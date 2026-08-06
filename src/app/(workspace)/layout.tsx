@@ -8,21 +8,14 @@ import { SearchCommand } from "@/components/workspace/search-command";
 
 export default function WorkspaceLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { isAuthenticated } = useSession();
+  const { isAuthenticated, isLoading } = useSession();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [hasCheckedSession, setHasCheckedSession] = useState(false);
 
   useEffect(() => {
-    // Let the mock session hydrate from localStorage on first mount before deciding to redirect.
-    const id = setTimeout(() => setHasCheckedSession(true), 0);
-    return () => clearTimeout(id);
-  }, []);
+    if (!isLoading && !isAuthenticated) router.replace("/sign-in");
+  }, [isLoading, isAuthenticated, router]);
 
-  useEffect(() => {
-    if (hasCheckedSession && !isAuthenticated) router.replace("/sign-in");
-  }, [hasCheckedSession, isAuthenticated, router]);
-
-  if (!isAuthenticated) return null;
+  if (isLoading || !isAuthenticated) return null;
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">

@@ -1,51 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useSyncExternalStore } from "react";
-import { usersStore, organizationsStore, nextId } from "@/lib/data-store";
-import { DEFAULT_MOCK_USER_ID } from "@/lib/mock/users";
-import type { User, OrganizationRole } from "@/lib/types";
-
-const SESSION_KEY = "beacon.mockSession";
-
-interface SessionState {
-  userId: string | null;
-}
-
-let sessionState: SessionState = { userId: null };
-const listeners = new Set<() => void>();
-
-function notify() {
-  for (const l of listeners) l();
-}
-
-function readPersisted(): SessionState {
-  if (typeof window === "undefined") return { userId: null };
-  try {
-    const raw = window.localStorage.getItem(SESSION_KEY);
-    return raw ? (JSON.parse(raw) as SessionState) : { userId: null };
-  } catch {
-    return { userId: null };
-  }
-}
-
-function persist(state: SessionState) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(SESSION_KEY, JSON.stringify(state));
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
-function getSnapshot(): SessionState {
-  return sessionState;
-}
-
-const SERVER_SNAPSHOT: SessionState = { userId: null };
-function getServerSnapshot(): SessionState {
-  return SERVER_SNAPSHOT;
-}
+import { useCallback, useEffect, useState } from "react";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { mapProfileRow, type ProfileRow } from "@/lib/supabase/mappers";
+import type { User } from "@/lib/types";
 
 export interface SignUpInput {
   name: string;
@@ -56,75 +14,87 @@ export interface SignUpInput {
 export class EmailAlreadyRegisteredError extends Error {}
 export class InvalidCredentialsError extends Error {}
 
-/** Mock session — persisted to localStorage, no real auth (Epic 2). */
-export function useSession() {
-  const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-  const users = useSyncExternalStore(usersStore.subscribe, usersStore.getState, usersStore.getState);
-
-  useEffect(() => {
-    const persisted = readPersisted();
-    if (persisted.userId !== sessionState.userId) {
-      sessionState = persisted;
-      notify();
-    }
-  }, []);
-
-  const user: User | null = state.userId ? users.find((u) => u.id === state.userId) ?? null : null;
-
-  const signIn = useCallback(async (email: string, password: string) => {
-    await simulateLatency();
-    if (!password) {
-      throw new InvalidCredentialsError("Email atau kata sandi salah.");
-    }
-    const match = usersStore.getState().find((u) => u.email.toLowerCase() === email.toLowerCase());
-    if (!match) {
-      throw new InvalidCredentialsError("Email atau kata sandi salah.");
-    }
-    sessionState = { userId: match.id };
-    persist(sessionState);
-    notify();
-    return match;
-  }, []);
-
-  const signUp = useCallback(async (input: SignUpInput) => {
-    await simulateLatency();
-    const existing = usersStore.getState().find((u) => u.email.toLowerCase() === input.email.toLowerCase());
-    if (existing) {
-      throw new EmailAlreadyRegisteredError("Email ini sudah terdaftar.");
-    }
-    const org = organizationsStore.getState()[0];
-    const newUser: User = {
-      id: nextId("user"),
-      email: input.email,
-      name: input.name,
-      avatarUrl: null,
-      organizationId: org.id,
-      organizationRole: "member" as OrganizationRole,
-      createdAt: new Date().toISOString(),
-    };
-    usersStore.setState((prev) => [...prev, newUser]);
-    sessionState = { userId: newUser.id };
-    persist(sessionState);
-    notify();
-    return newUser;
-  }, []);
-
-  const signOut = useCallback(() => {
-    sessionState = { userId: null };
-    persist(sessionState);
-    notify();
-  }, []);
-
-  /** Convenience for demoing without a full sign-up — Flow 1 note: "any mock credentials". */
-  const signInAsDefault = useCallback(() => {
-    sessionState = { userId: DEFAULT_MOCK_USER_ID };
-    persist(sessionState);
-    notify();
-  }, []);
-
-  return { user, isAuthenticated: !!user, signIn, signUp, signOut, signInAsDefault };
+async function fetchProfile(
+  supabase: ReturnType<typeof getSupabaseBrowserClient>,
+  userId: string,
+): Promise<User | null> {
+  const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).single();
+  if (error || !data) return null;
+  return mapProfileRow(data as ProfileRow);
 }
 
-function simulateLatency() {
-  return new Promise((resolve) => setTimeout(resolve, 500));
+/** Real Supabase Auth session (Epic 10) — replaces Stage 1's localStorage mock session. */
+export function useSession() {
+  const supabase = getSupabaseBrowserClient();
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+
+    async function syncFromAuthUserId(userId: string | undefined) {
+      const profile = userId ? await fetchProfile(supabase, userId) : null;
+      if (active) setUser(profile);
+    }
+
+    supabase.auth.getSession().then(({ data }: { data: { session: { user?: { id: string } } | null } }) => {
+      void syncFromAuthUserId(data.session?.user?.id).finally(() => {
+        if (active) setIsLoading(false);
+      });
+    });
+
+    const { data: subscription } = supabase.auth.onAuthStateChange(
+      (_event: string, session: { user?: { id: string } } | null) => {
+        void syncFromAuthUserId(session?.user?.id);
+      },
+    );
+
+    return () => {
+      active = false;
+      subscription.subscription.unsubscribe();
+    };
+  }, [supabase]);
+
+  const signIn = useCallback(
+    async (email: string, password: string) => {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        if (error.message.toLowerCase().includes("invalid login credentials")) {
+          throw new InvalidCredentialsError("Email atau kata sandi salah.");
+        }
+        throw error;
+      }
+    },
+    [supabase],
+  );
+
+  const signUp = useCallback(
+    async (input: SignUpInput) => {
+      const { data, error } = await supabase.auth.signUp({
+        email: input.email,
+        password: input.password,
+        options: { data: { name: input.name } },
+      });
+      if (error) {
+        const message = error.message.toLowerCase();
+        if (message.includes("already registered") || message.includes("already exists")) {
+          throw new EmailAlreadyRegisteredError("Email ini sudah terdaftar.");
+        }
+        throw error;
+      }
+      // Supabase's anti-enumeration behavior: signUp for an already-registered,
+      // already-confirmed email returns success with `identities: []` instead
+      // of an error, so it doesn't leak which emails have accounts.
+      if (data.user && data.user.identities && data.user.identities.length === 0) {
+        throw new EmailAlreadyRegisteredError("Email ini sudah terdaftar.");
+      }
+    },
+    [supabase],
+  );
+
+  const signOut = useCallback(async () => {
+    await supabase.auth.signOut();
+  }, [supabase]);
+
+  return { user, isAuthenticated: !!user, isLoading, signIn, signUp, signOut };
 }
