@@ -1,0 +1,41 @@
+# Local S3-compatible storage for screenshot uploads (Epic 12, US12.1).
+# `npm run dev` starts this automatically via the "predev" script — no
+# manual `docker compose up`, no AWS account, matching PRD.md's "Dev
+# environment parity" requirement. Production points the same code at a
+# real AWS S3 bucket purely via env vars (see .env.example).
+services:
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # Web console
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot: creates the bucket and makes it anonymously readable (GET only
+  # — uploads still require the presigned POST from /api/s3/presign) so
+  # <Image src=...> can load screenshots without a second signed-URL round
+  # trip, matching how production AWS S3 is expected to be configured.
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minioadmin minioadmin &&
+      mc mb --ignore-existing local/beacon-screenshots &&
+      mc anonymous set download local/beacon-screenshots
+      "
+
+volumes:
+  minio-data:

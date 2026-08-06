@@ -15,23 +15,28 @@ function readImageDimensions(url: string): Promise<{ width: number; height: numb
 
 export function ScreenshotUploadPrompt({
   onUpload,
+  isUploading = false,
 }: {
-  onUpload: (imageUrl: string, width: number, height: number) => void;
+  onUpload: (file: File, width: number, height: number) => void;
+  /** True while a parent-driven S3 upload + DB insert is in flight (Flow 3 step 4's progress indicator). */
+  isUploading?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const busy = isProcessing || isUploading;
 
   const handleFile = useCallback(
     async (file: File) => {
-      if (!file.type.startsWith("image/")) return;
+      if (!file.type.startsWith("image/") || isUploading) return;
       setIsProcessing(true);
       const url = URL.createObjectURL(file);
       const { width, height } = await readImageDimensions(url);
+      URL.revokeObjectURL(url);
       setIsProcessing(false);
-      onUpload(url, width, height);
+      onUpload(file, width, height);
     },
-    [onUpload],
+    [onUpload, isUploading],
   );
 
   return (
@@ -54,24 +59,28 @@ export function ScreenshotUploadPrompt({
         if (file) void handleFile(file);
       }}
       tabIndex={0}
+      aria-busy={busy}
       className={cn(
         "my-4 flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-input bg-card px-6 py-12 text-center outline-none focus-visible:border-ring",
         isDragging && "border-primary bg-primary-muted/20",
       )}
     >
-      {isProcessing ? (
+      {busy ? (
         <Loader2 className="size-8 animate-spin text-muted-foreground" />
       ) : (
         <ImagePlus className="size-8 stroke-[1.5] text-muted-foreground" />
       )}
       <div>
-        <p className="text-body-sm text-foreground">Seret gambar ke sini, atau tempel (paste) dari clipboard</p>
-        <p className="mt-1 text-caption text-muted-foreground">PNG, JPG, atau WEBP</p>
+        <p className="text-body-sm text-foreground">
+          {isUploading ? "Mengunggah gambar…" : "Seret gambar ke sini, atau tempel (paste) dari clipboard"}
+        </p>
+        {!isUploading && <p className="mt-1 text-caption text-muted-foreground">PNG, JPG, atau WEBP</p>}
       </div>
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        className="rounded-md border border-border bg-secondary px-3 py-1.5 text-body-sm font-medium text-secondary-foreground hover:bg-accent"
+        disabled={busy}
+        className="rounded-md border border-border bg-secondary px-3 py-1.5 text-body-sm font-medium text-secondary-foreground hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
       >
         Pilih berkas
       </button>
@@ -79,6 +88,7 @@ export function ScreenshotUploadPrompt({
         ref={inputRef}
         type="file"
         accept="image/*"
+        disabled={busy}
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];
