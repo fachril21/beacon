@@ -134,39 +134,27 @@ export function useReorderPages() {
 }
 
 /**
- * TODO(Epic 13): still mutates local store state only, not Supabase — the
- * atomic publish/update/unpublish RPC (is_published + published_content_
- * snapshot together) is a separate pass, tracked as its own task.
+ * Publish/Update/Unpublish (Flow 4) each call a single Postgres RPC
+ * (20260806100200_publishing_rpcs.sql) that sets is_published and
+ * published_content_snapshot together, atomically — a Viewer can never
+ * observe one changed without the other. The RPC runs as the calling User
+ * (SECURITY INVOKER), so the same pages_update_editor RLS policy that
+ * gates a direct UPDATE gates this too.
  */
 export function usePublishActions() {
-  const publish = useCallback((id: string) => {
-    pagesStore.setState((prev) =>
-      prev.map((p) => {
-        if (p.id !== id) return p;
-        const publishedAt = new Date().toISOString();
-        return {
-          ...p,
-          isPublished: true,
-          publishedAt,
-          publishedContentSnapshot: { title: p.title, content: p.content, screenshotBlocks: {}, publishedAt },
-        };
-      }),
-    );
-  }, []);
+  async function callPublishRpc(name: "publish_page" | "update_published_page" | "unpublish_page", id: string) {
+    const supabase = getSupabaseBrowserClient();
+    const { data, error } = await supabase.rpc(name, { p_page_id: id });
+    if (error) throw error;
 
-  const update = useCallback((id: string) => {
-    pagesStore.setState((prev) =>
-      prev.map((p) => {
-        if (p.id !== id || !p.isPublished) return p;
-        const publishedAt = new Date().toISOString();
-        return { ...p, publishedAt, publishedContentSnapshot: { title: p.title, content: p.content, screenshotBlocks: {}, publishedAt } };
-      }),
-    );
-  }, []);
+    const page = mapPageRow(data as PageRow);
+    pagesStore.setState((prev) => prev.map((p) => (p.id === id ? page : p)));
+    return page;
+  }
 
-  const unpublish = useCallback((id: string) => {
-    pagesStore.setState((prev) => prev.map((p) => (p.id === id ? { ...p, isPublished: false } : p)));
-  }, []);
+  const publish = useCallback((id: string) => callPublishRpc("publish_page", id), []);
+  const update = useCallback((id: string) => callPublishRpc("update_published_page", id), []);
+  const unpublish = useCallback((id: string) => callPublishRpc("unpublish_page", id), []);
 
   return { publish, update, unpublish };
 }

@@ -44,16 +44,20 @@ export function PageEditorToolbar({ page, space, title, saveStatus, onOpenVersio
   const pendingChanges = hasUnpublishedChanges(page);
   const status = getPageStatus(page);
 
-  function doPublish() {
+  async function doPublish() {
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       setIsOffline(true);
       toast("Akan dipublikasikan setelah kembali online", { description: "Tindakan ini disimpan dan akan dijalankan otomatis." });
       return;
     }
-    publish(page.id);
-    toast.success("Halaman berhasil dipublikasikan", {
-      action: { label: "Lihat halaman publik", onClick: () => router.push(`/public/pages/${page.id}`) },
-    });
+    try {
+      await publish(page.id);
+      toast.success("Halaman berhasil dipublikasikan", {
+        action: { label: "Lihat halaman publik", onClick: () => router.push(`/public/pages/${page.id}`) },
+      });
+    } catch {
+      toast.error("Gagal memublikasikan halaman, silakan coba lagi.");
+    }
   }
 
   function handlePublishClick() {
@@ -65,9 +69,13 @@ export function PageEditorToolbar({ page, space, title, saveStatus, onOpenVersio
     setConfirmOpen(true);
   }
 
-  function handleUpdate() {
-    update(page.id);
-    toast.success("Pembaruan telah dipublikasikan.");
+  async function handleUpdate() {
+    try {
+      await update(page.id);
+      toast.success("Pembaruan telah dipublikasikan.");
+    } catch {
+      toast.error("Gagal memublikasikan pembaruan, silakan coba lagi.");
+    }
   }
 
   return (
@@ -199,9 +207,10 @@ export function PageEditorToolbar({ page, space, title, saveStatus, onOpenVersio
             <Button
               variant="destructive"
               onClick={() => {
-                unpublish(page.id);
                 setUnpublishOpen(false);
-                toast("Halaman telah dibatalkan publikasinya.");
+                unpublish(page.id)
+                  .then(() => toast("Halaman telah dibatalkan publikasinya."))
+                  .catch(() => toast.error("Gagal membatalkan publikasi, silakan coba lagi."));
               }}
             >
               Batalkan Publikasi

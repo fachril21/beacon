@@ -3,10 +3,10 @@ import { renderHook, act } from "@testing-library/react";
 import { pagesStore } from "@/lib/supabase/stores";
 import { emptyDoc } from "@/lib/mock/lexical-content";
 
-const mockSupabase = { from: vi.fn() };
+const mockSupabase = { from: vi.fn(), rpc: vi.fn() };
 vi.mock("@/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => mockSupabase }));
 
-const { useCreatePage, useUpdatePageContent, useReorderPages } = await import("./use-pages");
+const { useCreatePage, useUpdatePageContent, useReorderPages, usePublishActions } = await import("./use-pages");
 
 function resetStore() {
   pagesStore.setState([]);
@@ -128,5 +128,93 @@ describe("useReorderPages", () => {
     expect(update).toHaveBeenCalledWith({ order: 1 });
     const byId = Object.fromEntries(pagesStore.getState().map((p) => [p.id, p.order]));
     expect(byId).toEqual({ a: 1, b: 0 });
+  });
+});
+
+describe("usePublishActions", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetStore();
+    pagesStore.setState([
+      {
+        id: "page-1",
+        spaceId: "space-1",
+        parentPageId: null,
+        title: "Getting started",
+        order: 0,
+        content: emptyDoc(),
+        visibility: "publishable",
+        isPublished: false,
+        publishedContentSnapshot: null,
+        publishedAt: null,
+        createdByUserId: "user-1",
+        createdAt: "t",
+        updatedAt: "t",
+      },
+    ]);
+  });
+
+  it("publish calls the publish_page RPC and patches the store from its (atomic) result", async () => {
+    const publishedRow = {
+      id: "page-1",
+      space_id: "space-1",
+      parent_page_id: null,
+      title: "Getting started",
+      order: 0,
+      content: emptyDoc(),
+      visibility: "publishable",
+      is_published: true,
+      published_content_snapshot: { title: "Getting started", content: emptyDoc(), screenshotBlocks: {}, publishedAt: "2026-01-01T00:00:00Z" },
+      published_at: "2026-01-01T00:00:00Z",
+      created_by_user_id: "user-1",
+      created_at: "t",
+      updated_at: "t",
+    };
+    mockSupabase.rpc.mockResolvedValue({ data: publishedRow, error: null });
+
+    const { result } = renderHook(() => usePublishActions());
+    await act(async () => {
+      await result.current.publish("page-1");
+    });
+
+    expect(mockSupabase.rpc).toHaveBeenCalledWith("publish_page", { p_page_id: "page-1" });
+    expect(pagesStore.getState()[0].isPublished).toBe(true);
+    expect(pagesStore.getState()[0].publishedContentSnapshot).not.toBeNull();
+  });
+
+  it("unpublish calls the unpublish_page RPC and patches the store", async () => {
+    pagesStore.setState((prev) => prev.map((p) => ({ ...p, isPublished: true })));
+    const unpublishedRow = {
+      id: "page-1",
+      space_id: "space-1",
+      parent_page_id: null,
+      title: "Getting started",
+      order: 0,
+      content: emptyDoc(),
+      visibility: "publishable",
+      is_published: false,
+      published_content_snapshot: { title: "Getting started", content: emptyDoc(), screenshotBlocks: {}, publishedAt: "t" },
+      published_at: "t",
+      created_by_user_id: "user-1",
+      created_at: "t",
+      updated_at: "t",
+    };
+    mockSupabase.rpc.mockResolvedValue({ data: unpublishedRow, error: null });
+
+    const { result } = renderHook(() => usePublishActions());
+    await act(async () => {
+      await result.current.unpublish("page-1");
+    });
+
+    expect(mockSupabase.rpc).toHaveBeenCalledWith("unpublish_page", { p_page_id: "page-1" });
+    expect(pagesStore.getState()[0].isPublished).toBe(false);
+  });
+
+  it("throws when the RPC returns an error, without touching the local store", async () => {
+    mockSupabase.rpc.mockResolvedValue({ data: null, error: { message: "permission denied" } });
+
+    const { result } = renderHook(() => usePublishActions());
+    await expect(result.current.publish("page-1")).rejects.toThrow();
+    expect(pagesStore.getState()[0].isPublished).toBe(false);
   });
 });
