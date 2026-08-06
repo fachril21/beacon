@@ -5,6 +5,7 @@ import { pagesStore } from "@/lib/supabase/stores";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { mapPageRow, type PageRow } from "@/lib/supabase/mappers";
 import { emptyDoc } from "@/lib/mock/lexical-content";
+import { extractPlainText } from "@/lib/extract-text";
 import type { Page } from "@/lib/types";
 import type { SerializedEditorState } from "lexical";
 
@@ -108,7 +109,10 @@ export function useUpdatePageTitle() {
 export function useUpdatePageContent() {
   return useCallback(async (id: string, content: SerializedEditorState) => {
     const supabase = getSupabaseBrowserClient();
-    const { error } = await supabase.from("pages").update({ content }).eq("id", id);
+    // search_text mirrors content in plain text so Postgres full-text search
+    // (Epic 14, pages.search_vector) stays in sync on every content save.
+    const searchText = extractPlainText(content);
+    const { error } = await supabase.from("pages").update({ content, search_text: searchText }).eq("id", id);
     if (error) throw error;
 
     pagesStore.setState((prev) => prev.map((p) => (p.id === id ? { ...p, content, updatedAt: new Date().toISOString() } : p)));

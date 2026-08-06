@@ -1,82 +1,126 @@
 "use client";
 
-import { useMemo } from "react";
-import { useSyncExternalStore } from "react";
-import { pagesStore, spacesStore, permissionsStore } from "@/lib/data-store";
-import { extractPlainText, snippetAround } from "@/lib/extract-text";
+import { useEffect, useState } from "react";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { snippetAround } from "@/lib/extract-text";
 import type { SearchResult } from "@/lib/types";
 
-function matches(haystack: string, query: string) {
-  return haystack.toLowerCase().includes(query.toLowerCase());
+const SEARCH_DEBOUNCE_MS = 250;
+
+interface PageSearchRow {
+  id: string;
+  space_id: string;
+  title: string;
+  is_published: boolean;
+  published_content_snapshot: { title: string } | null;
+  search_text: string;
+  spaces: { name: string; organization_id?: string; is_publishable?: boolean } | null;
+}
+
+function useDebounced(value: string, delayMs: number): string {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(id);
+  }, [value, delayMs]);
+  return debounced;
 }
 
 /**
- * Internal search — scoped to Spaces the User has an explicit Permission row
- * in (mirrors what RLS will enforce in Stage 2, PRD.md §5.5).
+ * Internal search — RLS ("authenticated" role) naturally scopes results to
+ * Spaces the caller has a Permission row in, plus anything already public,
+ * mirroring PRD.md §5.5's "internal + published" and Flow 6.
  */
 export function useInternalSearch(query: string, userId: string | undefined): SearchResult[] {
-  const pages = useSyncExternalStore(pagesStore.subscribe, pagesStore.getState, pagesStore.getState);
-  const spaces = useSyncExternalStore(spacesStore.subscribe, spacesStore.getState, spacesStore.getState);
-  const permissions = useSyncExternalStore(permissionsStore.subscribe, permissionsStore.getState, permissionsStore.getState);
+  const debouncedQuery = useDebounced(query, SEARCH_DEBOUNCE_MS);
+  const [results, setResults] = useState<SearchResult[]>([]);
 
-  return useMemo(() => {
-    const trimmed = query.trim();
-    if (!trimmed || !userId) return [];
-    const accessibleSpaceIds = new Set(permissions.filter((p) => p.userId === userId).map((p) => p.spaceId));
-    const results: SearchResult[] = [];
-    for (const page of pages) {
-      if (!accessibleSpaceIds.has(page.spaceId)) continue;
-      const space = spaces.find((s) => s.id === page.spaceId);
-      if (!space) continue;
-      const bodyText = extractPlainText(page.content);
-      const titleHit = matches(page.title, trimmed);
-      const bodyHit = matches(bodyText, trimmed);
-      if (!titleHit && !bodyHit) continue;
-      results.push({
-        pageId: page.id,
-        spaceId: space.id,
-        spaceName: space.name,
-        pageTitle: page.title,
-        snippet: titleHit ? snippetAround(bodyText, "") : snippetAround(bodyText, trimmed),
-      });
-    }
-    return results;
-  }, [pages, spaces, permissions, query, userId]);
+  useEffect(() => {
+    const trimmed = debouncedQuery.trim();
+    if (!trimmed || !userId) return;
+    let cancelled = false;
+
+    (async () => {
+      const supabase = getSupabaseBrowserClient();
+      const { data, error } = await supabase
+        .from("pages")
+        .select("id, space_id, title, is_published, published_content_snapshot, search_text, spaces(name)")
+        .textSearch("search_vector", trimmed, { type: "websearch", config: "simple" });
+      if (error) {
+        console.error("[beacon] internal search failed:", error);
+        return;
+      }
+      const rows = (data ?? []) as unknown as PageSearchRow[];
+      const mapped: SearchResult[] = rows
+        .filter((row) => row.spaces)
+        .map((row) => ({
+          pageId: row.id,
+          spaceId: row.space_id,
+          spaceName: row.spaces!.name,
+          pageTitle: row.title,
+          snippet: snippetAround(row.search_text, trimmed),
+        }));
+      if (!cancelled) setResults(mapped);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedQuery, userId]);
+
+  return debouncedQuery.trim() && userId ? results : [];
 }
 
 /**
- * Public search — anonymous, scoped to one Organization's publishable Spaces
- * and published Pages only (PRD.md §5.5, Flow 5).
+ * Public search — anonymous, explicitly scoped to one Organization's
+ * publishable Spaces and published Pages only (PRD.md §5.5, Flow 5). RLS's
+ * pages_select_public_published policy already gates is_published/
+ * visibility/space.is_publishable; the organization_id check here is the
+ * same app-level scoping use-public-content.ts relies on until Epic 14a's
+ * Host-header middleware lands.
  */
 export function usePublicSearch(query: string, organizationId: string | undefined): SearchResult[] {
-  const pages = useSyncExternalStore(pagesStore.subscribe, pagesStore.getState, pagesStore.getState);
-  const spaces = useSyncExternalStore(spacesStore.subscribe, spacesStore.getState, spacesStore.getState);
+  const debouncedQuery = useDebounced(query, SEARCH_DEBOUNCE_MS);
+  const [results, setResults] = useState<SearchResult[]>([]);
 
-  return useMemo(() => {
-    const trimmed = query.trim();
-    if (!trimmed || !organizationId) return [];
-    const publishableSpaceIds = new Set(
-      spaces.filter((s) => s.organizationId === organizationId && s.isPublishable).map((s) => s.id),
-    );
-    const results: SearchResult[] = [];
-    for (const page of pages) {
-      if (!page.isPublished || !page.publishedContentSnapshot) continue;
-      if (!publishableSpaceIds.has(page.spaceId)) continue;
-      const space = spaces.find((s) => s.id === page.spaceId);
-      if (!space) continue;
-      const snapshot = page.publishedContentSnapshot;
-      const bodyText = extractPlainText(snapshot.content);
-      const titleHit = matches(snapshot.title, trimmed);
-      const bodyHit = matches(bodyText, trimmed);
-      if (!titleHit && !bodyHit) continue;
-      results.push({
-        pageId: page.id,
-        spaceId: space.id,
-        spaceName: space.name,
-        pageTitle: snapshot.title,
-        snippet: titleHit ? snippetAround(bodyText, "") : snippetAround(bodyText, trimmed),
-      });
-    }
-    return results;
-  }, [pages, spaces, query, organizationId]);
+  useEffect(() => {
+    const trimmed = debouncedQuery.trim();
+    if (!trimmed || !organizationId) return;
+    let cancelled = false;
+
+    (async () => {
+      const supabase = getSupabaseBrowserClient();
+      const { data, error } = await supabase
+        .from("pages")
+        .select("id, space_id, title, is_published, published_content_snapshot, search_text, spaces(name, organization_id, is_publishable)")
+        .textSearch("search_vector", trimmed, { type: "websearch", config: "simple" });
+      if (error) {
+        console.error("[beacon] public search failed:", error);
+        return;
+      }
+      const rows = (data ?? []) as unknown as PageSearchRow[];
+      const mapped: SearchResult[] = rows
+        .filter(
+          (row) =>
+            row.is_published &&
+            row.published_content_snapshot &&
+            row.spaces?.organization_id === organizationId &&
+            row.spaces.is_publishable,
+        )
+        .map((row) => ({
+          pageId: row.id,
+          spaceId: row.space_id,
+          spaceName: row.spaces!.name,
+          pageTitle: row.published_content_snapshot!.title,
+          snippet: snippetAround(row.search_text, trimmed),
+        }));
+      if (!cancelled) setResults(mapped);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedQuery, organizationId]);
+
+  return debouncedQuery.trim() && organizationId ? results : [];
 }

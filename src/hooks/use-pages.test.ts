@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { pagesStore } from "@/lib/supabase/stores";
-import { emptyDoc } from "@/lib/mock/lexical-content";
+import { emptyDoc, doc, paragraph } from "@/lib/mock/lexical-content";
 
 const mockSupabase = { from: vi.fn(), rpc: vi.fn() };
 vi.mock("@/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => mockSupabase }));
@@ -101,6 +101,19 @@ describe("useUpdatePageContent", () => {
 
     expect(update).toHaveBeenCalledWith(expect.objectContaining({ content: newContent }));
     expect(pagesStore.getState()[0].content).toEqual(newContent);
+  });
+
+  it("keeps search_text in sync with the plain-text content, for Epic 14's full-text search", async () => {
+    const update = vi.fn(() => ({ eq: () => Promise.resolve({ error: null }) }));
+    mockSupabase.from.mockReturnValue({ update });
+
+    const newContent = doc([paragraph("Cara menghubungkan akun Google")]);
+    const { result } = renderHook(() => useUpdatePageContent());
+    await act(async () => {
+      await result.current("page-1", newContent);
+    });
+
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ search_text: "Cara menghubungkan akun Google" }));
   });
 });
 
