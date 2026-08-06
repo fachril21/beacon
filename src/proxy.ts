@@ -18,7 +18,7 @@ import type { Organization } from "@/lib/types";
  * `x-beacon-organization-id` header this sets — wiring that swap is the
  * next step once a real verified domain exists to test against.
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const host = request.headers.get("host") ?? "";
   const appHosts = (process.env.NEXT_PUBLIC_APP_HOSTS ?? "localhost,127.0.0.1").split(",");
 
