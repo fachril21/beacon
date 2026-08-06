@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,19 +17,27 @@ export function NewSpaceDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   const createSpace = useCreateSpace();
   const [name, setName] = useState("");
   const [isPublishable, setIsPublishable] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
 
-  function handleCreate() {
+  async function handleCreate() {
     if (!user || !name.trim()) return;
-    const space = createSpace({
-      organizationId: user.organizationId,
-      name: name.trim(),
-      isPublishable,
-      createdByUserId: user.id,
-    });
-    setName("");
-    setIsPublishable(false);
-    onOpenChange(false);
-    router.push(`/spaces/${space.id}`);
+    setIsCreating(true);
+    try {
+      const space = await createSpace({
+        organizationId: user.organizationId,
+        name: name.trim(),
+        isPublishable,
+        createdByUserId: user.id,
+      });
+      setName("");
+      setIsPublishable(false);
+      onOpenChange(false);
+      router.push(`/spaces/${space.id}`);
+    } catch {
+      toast.error("Tidak dapat membuat Space, silakan coba lagi.");
+    } finally {
+      setIsCreating(false);
+    }
   }
 
   return (
@@ -59,7 +68,9 @@ export function NewSpaceDialog({ open, onOpenChange }: { open: boolean; onOpenCh
         </div>
         <DialogFooter>
           <Button variant="secondary" onClick={() => onOpenChange(false)}>Batal</Button>
-          <Button onClick={handleCreate} disabled={!name.trim()}>Buat</Button>
+          <Button onClick={() => void handleCreate()} disabled={!name.trim() || isCreating}>
+            {isCreating ? "Membuat…" : "Buat"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

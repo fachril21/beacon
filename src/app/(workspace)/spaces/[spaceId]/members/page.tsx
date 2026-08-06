@@ -33,16 +33,24 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
   }
   if (!space) return null;
 
-  function handleRoleChange(userId: string, newRole: SpaceRole) {
-    updateRole(spaceId, userId, newRole);
-    toast.success("Peran diperbarui.");
+  async function handleRoleChange(userId: string, newRole: SpaceRole) {
+    try {
+      await updateRole(spaceId, userId, newRole);
+      toast.success("Peran diperbarui.");
+    } catch {
+      toast.error("Tidak dapat memperbarui peran, silakan coba lagi.");
+    }
   }
 
-  function handleInvite() {
+  async function handleInvite() {
     if (!inviteEmail.trim() || !user) return;
-    inviteToSpace(spaceId, inviteEmail.trim(), inviteRole, user.id);
-    setInviteEmail("");
-    toast.success("Undangan terkirim.");
+    try {
+      await inviteToSpace(spaceId, inviteEmail.trim(), inviteRole, user.id);
+      setInviteEmail("");
+      toast.success("Undangan terkirim.");
+    } catch {
+      toast.error("Tidak dapat mengirim undangan, silakan coba lagi.");
+    }
   }
 
   return (
@@ -69,7 +77,7 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
               <SelectItem value="admin">Admin</SelectItem>
             </SelectContent>
           </Select>
-          <Button onClick={handleInvite} disabled={!inviteEmail.trim()}>
+          <Button onClick={() => void handleInvite()} disabled={!inviteEmail.trim()}>
             <UserPlus className="size-3.5" />
             Undang
           </Button>
@@ -90,7 +98,7 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
                     <p className="text-caption text-muted-foreground">{member.email}</p>
                   </div>
                 </div>
-                <Select value={perm.role} onValueChange={(v) => v && handleRoleChange(perm.userId, v as SpaceRole)}>
+                <Select value={perm.role} onValueChange={(v) => v && void handleRoleChange(perm.userId, v as SpaceRole)}>
                   <SelectTrigger className="w-28">
                     <SelectValue>{ROLE_LABELS[perm.role]}</SelectValue>
                   </SelectTrigger>

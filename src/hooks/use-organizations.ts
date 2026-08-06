@@ -1,11 +1,30 @@
 "use client";
 
-import { useSyncExternalStore, useCallback } from "react";
-import { organizationsStore } from "@/lib/data-store";
+import { useSyncExternalStore, useCallback, useEffect } from "react";
+import { organizationsStore } from "@/lib/supabase/stores";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { mapOrganizationRow, type OrganizationRow } from "@/lib/supabase/mappers";
 import { useSession } from "./use-session";
 
+const ALL_ORGANIZATIONS_KEY = "all";
+
 export function useOrganizations() {
-  return useSyncExternalStore(organizationsStore.subscribe, organizationsStore.getState, organizationsStore.getState);
+  const orgs = useSyncExternalStore(organizationsStore.subscribe, organizationsStore.getState, organizationsStore.getState);
+
+  useEffect(() => {
+    organizationsStore.ensureLoaded(
+      ALL_ORGANIZATIONS_KEY,
+      async () => {
+        const supabase = getSupabaseBrowserClient();
+        const { data, error } = await supabase.from("organizations").select("*");
+        if (error) throw error;
+        return ((data ?? []) as OrganizationRow[]).map(mapOrganizationRow);
+      },
+      (error) => console.error("[beacon] failed to load organizations:", error),
+    );
+  }, []);
+
+  return orgs;
 }
 
 export function useOrganization(id: string | undefined) {
@@ -26,29 +45,47 @@ function randomDnsToken() {
 
 export function useOrganizationDomainActions(organizationId: string) {
   const addDomain = useCallback(
-    (domain: string) => {
-      const claimed = organizationsStore
-        .getState()
-        .some((o) => o.id !== organizationId && o.domain?.toLowerCase() === domain.toLowerCase());
-      if (claimed) {
-        throw new Error("Domain ini sudah digunakan oleh Organisasi lain.");
+    async (domain: string) => {
+      const supabase = getSupabaseBrowserClient();
+      const pendingDnsToken = randomDnsToken();
+      const { error } = await supabase
+        .from("organizations")
+        .update({ domain, is_domain_verified: false, pending_dns_token: pendingDnsToken })
+        .eq("id", organizationId);
+
+      if (error) {
+        // Postgres unique_violation on organizations.domain (schema-enforced,
+        // not just a client-side check) — see 20260806100000_initial_schema.sql.
+        if ((error as { code?: string }).code === "23505") {
+          throw new Error("Domain ini sudah digunakan oleh Organisasi lain.");
+        }
+        throw error;
       }
+
       organizationsStore.setState((prev) =>
-        prev.map((o) =>
-          o.id === organizationId
-            ? { ...o, domain, isDomainVerified: false, pendingDnsToken: randomDnsToken() }
-            : o,
-        ),
+        prev.map((o) => (o.id === organizationId ? { ...o, domain, isDomainVerified: false, pendingDnsToken } : o)),
       );
     },
     [organizationId],
   );
 
-  /** Mock verification: succeeds ~60% of the time to demonstrate the "not propagated yet" retry state. */
+  /**
+   * TODO(Epic 14a, deferred): real verification calls Vercel's Domains API
+   * to check DNS propagation. No Vercel account/domain access is available
+   * in this environment (see the Stage 2 evidence report), so this keeps
+   * Stage 1's randomized placeholder rather than silently marking every
+   * domain "verified" without ever having checked anything.
+   */
   const verifyDomain = useCallback(async () => {
     await new Promise((r) => setTimeout(r, 700));
     const succeeded = Math.random() < 0.6;
     if (succeeded) {
+      const supabase = getSupabaseBrowserClient();
+      const { error } = await supabase
+        .from("organizations")
+        .update({ is_domain_verified: true, pending_dns_token: null })
+        .eq("id", organizationId);
+      if (error) throw error;
       organizationsStore.setState((prev) =>
         prev.map((o) => (o.id === organizationId ? { ...o, isDomainVerified: true, pendingDnsToken: null } : o)),
       );
@@ -56,7 +93,14 @@ export function useOrganizationDomainActions(organizationId: string) {
     return succeeded;
   }, [organizationId]);
 
-  const removeDomain = useCallback(() => {
+  const removeDomain = useCallback(async () => {
+    const supabase = getSupabaseBrowserClient();
+    const { error } = await supabase
+      .from("organizations")
+      .update({ domain: null, is_domain_verified: false, pending_dns_token: null })
+      .eq("id", organizationId);
+    if (error) throw error;
+
     organizationsStore.setState((prev) =>
       prev.map((o) => (o.id === organizationId ? { ...o, domain: null, isDomainVerified: false, pendingDnsToken: null } : o)),
     );
