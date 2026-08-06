@@ -2,40 +2,83 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useUpdatePageContent } from "@/hooks/use-pages";
+import { savePendingEdit, loadPendingEdit, clearPendingEdit } from "@/lib/offline-buffer";
 import type { SerializedEditorState } from "lexical";
 
 export type SaveStatus = "idle" | "saving" | "saved" | "offline" | "syncing" | "error";
 
 const AUTOSAVE_DEBOUNCE_MS = 2500; // fires <=3s after the last keystroke (PRD.md §5.1)
+const RETRY_DELAY_MS = 4000;
 
 /**
- * Debounced autosave to the mock Page store, with offline/retry states
- * matching Flow 3's failure path. `simulateFailure` is a dev-only escape
- * hatch (Stage 1 has no real network to fail) mirroring the pattern used on
- * the auth screens.
+ * Debounced autosave to Supabase, with an IndexedDB fallback buffer so an
+ * edit that fails to save (offline, or a real request failure) survives a
+ * crash/reload and is retried automatically — Flow 3's failure path, for
+ * real (Epic 11 US11.1), not simulated.
  */
 export function usePageAutosave(pageId: string, simulateFailure = false) {
   const updateContent = useUpdatePageContent();
   const [status, setStatus] = useState<SaveStatus>("idle");
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isOnline, setIsOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
-  const pendingContentRef = useRef<SerializedEditorState | null>(null);
+
+  // A retry needs to call "whatever persistNow is on the next render," not
+  // the specific closure that scheduled it — a plain self-reference inside
+  // the useCallback body would instead pin the retry to a stale closure.
+  const persistNowRef = useRef<(content: SerializedEditorState) => Promise<void>>(async () => {});
+
+  const persistNow = useCallback(
+    async (content: SerializedEditorState) => {
+      if (simulateFailure) {
+        await savePendingEdit(pageId, content);
+        setStatus("error");
+        return;
+      }
+      try {
+        await updateContent(pageId, content);
+        await clearPendingEdit(pageId);
+        setStatus("saved");
+        savedFadeRef.current = setTimeout(() => setStatus("idle"), 2000);
+      } catch {
+        await savePendingEdit(pageId, content);
+        setStatus("error");
+        retryRef.current = setTimeout(() => void persistNowRef.current(content), RETRY_DELAY_MS);
+      }
+    },
+    [pageId, simulateFailure, updateContent],
+  );
+
+  useEffect(() => {
+    persistNowRef.current = persistNow;
+  }, [persistNow]);
+
+  // Crash/reload recovery: a buffered edit from before this mount means the
+  // last session ended without a confirmed save — flush it immediately.
+  useEffect(() => {
+    let cancelled = false;
+    loadPendingEdit(pageId).then((buffered) => {
+      if (buffered && !cancelled) {
+        setStatus("syncing");
+        void persistNow(buffered);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageId]);
 
   useEffect(() => {
     function handleOnline() {
       setIsOnline(true);
-      if (pendingContentRef.current) {
-        setStatus("syncing");
-        setTimeout(() => {
-          if (pendingContentRef.current) {
-            updateContent(pageId, pendingContentRef.current);
-            pendingContentRef.current = null;
-          }
-          setStatus("saved");
-          savedFadeRef.current = setTimeout(() => setStatus("idle"), 2000);
-        }, 600);
-      }
+      loadPendingEdit(pageId).then((buffered) => {
+        if (buffered) {
+          setStatus("syncing");
+          void persistNow(buffered);
+        }
+      });
     }
     function handleOffline() {
       setIsOnline(false);
@@ -54,31 +97,27 @@ export function usePageAutosave(pageId: string, simulateFailure = false) {
     (content: SerializedEditorState) => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       if (savedFadeRef.current) clearTimeout(savedFadeRef.current);
+      if (retryRef.current) clearTimeout(retryRef.current);
 
       if (!isOnline) {
-        pendingContentRef.current = content;
+        void savePendingEdit(pageId, content);
         setStatus("offline");
         return;
       }
 
       setStatus("saving");
       timeoutRef.current = setTimeout(() => {
-        if (simulateFailure) {
-          setStatus("error");
-          return;
-        }
-        updateContent(pageId, content);
-        setStatus("saved");
-        savedFadeRef.current = setTimeout(() => setStatus("idle"), 2000);
+        void persistNow(content);
       }, AUTOSAVE_DEBOUNCE_MS);
     },
-    [isOnline, pageId, simulateFailure, updateContent],
+    [isOnline, pageId, persistNow],
   );
 
   useEffect(() => {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       if (savedFadeRef.current) clearTimeout(savedFadeRef.current);
+      if (retryRef.current) clearTimeout(retryRef.current);
     };
   }, []);
 

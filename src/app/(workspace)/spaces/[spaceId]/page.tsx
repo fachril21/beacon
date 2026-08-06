@@ -3,6 +3,7 @@
 import { use, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { FileText, Plus, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,8 +25,13 @@ export default function SpacePage({ params }: { params: Promise<{ spaceId: strin
   async function handleNewPage() {
     if (!user) return;
     setIsCreating(true);
-    const page = createPage({ spaceId, parentPageId: null, title: "Halaman tanpa judul", createdByUserId: user.id });
-    router.push(`/spaces/${spaceId}/pages/${page.id}`);
+    try {
+      const page = await createPage({ spaceId, parentPageId: null, title: "Halaman tanpa judul", createdByUserId: user.id });
+      router.push(`/spaces/${spaceId}/pages/${page.id}`);
+    } catch {
+      toast.error("Tidak dapat membuat Halaman, silakan coba lagi.");
+      setIsCreating(false);
+    }
   }
 
   if (!space) {
@@ -60,7 +66,7 @@ export default function SpacePage({ params }: { params: Promise<{ spaceId: strin
                 </Button>
               </Link>
             )}
-            <Button size="sm" onClick={handleNewPage} disabled={isCreating}>
+            <Button size="sm" onClick={() => void handleNewPage()} disabled={isCreating}>
               <Plus className="size-3.5" />
               Halaman baru
             </Button>
@@ -73,7 +79,7 @@ export default function SpacePage({ params }: { params: Promise<{ spaceId: strin
             title="Belum ada halaman"
             description="Mulai menulis panduan pertama untuk Space ini."
             actionLabel="+ Halaman baru"
-            onAction={handleNewPage}
+            onAction={() => void handleNewPage()}
             className="mt-16"
           />
         ) : (

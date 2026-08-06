@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ChevronRight, FileText, GripVertical, Plus } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useChildPages, useCreatePage } from "@/hooks/use-pages";
@@ -36,9 +37,13 @@ export function PageTreeItem({ page, spaceId, depth }: PageTreeItemProps) {
     e.preventDefault();
     e.stopPropagation();
     if (!user) return;
-    const newPage = createPage({ spaceId, parentPageId: page.id, title: "Halaman tanpa judul", createdByUserId: user.id });
-    setIsExpanded(true);
-    router.push(`/spaces/${spaceId}/pages/${newPage.id}`);
+    try {
+      const newPage = await createPage({ spaceId, parentPageId: page.id, title: "Halaman tanpa judul", createdByUserId: user.id });
+      setIsExpanded(true);
+      router.push(`/spaces/${spaceId}/pages/${newPage.id}`);
+    } catch {
+      toast.error("Tidak dapat membuat Halaman, silakan coba lagi.");
+    }
   }
 
   return (

@@ -4,9 +4,10 @@
  * (PRD.md Epic 1 US1.3), same rule Stage 1's data-store.ts enforced.
  */
 import { createCollectionStore } from "./collection-store";
-import type { Organization, Space, Page, Permission, PendingInvite, Version } from "@/lib/types";
+import type { Organization, Space, Page, Permission, PendingInvite, Version, User } from "@/lib/types";
 
 export const organizationsStore = createCollectionStore<Organization>();
+export const usersStore = createCollectionStore<User>();
 export const spacesStore = createCollectionStore<Space>();
 export const pagesStore = createCollectionStore<Page>();
 export const permissionsStore = createCollectionStore<Permission>();
