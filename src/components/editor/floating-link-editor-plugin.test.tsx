@@ -112,6 +112,7 @@ describe("FloatingLinkEditorPlugin", () => {
         { discrete: true },
       );
       editor.dispatchCommand(TOGGLE_LINK_COMMAND, "https://");
+      editor.update(() => {}, { discrete: true }); // force-flush the batched update from dispatchCommand
     });
 
     const input = screen.getByLabelText("URL tautan") as HTMLInputElement;
@@ -134,6 +135,7 @@ describe("FloatingLinkEditorPlugin", () => {
         { discrete: true },
       );
       editor.dispatchCommand(TOGGLE_LINK_COMMAND, "https://");
+      editor.update(() => {}, { discrete: true }); // force-flush the batched update from dispatchCommand
     });
 
     const input = screen.getByLabelText("URL tautan");
@@ -161,18 +163,19 @@ describe("FloatingLinkEditorPlugin", () => {
         { discrete: true },
       );
       editor.dispatchCommand(TOGGLE_LINK_COMMAND, "https://");
+      editor.update(() => {}, { discrete: true }); // force-flush the batched update from dispatchCommand
     });
 
     const input = screen.getByLabelText("URL tautan");
     act(() => {
       input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      editor.update(() => {}, { discrete: true }); // force-flush the batched update from the Escape handler
     });
 
     editor.getEditorState().read(() => {
       const paragraph = $getRoot().getFirstChildOrThrow();
-      const firstChild = paragraph.getFirstChildOrThrow();
-      expect($isLinkNode(firstChild)).toBe(false);
-      expect(firstChild.getTextContent()).toBe("hello");
+      expect(paragraph.getTextContent()).toBe("hello world");
+      expect(paragraph.getChildren().some((child) => $isLinkNode(child))).toBe(false);
     });
   });
 
