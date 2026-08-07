@@ -8,7 +8,7 @@ import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
 import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
-import { $getRoot, $createParagraphNode, $createTextNode, type LexicalEditor, type TextNode } from "lexical";
+import { $getRoot, $createParagraphNode, $createTextNode, type LexicalEditor, type TextNode, type ElementNode } from "lexical";
 import { CodeNode, $createCodeNode } from "@lexical/code";
 import { LinkNode, $createLinkNode, $isLinkNode } from "@lexical/link";
 import { FloatingToolbarPlugin } from "./floating-toolbar-plugin";
@@ -89,7 +89,7 @@ describe("FloatingToolbarPlugin", () => {
     act(() => {
       editor.update(
         () => {
-          const paragraph = $getRoot().getFirstChildOrThrow();
+          const paragraph = $getRoot().getFirstChildOrThrow<ElementNode>();
           const text = paragraph.getFirstChildOrThrow() as TextNode;
           text.select(2, 2);
         },
@@ -146,7 +146,7 @@ describe("FloatingToolbarPlugin", () => {
     await user.click(screen.getByRole("button", { name: "Tebal" }));
 
     editor.getEditorState().read(() => {
-      const paragraph = $getRoot().getFirstChildOrThrow();
+      const paragraph = $getRoot().getFirstChildOrThrow<ElementNode>();
       const text = paragraph.getFirstChildOrThrow() as TextNode;
       expect(text.hasFormat("bold")).toBe(true);
     });
@@ -160,7 +160,7 @@ describe("FloatingToolbarPlugin", () => {
     await user.click(screen.getByRole("button", { name: "Tautan" }));
 
     editor.getEditorState().read(() => {
-      const paragraph = $getRoot().getFirstChildOrThrow();
+      const paragraph = $getRoot().getFirstChildOrThrow<ElementNode>();
       const firstChild = paragraph.getFirstChildOrThrow();
       expect($isLinkNode(firstChild)).toBe(true);
     });

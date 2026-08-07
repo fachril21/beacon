@@ -8,7 +8,7 @@ import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
 import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
-import { $getRoot, $createParagraphNode, $createTextNode, type LexicalEditor } from "lexical";
+import { $getRoot, $createParagraphNode, $createTextNode, type LexicalEditor, type ElementNode } from "lexical";
 import { LinkNode, $createLinkNode, $isLinkNode, TOGGLE_LINK_COMMAND } from "@lexical/link";
 import { FloatingLinkEditorPlugin } from "./floating-link-editor-plugin";
 
@@ -142,7 +142,7 @@ describe("FloatingLinkEditorPlugin", () => {
     await user.type(input, "example.com{Enter}");
 
     editor.getEditorState().read(() => {
-      const paragraph = $getRoot().getFirstChildOrThrow();
+      const paragraph = $getRoot().getFirstChildOrThrow<ElementNode>();
       const link = paragraph.getFirstChildOrThrow();
       expect($isLinkNode(link)).toBe(true);
       expect(link.getTextContent()).toBe("hello");
@@ -173,7 +173,7 @@ describe("FloatingLinkEditorPlugin", () => {
     });
 
     editor.getEditorState().read(() => {
-      const paragraph = $getRoot().getFirstChildOrThrow();
+      const paragraph = $getRoot().getFirstChildOrThrow<ElementNode>();
       expect(paragraph.getTextContent()).toBe("hello world");
       expect(paragraph.getChildren().some((child) => $isLinkNode(child))).toBe(false);
     });
@@ -198,7 +198,7 @@ describe("FloatingLinkEditorPlugin", () => {
     await user.click(screen.getByRole("button", { name: "Hapus tautan" }));
 
     editor.getEditorState().read(() => {
-      const paragraph = $getRoot().getFirstChildOrThrow();
+      const paragraph = $getRoot().getFirstChildOrThrow<ElementNode>();
       const firstChild = paragraph.getFirstChildOrThrow();
       expect($isLinkNode(firstChild)).toBe(false);
       expect(firstChild.getTextContent()).toBe("click here");
