@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
+import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
@@ -20,6 +21,25 @@ import { FloatingToolbarPlugin } from "./floating-toolbar-plugin";
 import { usePageAutosave, type SaveStatus } from "@/hooks/use-page-autosave";
 import { PageIdProvider } from "./page-id-context";
 import type { Page } from "@/lib/types";
+
+/**
+ * LexicalComposer's `initialConfig.editable` only sets the editor's editable
+ * state at construction time -- it is never re-read after mount. Our
+ * `editable` prop starts false on every page load (useSpaceRole resolves
+ * asynchronously, so `role` is null and `canEdit` is false for the first
+ * render or two), so without this plugin every page -- for every role,
+ * including editors/admins -- got permanently stuck read-only the moment
+ * PageEditor first rendered. `editor.setEditable()` is Lexical's documented
+ * imperative API for changing editable state after construction; this
+ * plugin just keeps it in sync with the React prop on every change.
+ */
+function EditableSyncPlugin({ editable }: { editable: boolean }) {
+  const [editor] = useLexicalComposerContext();
+  useEffect(() => {
+    editor.setEditable(editable);
+  }, [editor, editable]);
+  return null;
+}
 
 export function PageEditor({
   page,
@@ -58,6 +78,7 @@ export function PageEditor({
   return (
     <LexicalComposer initialConfig={initialConfig}>
       <PageIdProvider pageId={page.id}>
+        <EditableSyncPlugin editable={editable} />
         <div className="relative">
           <RichTextPlugin
             contentEditable={
