@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { ThumbsUp, ThumbsDown, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,18 +14,34 @@ export function FeedbackWidget({ pageId }: { pageId: string }) {
   const [choice, setChoice] = useState<"yes" | "no" | null>(null);
   const [comment, setComment] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleChoice(value: "yes" | "no") {
+  async function handleChoice(value: "yes" | "no") {
     setChoice(value);
     if (value === "yes") {
-      createFeedback(pageId, true, null);
-      setSubmitted(true);
+      setIsSubmitting(true);
+      try {
+        await createFeedback(pageId, true, null);
+        setSubmitted(true);
+      } catch {
+        toast.error("Gagal mengirim masukan, silakan coba lagi.");
+        setChoice(null);
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   }
 
-  function handleSubmitComment() {
-    createFeedback(pageId, false, comment.trim() || null);
-    setSubmitted(true);
+  async function handleSubmitComment() {
+    setIsSubmitting(true);
+    try {
+      await createFeedback(pageId, false, comment.trim() || null);
+      setSubmitted(true);
+    } catch {
+      toast.error("Gagal mengirim masukan, silakan coba lagi.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   if (submitted) {
@@ -43,8 +60,8 @@ export function FeedbackWidget({ pageId }: { pageId: string }) {
         <Button
           variant={choice === "yes" ? undefined : "secondary"}
           className={choice === "yes" ? "bg-primary-muted text-primary-muted-foreground hover:bg-primary-muted" : undefined}
-          onClick={() => handleChoice("yes")}
-          disabled={choice === "no"}
+          onClick={() => void handleChoice("yes")}
+          disabled={choice === "no" || isSubmitting}
         >
           <ThumbsUp className="size-3.5" />
           Ya
@@ -52,8 +69,8 @@ export function FeedbackWidget({ pageId }: { pageId: string }) {
         <Button
           variant="secondary"
           className={cn(choice === "no" && "bg-primary-muted text-primary-muted-foreground hover:bg-primary-muted", choice === "yes" && "opacity-40")}
-          onClick={() => handleChoice("no")}
-          disabled={choice === "yes"}
+          onClick={() => void handleChoice("no")}
+          disabled={choice === "yes" || isSubmitting}
         >
           <ThumbsDown className="size-3.5" />
           Tidak
@@ -67,7 +84,7 @@ export function FeedbackWidget({ pageId }: { pageId: string }) {
             placeholder="Apa yang bisa diperbaiki?"
             className="min-h-20"
           />
-          <Button variant="secondary" onClick={handleSubmitComment} className="self-end">
+          <Button variant="secondary" onClick={() => void handleSubmitComment()} className="self-end" disabled={isSubmitting}>
             Kirim
           </Button>
         </div>

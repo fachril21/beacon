@@ -12,6 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { SaveStatusIndicator } from "./save-status-indicator";
 import { useOrganization } from "@/hooks/use-organizations";
 import { usePublishActions, hasUnpublishedChanges, getPageStatus } from "@/hooks/use-pages";
+import { useHelpfulnessRate } from "@/hooks/use-feedback";
 import { isPageNearlyEmpty } from "@/lib/content-empty";
 import { StatusBadge } from "@/components/beacon/status-badge";
 import type { Page, Space, SpaceRole } from "@/lib/types";
@@ -48,6 +49,7 @@ export function PageEditorToolbar({ page, space, title, saveStatus, role, onOpen
 
   const pendingChanges = hasUnpublishedChanges(page);
   const status = getPageStatus(page);
+  const helpfulness = useHelpfulnessRate(canEdit && page.isPublished ? page.id : undefined);
 
   async function doPublish() {
     if (typeof navigator !== "undefined" && !navigator.onLine) {
@@ -93,6 +95,11 @@ export function PageEditorToolbar({ page, space, title, saveStatus, role, onOpen
           <span>/</span>
           <span className="truncate text-foreground">{title || "Halaman tanpa judul"}</span>
           {page.isPublished && <StatusBadge status={status} className="ml-1" />}
+          {canEdit && helpfulness.total > 0 && (
+            <span className="ml-2 shrink-0 text-caption text-muted-foreground">
+              {Math.round((helpfulness.rate ?? 0) * 100)}% membantu ({helpfulness.total} respons)
+            </span>
+          )}
         </nav>
         <div className="flex shrink-0 items-center gap-3">
           <SaveStatusIndicator status={saveStatus} />

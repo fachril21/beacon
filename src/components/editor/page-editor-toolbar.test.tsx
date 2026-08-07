@@ -17,6 +17,11 @@ vi.mock("@/hooks/use-pages", () => ({
   getPageStatus: () => "draft",
 }));
 
+const mockHelpfulnessRate = vi.fn(() => ({ yes: 0, total: 0, rate: null as number | null }));
+vi.mock("@/hooks/use-feedback", () => ({
+  useHelpfulnessRate: () => mockHelpfulnessRate(),
+}));
+
 const space: Space = {
   id: "space-1",
   organizationId: "org-1",
@@ -82,5 +87,50 @@ describe("PageEditorToolbar role gating (US17.2)", () => {
     );
     // Update button (shown for editors/admins on published pages) must not render for a viewer.
     expect(screen.queryByRole("button", { name: "Perbarui" })).not.toBeInTheDocument();
+  });
+});
+
+describe("PageEditorToolbar helpfulness rate (US15.2)", () => {
+  it("shows the aggregate helpfulness rate to an admin on a published page with responses", () => {
+    mockHelpfulnessRate.mockReturnValue({ yes: 2, total: 3, rate: 2 / 3 });
+    render(
+      <PageEditorToolbar
+        page={{ ...draftPage, isPublished: true }}
+        space={space}
+        title={draftPage.title}
+        saveStatus="idle"
+        role="admin"
+      />,
+    );
+    expect(screen.getByText(/67%/)).toBeInTheDocument();
+    expect(screen.getByText(/3 respons/)).toBeInTheDocument();
+  });
+
+  it("shows nothing for a page with zero responses yet", () => {
+    mockHelpfulnessRate.mockReturnValue({ yes: 0, total: 0, rate: null });
+    render(
+      <PageEditorToolbar
+        page={{ ...draftPage, isPublished: true }}
+        space={space}
+        title={draftPage.title}
+        saveStatus="idle"
+        role="admin"
+      />,
+    );
+    expect(screen.queryByText(/respons/)).not.toBeInTheDocument();
+  });
+
+  it("never shows the helpfulness rate to a viewer, even with responses (feedback_select_editor RLS mirror)", () => {
+    mockHelpfulnessRate.mockReturnValue({ yes: 2, total: 3, rate: 2 / 3 });
+    render(
+      <PageEditorToolbar
+        page={{ ...draftPage, isPublished: true }}
+        space={space}
+        title={draftPage.title}
+        saveStatus="idle"
+        role="viewer"
+      />,
+    );
+    expect(screen.queryByText(/respons/)).not.toBeInTheDocument();
   });
 });

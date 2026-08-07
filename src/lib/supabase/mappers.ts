@@ -14,6 +14,8 @@ import type {
   ScreenshotBlock,
   Version,
   PublishedContentSnapshot,
+  Comment,
+  Feedback,
 } from "@/lib/types";
 import type { SerializedEditorState } from "lexical";
 
@@ -201,5 +203,45 @@ export function mapVersionRow(row: VersionRow): Version {
     createdByUserId: row.created_by_user_id,
     createdAt: row.created_at,
     isRestoreOf: row.is_restore_of,
+  };
+}
+
+export interface CommentRow {
+  id: string;
+  page_id: string;
+  block_id: string;
+  author_user_id: string;
+  body: string;
+  mentioned_user_ids: string[];
+  created_at: string;
+}
+
+export function mapCommentRow(row: CommentRow): Comment {
+  return {
+    id: row.id,
+    pageId: row.page_id,
+    blockId: row.block_id,
+    authorUserId: row.author_user_id,
+    body: row.body,
+    mentionedUserIds: row.mentioned_user_ids,
+    createdAt: row.created_at,
+  };
+}
+
+export interface FeedbackRow {
+  id: string;
+  page_id: string;
+  helpful: boolean;
+  comment: string | null;
+  created_at: string;
+}
+
+export function mapFeedbackRow(row: FeedbackRow): Feedback {
+  return {
+    id: row.id,
+    pageId: row.page_id,
+    helpful: row.helpful,
+    comment: row.comment,
+    createdAt: row.created_at,
   };
 }
