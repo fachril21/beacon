@@ -10,6 +10,7 @@ import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { $getRoot, $createParagraphNode, $createTextNode, type LexicalEditor, type TextNode, type ElementNode } from "lexical";
 import { CodeNode, $createCodeNode } from "@lexical/code";
+import { HeadingNode, QuoteNode } from "@lexical/rich-text";
 import { LinkNode, $createLinkNode, $isLinkNode } from "@lexical/link";
 import { FloatingToolbarPlugin } from "./floating-toolbar-plugin";
 
@@ -32,7 +33,7 @@ function renderEditor() {
     <LexicalComposer
       initialConfig={{
         namespace: "test",
-        nodes: [CodeNode, LinkNode],
+        nodes: [CodeNode, LinkNode, HeadingNode, QuoteNode],
         onError: (e) => {
           throw e;
         },
@@ -163,6 +164,49 @@ describe("FloatingToolbarPlugin", () => {
       const paragraph = $getRoot().getFirstChildOrThrow<ElementNode>();
       const firstChild = paragraph.getFirstChildOrThrow();
       expect($isLinkNode(firstChild)).toBe(true);
+    });
+  });
+
+  it.each([
+    ["Judul 1", "h1"],
+    ["Judul 2", "h2"],
+  ] as const)("turns the selected block into a %s heading via the %s button", async (label, tag) => {
+    const user = userEvent.setup();
+    const editor = renderEditor();
+    selectPlainText(editor, 0, 5);
+
+    await user.click(screen.getByRole("button", { name: label }));
+
+    editor.getEditorState().read(() => {
+      const block = $getRoot().getFirstChildOrThrow<HeadingNode>();
+      expect(block.getType()).toBe("heading");
+      expect(block.getTag()).toBe(tag);
+    });
+  });
+
+  it("turns the selected block into a quote via the Kutipan button", async () => {
+    const user = userEvent.setup();
+    const editor = renderEditor();
+    selectPlainText(editor, 0, 5);
+
+    await user.click(screen.getByRole("button", { name: "Kutipan" }));
+
+    editor.getEditorState().read(() => {
+      expect($getRoot().getFirstChildOrThrow<ElementNode>().getType()).toBe("quote");
+    });
+  });
+
+  it("turns a heading back into a plain paragraph via the Paragraf button", async () => {
+    const user = userEvent.setup();
+    const editor = renderEditor();
+    selectPlainText(editor, 0, 5);
+    await user.click(screen.getByRole("button", { name: "Judul 1" }));
+
+    await user.click(screen.getByRole("button", { name: "Paragraf" }));
+
+    editor.getEditorState().read(() => {
+      const paragraph = $getRoot().getFirstChildOrThrow<ElementNode>();
+      expect(paragraph.getType()).toBe("paragraph");
     });
   });
 });
