@@ -18,6 +18,7 @@ import { editorTheme } from "./editor-theme";
 import { editorNodes } from "./nodes";
 import { SlashCommandPlugin } from "./slash-command-plugin";
 import { FloatingToolbarPlugin } from "./floating-toolbar-plugin";
+import { CodeBlockExitPlugin } from "./code-block-exit-plugin";
 import { usePageAutosave, type SaveStatus } from "@/hooks/use-page-autosave";
 import { PageIdProvider } from "./page-id-context";
 import type { Page } from "@/lib/types";
@@ -103,6 +104,7 @@ export function PageEditor({
         <TabIndentationPlugin />
         <SlashCommandPlugin />
         <FloatingToolbarPlugin />
+        <CodeBlockExitPlugin />
         <OnChangePlugin onChange={handleChange} ignoreSelectionChange />
       </PageIdProvider>
     </LexicalComposer>
