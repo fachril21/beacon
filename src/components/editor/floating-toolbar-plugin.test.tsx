@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
@@ -8,7 +8,7 @@ import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
 import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
-import { $getRoot, $createParagraphNode, $createTextNode, type LexicalEditor } from "lexical";
+import { $getRoot, $createParagraphNode, $createTextNode, type LexicalEditor, type TextNode } from "lexical";
 import { CodeNode, $createCodeNode } from "@lexical/code";
 import { LinkNode, $createLinkNode, $isLinkNode } from "@lexical/link";
 import { FloatingToolbarPlugin } from "./floating-toolbar-plugin";
@@ -54,6 +54,21 @@ function renderEditor() {
   return editor;
 }
 
+function selectPlainText(editor: LexicalEditor, anchorOffset: number, focusOffset: number) {
+  act(() => {
+    editor.update(
+      () => {
+        const paragraph = $createParagraphNode();
+        const text = $createTextNode("hello world");
+        paragraph.append(text);
+        $getRoot().clear().append(paragraph);
+        text.select(anchorOffset, focusOffset);
+      },
+      { discrete: true },
+    );
+  });
+}
+
 describe("FloatingToolbarPlugin", () => {
   it("does not render on mount with no selection", () => {
     renderEditor();
@@ -62,66 +77,63 @@ describe("FloatingToolbarPlugin", () => {
 
   it("shows the format toolbar when a non-collapsed text selection exists", () => {
     const editor = renderEditor();
-    editor.update(
-      () => {
-        const paragraph = $createParagraphNode();
-        const text = $createTextNode("hello world");
-        paragraph.append(text);
-        $getRoot().clear().append(paragraph);
-        text.select(0, 5);
-      },
-      { discrete: true },
-    );
-
+    selectPlainText(editor, 0, 5);
     expect(screen.getByRole("button", { name: "Tebal" })).toBeInTheDocument();
   });
 
-  it("hides the toolbar when the selection is collapsed", () => {
+  it("hides the toolbar once the selection collapses again", () => {
     const editor = renderEditor();
-    editor.update(
-      () => {
-        const paragraph = $createParagraphNode();
-        const text = $createTextNode("hello world");
-        paragraph.append(text);
-        $getRoot().clear().append(paragraph);
-        text.select(2, 2);
-      },
-      { discrete: true },
-    );
+    selectPlainText(editor, 0, 5);
+    expect(screen.getByRole("button", { name: "Tebal" })).toBeInTheDocument();
+
+    act(() => {
+      editor.update(
+        () => {
+          const paragraph = $getRoot().getFirstChildOrThrow();
+          const text = paragraph.getFirstChildOrThrow() as TextNode;
+          text.select(2, 2);
+        },
+        { discrete: true },
+      );
+    });
 
     expect(screen.queryByRole("button", { name: "Tebal" })).not.toBeInTheDocument();
   });
 
-  it("hides the toolbar when the selection is inside a code block", () => {
+  it("never shows the toolbar for a selection inside a code block", () => {
     const editor = renderEditor();
-    editor.update(
-      () => {
-        const code = $createCodeNode();
-        const text = $createTextNode("console.log(1)");
-        code.append(text);
-        $getRoot().clear().append(code);
-        text.select(0, 5);
-      },
-      { discrete: true },
-    );
+    act(() => {
+      editor.update(
+        () => {
+          const code = $createCodeNode();
+          const text = $createTextNode("console.log(1)");
+          code.append(text);
+          $getRoot().clear().append(code);
+          text.select(0, 5);
+        },
+        { discrete: true },
+      );
+    });
 
     expect(screen.queryByRole("button", { name: "Tebal" })).not.toBeInTheDocument();
   });
 
-  it("hides the format toolbar when the selection is inside a link (link editor takes over)", () => {
+  it("defers to the link editor instead of showing the format toolbar on a link selection", () => {
     const editor = renderEditor();
-    editor.update(
-      () => {
-        const paragraph = $createParagraphNode();
-        const link = $createLinkNode("https://example.com");
-        const text = $createTextNode("click here");
-        link.append(text);
-        paragraph.append(link);
-        $getRoot().clear().append(paragraph);
-        text.select(0, 5);
-      },
-      { discrete: true },
-    );
+    act(() => {
+      editor.update(
+        () => {
+          const paragraph = $createParagraphNode();
+          const link = $createLinkNode("https://example.com");
+          const text = $createTextNode("click here");
+          link.append(text);
+          paragraph.append(link);
+          $getRoot().clear().append(paragraph);
+          text.select(0, 5);
+        },
+        { discrete: true },
+      );
+    });
 
     expect(screen.queryByRole("button", { name: "Tebal" })).not.toBeInTheDocument();
   });
@@ -129,23 +141,13 @@ describe("FloatingToolbarPlugin", () => {
   it("dispatches bold formatting on the selection when the Bold button is clicked", async () => {
     const user = userEvent.setup();
     const editor = renderEditor();
-    editor.update(
-      () => {
-        const paragraph = $createParagraphNode();
-        const text = $createTextNode("hello world");
-        paragraph.append(text);
-        $getRoot().clear().append(paragraph);
-        text.select(0, 5);
-      },
-      { discrete: true },
-    );
+    selectPlainText(editor, 0, 5);
 
     await user.click(screen.getByRole("button", { name: "Tebal" }));
 
     editor.getEditorState().read(() => {
-      const root = $getRoot();
-      const paragraph = root.getFirstChildOrThrow();
-      const text = paragraph.getFirstChildOrThrow() as import("lexical").TextNode;
+      const paragraph = $getRoot().getFirstChildOrThrow();
+      const text = paragraph.getFirstChildOrThrow() as TextNode;
       expect(text.hasFormat("bold")).toBe(true);
     });
   });
@@ -153,22 +155,12 @@ describe("FloatingToolbarPlugin", () => {
   it("wraps the selection in a link when the Link button is clicked", async () => {
     const user = userEvent.setup();
     const editor = renderEditor();
-    editor.update(
-      () => {
-        const paragraph = $createParagraphNode();
-        const text = $createTextNode("hello world");
-        paragraph.append(text);
-        $getRoot().clear().append(paragraph);
-        text.select(0, 5);
-      },
-      { discrete: true },
-    );
+    selectPlainText(editor, 0, 5);
 
     await user.click(screen.getByRole("button", { name: "Tautan" }));
 
     editor.getEditorState().read(() => {
-      const root = $getRoot();
-      const paragraph = root.getFirstChildOrThrow();
+      const paragraph = $getRoot().getFirstChildOrThrow();
       const firstChild = paragraph.getFirstChildOrThrow();
       expect($isLinkNode(firstChild)).toBe(true);
     });
