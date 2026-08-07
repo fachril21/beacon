@@ -14,7 +14,7 @@ import { useOrganization } from "@/hooks/use-organizations";
 import { usePublishActions, hasUnpublishedChanges, getPageStatus } from "@/hooks/use-pages";
 import { isPageNearlyEmpty } from "@/lib/content-empty";
 import { StatusBadge } from "@/components/beacon/status-badge";
-import type { Page, Space } from "@/lib/types";
+import type { Page, Space, SpaceRole } from "@/lib/types";
 import type { SaveStatus } from "@/hooks/use-page-autosave";
 
 interface PageEditorToolbarProps {
@@ -22,10 +22,14 @@ interface PageEditorToolbarProps {
   space: Space;
   title: string;
   saveStatus: SaveStatus;
+  /** The current user's role in this Page's Space. Publish/Update/Unpublish are
+   * editor/admin-only (US17.2) — RLS already rejects the write; this hides the
+   * dead-click affordance so a viewer never sees actions they can't use. */
+  role: SpaceRole | null;
   onOpenVersionHistory?: () => void;
 }
 
-export function PageEditorToolbar({ page, space, title, saveStatus, onOpenVersionHistory }: PageEditorToolbarProps) {
+export function PageEditorToolbar({ page, space, title, saveStatus, role, onOpenVersionHistory }: PageEditorToolbarProps) {
   const router = useRouter();
   const organization = useOrganization(space.organizationId);
   const { publish, update, unpublish } = usePublishActions();
@@ -33,6 +37,7 @@ export function PageEditorToolbar({ page, space, title, saveStatus, onOpenVersio
   const [emptyWarningOpen, setEmptyWarningOpen] = useState(false);
   const [unpublishOpen, setUnpublishOpen] = useState(false);
   const [isOffline, setIsOffline] = useState(typeof navigator !== "undefined" && !navigator.onLine);
+  const canEdit = role === "editor" || role === "admin";
 
   const orgVerified = organization?.isDomainVerified ?? false;
   const disabledReason = !space.isPublishable
@@ -92,7 +97,7 @@ export function PageEditorToolbar({ page, space, title, saveStatus, onOpenVersio
         <div className="flex shrink-0 items-center gap-3">
           <SaveStatusIndicator status={saveStatus} />
 
-          {page.isPublished ? (
+          {!canEdit ? null : page.isPublished ? (
             <Button size="sm" variant="secondary" onClick={handleUpdate} disabled={!pendingChanges}>
               Perbarui
             </Button>
@@ -124,7 +129,7 @@ export function PageEditorToolbar({ page, space, title, saveStatus, onOpenVersio
                 <History className="size-3.5" />
                 Riwayat Versi
               </DropdownMenuItem>
-              {page.isPublished && (
+              {canEdit && page.isPublished && (
                 <DropdownMenuItem variant="destructive" onClick={() => setUnpublishOpen(true)}>
                   Batalkan Publikasi
                 </DropdownMenuItem>
@@ -134,7 +139,7 @@ export function PageEditorToolbar({ page, space, title, saveStatus, onOpenVersio
         </div>
       </div>
 
-      {page.isPublished && pendingChanges && (
+      {canEdit && page.isPublished && pendingChanges && (
         <div className="flex items-center justify-between gap-3 border-t border-warning/30 bg-warning-muted px-6 py-2.5">
           <p className="text-body-sm text-warning-muted-foreground">Anda memiliki perubahan yang belum dipublikasikan.</p>
           <Button size="sm" variant="secondary" onClick={handleUpdate}>

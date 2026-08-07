@@ -21,7 +21,16 @@ import { usePageAutosave, type SaveStatus } from "@/hooks/use-page-autosave";
 import { PageIdProvider } from "./page-id-context";
 import type { Page } from "@/lib/types";
 
-export function PageEditor({ page, onStatusChange }: { page: Page; onStatusChange?: (status: SaveStatus) => void }) {
+export function PageEditor({
+  page,
+  onStatusChange,
+  editable = true,
+}: {
+  page: Page;
+  onStatusChange?: (status: SaveStatus) => void;
+  /** Viewer-role Users (US17.2) get a read-only editor — RLS already rejects the write. */
+  editable?: boolean;
+}) {
   const { status, scheduleSave } = usePageAutosave(page.id);
 
   useEffect(() => {
@@ -33,6 +42,7 @@ export function PageEditor({ page, onStatusChange }: { page: Page; onStatusChang
     theme: editorTheme,
     nodes: editorNodes,
     editorState: JSON.stringify(page.content),
+    editable,
     onError: (error: Error) => {
       console.error("Lexical error:", error);
     },
