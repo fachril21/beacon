@@ -103,6 +103,48 @@ Other known gaps, in order of how much they matter:
 4. **`src/lib/data-store.ts` (the Stage 1 mock store) still exists** and is still imported by `use-comments.ts` and `use-feedback.ts` — those are Stage 3 (Epics 15/16), out of this session's scope, so they were deliberately left on mock data rather than converted.
 5. **Coverage gap** noted above.
 
+## Session 2 — Real Infrastructure Verification
+
+**What changed since the report above:** Docker, a running MinIO container, and a live (already-migrated) remote Supabase Postgres instance became available. This session re-ran what was previously only reasoned about, against the real thing, instead of adding new mocked tests.
+
+### Re-ran full unit suite
+- **Command:** `npx vitest run --coverage`
+- **Result:** 81/81 tests passing (unchanged). Coverage: statements 65.66%, branches 49.72%, functions 64.08%, lines 72% — still below the 80% global threshold, same gap as the original report; not addressed this session (out of scope for infra verification).
+
+### Real bug caught by live testing (not by any test): browser env-var inlining
+`src/lib/supabase/env.ts`'s `requireEnv(name)` did `process.env[name]` — a dynamic, computed property access. Next.js/Turbopack can only statically inline `NEXT_PUBLIC_*` vars into the browser bundle when the access is a literal `process.env.NEXT_PUBLIC_X`; a dynamic lookup can't be analyzed, so nothing gets inlined and the browser build throws `Missing required environment variable` on every page using `useSession`, regardless of `.env.local` contents. This is a bug **unit tests could never have caught**, since Vitest runs in Node where a real `process.env` object exists — only running the actual `next dev` build in a real browser surfaced it. **Fixed** by passing the literal `process.env.NEXT_PUBLIC_X` value into `requireEnv` at each call site instead of doing the lookup inside the shared helper (`src/lib/supabase/env.ts`).
+
+### Real infra bug caught: missing table grants on manually-run migrations
+The migrations never contain `GRANT` statements — they rely on Supabase's platform automatically granting `anon`/`authenticated`/`service_role` privileges on every `public` schema table, which normally only happens via `supabase db push`/the Dashboard. Since this project's migrations were applied via a direct SQL connection instead, that automatic grant step never ran: real login failed with `permission denied for table profiles` (Postgres 42501) the moment `useSession` tried to read the signed-in user's `profiles` row — RLS was never even reached, the table-level grant blocked it first. Fixed by running the standard Supabase default-privilege `GRANT`/`ALTER DEFAULT PRIVILEGES` statements directly against the remote DB.
+
+### Real S3/MinIO upload — Epic 12's biggest gap, now closed
+Previously: *"MinIO/S3 has never received a real upload... never started — no Docker this session."*
+This session: started MinIO via `docker compose up -d --wait minio-init` (bucket `beacon-screenshots` created, anonymous-download policy applied), then a real screenshot was uploaded through the app's actual UI (presign → direct browser-to-S3 POST → DB insert) while authenticated as a real user.
+- **Verified via `mc ls` against the live container:** `screenshots/4994b434-d2a4-4911-89a1-dd6ffac0a76e/f1793cc5-0d78-4a87-a4d2-4c99a531cf96.png` (628 KiB) actually exists in the bucket.
+- **Verified public readability:** `curl -o /dev/null -w '%{http_code}'` against `http://localhost:9000/beacon-screenshots/<key>` → `200 image/png`, matching the exact URL shape the app builds from `NEXT_PUBLIC_S3_PUBLIC_URL_BASE`.
+- **What is now guaranteed for real (not mocked):** the full presign → upload → publicly-readable-URL round trip works end-to-end against a real S3-compatible store.
+
+### Real RLS spot-check against the live database (partial substitute for pgTAP, which remains not run — see below)
+Queried the live REST endpoint with the real anon key (`.env.local`'s `NEXT_PUBLIC_SUPABASE_ANON_KEY`) and **no session** — genuinely unauthenticated:
+
+| Table | Anon query | Result | Matches AC? |
+|---|---|---|---|
+| `pages` | `GET /rest/v1/pages?select=id,title` | `[]` | Yes — internal pages invisible to anon |
+| `profiles` | `GET /rest/v1/profiles?select=id,email` | `[]` | Yes — profiles are internal-only |
+| `spaces` | `GET /rest/v1/spaces?select=id,name` | `[{"id":"27a47b64-...","name":"Cakra-Academic"}]` | Yes — `spaces_select_public_publishable` intentionally exposes `is_publishable=true` Spaces to anon (Flow 5's public TOC); this Space had been marked publishable |
+
+This is real evidence — against the actual live database, actual RLS policies as applied, actual `GRANT`s as fixed above — that Epic 9's table-level access control holds for the three tables spot-checked.
+
+**pgTAP suite (`supabase/tests/database/rls_policies.test.sql`) — still NOT run.** `supabase projects list` (CLI is authenticated) does not show this project (`jrdtpmtpjowouknmuxid`) under the linked account, so `supabase link`/`supabase test db` wasn't available without further account/access setup this session didn't chase down given time/cost constraints. The REST spot-check above is real but narrower than the full pgTAP suite (e.g., it doesn't check the bootstrap-permission-insert AC or the non-owner-domain-update-affects-0-rows AC).
+
+### Updated known gaps
+1. ~~Nothing has run against a real Postgres/Supabase instance~~ → **partially closed**: real anon-vs-authenticated RLS behavior spot-checked live (table above); full pgTAP suite still not executed.
+2. ~~MinIO/S3 has never received a real upload~~ → **closed**: real upload verified end-to-end.
+3. Epic 14a live domain routing — still deferred, unchanged.
+4. `src/lib/data-store.ts` mock store still used by Stage 3 hooks — unchanged, out of scope.
+5. Coverage gap (65.66%/49.72%/64.08%/72% vs 80% target) — unchanged, not addressed this session.
+6. **New:** multi-organization cross-tenant isolation (a second real Organization/user) was not tested live — only single-tenant anon-vs-authenticated was spot-checked.
+
 ## Merge evidence
 
 No squashing planned — this session made 9 checkpoint commits (one per epic plus the test-infra setup and the `proxy.ts` rename), each with the RED/GREEN evidence and any bugs caught inlined in the commit message. If these get squashed later, the "Task report" section above is the summary to carry forward.
