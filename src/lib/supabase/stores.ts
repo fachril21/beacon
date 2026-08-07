@@ -15,6 +15,7 @@ import type {
   ScreenshotBlock,
   Comment,
   Feedback,
+  Notification,
 } from "@/lib/types";
 
 export const organizationsStore = createCollectionStore<Organization>();
@@ -27,3 +28,4 @@ export const versionsStore = createCollectionStore<Version>();
 export const screenshotBlocksStore = createCollectionStore<ScreenshotBlock>();
 export const commentsStore = createCollectionStore<Comment>();
 export const feedbackStore = createCollectionStore<Feedback>();
+export const notificationsStore = createCollectionStore<Notification>();

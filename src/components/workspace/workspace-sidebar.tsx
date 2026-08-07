@@ -13,6 +13,7 @@ import { useUserSpaces } from "@/hooks/use-spaces";
 import { useChildPages, usePages, useReorderPages } from "@/hooks/use-pages";
 import { PageTreeItem } from "./page-tree-item";
 import { NewSpaceDialog } from "./new-space-dialog";
+import { NotificationBell } from "./notification-bell";
 
 function SpaceSection({ spaceId, name }: { spaceId: string; name: string }) {
   const pathname = usePathname();
@@ -133,6 +134,7 @@ export function WorkspaceSidebar({ onOpenSearch }: { onOpenSearch: () => void })
             <p className="truncate text-body-sm text-sidebar-accent-foreground">{user?.name}</p>
           </div>
         </div>
+        <NotificationBell />
         <Button
           variant="ghost"
           size="icon-sm"

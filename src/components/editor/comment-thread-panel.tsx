@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { toast } from "sonner";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -54,11 +55,15 @@ export function CommentThreadPanel({ blockId, className }: { blockId: string; cl
     setMentionedUserIds((prev) => (prev.includes(userId) ? prev : [...prev, userId]));
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!body.trim() || !user) return;
-    createComment(pageId, blockId, user.id, body.trim(), mentionedUserIds);
-    setBody("");
-    setMentionedUserIds([]);
+    try {
+      await createComment(pageId, blockId, user.id, body.trim(), mentionedUserIds);
+      setBody("");
+      setMentionedUserIds([]);
+    } catch {
+      toast.error("Gagal mengirim komentar, silakan coba lagi.");
+    }
   }
 
   return (
@@ -120,7 +125,7 @@ export function CommentThreadPanel({ blockId, className }: { blockId: string; cl
               ))}
             </div>
           )}
-          <Button size="sm" onClick={handleSubmit} disabled={!body.trim()} className="mt-2 w-full">
+          <Button size="sm" onClick={() => void handleSubmit()} disabled={!body.trim()} className="mt-2 w-full">
             Kirim
           </Button>
         </div>

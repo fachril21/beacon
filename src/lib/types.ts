@@ -217,6 +217,22 @@ export interface Feedback {
 }
 
 // ---------------------------------------------------------------------------
+// Notification — a real notification sent when a User is @mentioned in a
+// Comment (PRD.md US16.2). Not in PROJECT.md §9.4 (added during Stage 3,
+// since no notification surface existed before Epic 16).
+// ---------------------------------------------------------------------------
+
+export interface Notification {
+  id: ID;
+  recipientUserId: ID;
+  actorUserId: ID;
+  pageId: ID;
+  commentId: ID;
+  isRead: boolean;
+  createdAt: ISODateString;
+}
+
+// ---------------------------------------------------------------------------
 // Search
 // ---------------------------------------------------------------------------
 

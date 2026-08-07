@@ -16,6 +16,7 @@ import type {
   PublishedContentSnapshot,
   Comment,
   Feedback,
+  Notification,
 } from "@/lib/types";
 import type { SerializedEditorState } from "lexical";
 
@@ -242,6 +243,28 @@ export function mapFeedbackRow(row: FeedbackRow): Feedback {
     pageId: row.page_id,
     helpful: row.helpful,
     comment: row.comment,
+    createdAt: row.created_at,
+  };
+}
+
+export interface NotificationRow {
+  id: string;
+  recipient_user_id: string;
+  actor_user_id: string;
+  page_id: string;
+  comment_id: string;
+  is_read: boolean;
+  created_at: string;
+}
+
+export function mapNotificationRow(row: NotificationRow): Notification {
+  return {
+    id: row.id,
+    recipientUserId: row.recipient_user_id,
+    actorUserId: row.actor_user_id,
+    pageId: row.page_id,
+    commentId: row.comment_id,
+    isRead: row.is_read,
     createdAt: row.created_at,
   };
 }
