@@ -5,15 +5,23 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { ChevronRight, Plus, Search, Settings } from "lucide-react";
+import { ChevronRight, LogOut, Plus, Search, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/use-session";
 import { useUserSpaces } from "@/hooks/use-spaces";
 import { useChildPages, usePages, useReorderPages } from "@/hooks/use-pages";
 import { PageTreeItem } from "./page-tree-item";
 import { NewSpaceDialog } from "./new-space-dialog";
 import { NotificationBell } from "./notification-bell";
+import { sidebarNavIconClass, sidebarNavRowClass } from "./sidebar-row";
+
+function SidebarSectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="px-2 pt-4 pb-1.5 text-caption font-semibold tracking-[0.04em] text-sidebar-foreground/50 uppercase first:pt-0">
+      {children}
+    </p>
+  );
+}
 
 function SpaceSection({ spaceId, name }: { spaceId: string; name: string }) {
   const pathname = usePathname();
@@ -83,16 +91,22 @@ export function WorkspaceSidebar({ onOpenSearch }: { onOpenSearch: () => void })
 
   return (
     <aside className="flex h-full w-sidebar shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
-      <div className="flex items-center gap-2.5 px-4 py-4">
-        <div className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
-          <svg viewBox="0 0 24 24" fill="none" className="size-4" aria-hidden>
-            <path d="M12 2 4 6v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V6l-8-4Z" fill="currentColor" />
-          </svg>
-        </div>
-        <span className="text-body-sm font-semibold text-sidebar-accent-foreground">Beacon</span>
+      {/* Compact workspace switcher, pinned at the top */}
+      <div className="px-2 pt-3">
+        <Link
+          href="/"
+          className="flex items-center gap-2.5 rounded-md px-1.5 py-2 hover:bg-sidebar-accent"
+        >
+          <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+            <svg viewBox="0 0 24 24" fill="none" className="size-4" aria-hidden>
+              <path d="M12 2 4 6v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V6l-8-4Z" fill="currentColor" />
+            </svg>
+          </div>
+          <span className="min-w-0 flex-1 truncate text-body-sm font-semibold text-sidebar-accent-foreground">Beacon</span>
+        </Link>
       </div>
 
-      <div className="px-3 pb-2">
+      <div className="px-2 pt-2 pb-1">
         <button
           type="button"
           onClick={onOpenSearch}
@@ -105,6 +119,7 @@ export function WorkspaceSidebar({ onOpenSearch }: { onOpenSearch: () => void })
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 pb-2">
+        <SidebarSectionLabel>Space</SidebarSectionLabel>
         {spaces.length === 0 ? (
           <p className="px-2 py-3 text-caption text-sidebar-foreground/60">Belum ada Space.</p>
         ) : (
@@ -118,35 +133,31 @@ export function WorkspaceSidebar({ onOpenSearch }: { onOpenSearch: () => void })
         )}
       </div>
 
-      <div className="border-t border-sidebar-border p-2">
-        <Button variant="ghost" className="w-full justify-start gap-2 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" onClick={() => setIsNewSpaceOpen(true)}>
-          <Plus className="size-4" />
-          Space baru
-        </Button>
+      <div className="border-t border-sidebar-border px-2 pt-1 pb-2">
+        <SidebarSectionLabel>Umum</SidebarSectionLabel>
+        <div className="flex flex-col gap-0.5">
+          <button type="button" className={sidebarNavRowClass} onClick={() => setIsNewSpaceOpen(true)}>
+            <Plus className={sidebarNavIconClass} />
+            Space baru
+          </button>
+          <NotificationBell />
+          <Link href="/settings/organization" className={sidebarNavRowClass}>
+            <Settings className={sidebarNavIconClass} />
+            Pengaturan Organisasi
+          </Link>
+          <button type="button" className={sidebarNavRowClass} onClick={signOut}>
+            <LogOut className={sidebarNavIconClass} />
+            Keluar
+          </button>
+        </div>
       </div>
 
-      <div className="flex items-center justify-between gap-2 border-t border-sidebar-border p-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-secondary text-caption font-semibold text-secondary-foreground">
-            {user?.name?.[0]?.toUpperCase() ?? "?"}
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-body-sm text-sidebar-accent-foreground">{user?.name}</p>
-          </div>
+      {/* Footer meta row — identity only, low-emphasis */}
+      <div className="flex items-center gap-2.5 border-t border-sidebar-border px-3 py-3">
+        <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-secondary text-caption font-semibold text-secondary-foreground">
+          {user?.name?.[0]?.toUpperCase() ?? "?"}
         </div>
-        <NotificationBell />
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          render={<Link href="/settings/organization" aria-label="Pengaturan Organisasi" />}
-          nativeButton={false}
-          className="shrink-0 text-sidebar-foreground hover:bg-sidebar-accent"
-        >
-          <Settings className="size-4" />
-        </Button>
-        <Button variant="ghost" size="sm" onClick={signOut} className="shrink-0 text-sidebar-foreground hover:bg-sidebar-accent">
-          Keluar
-        </Button>
+        <p className="min-w-0 flex-1 truncate text-body-sm text-sidebar-foreground/70">{user?.name}</p>
       </div>
 
       <NewSpaceDialog open={isNewSpaceOpen} onOpenChange={setIsNewSpaceOpen} />

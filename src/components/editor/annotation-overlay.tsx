@@ -1,3 +1,4 @@
+import { getAnnotationCanvasSize } from "@/lib/annotation-canvas-size";
 import type { AnnotationJson } from "@/lib/types";
 
 interface FabricObjectJson {
@@ -41,9 +42,15 @@ export function AnnotationOverlay({
 }) {
   if (!annotation?.objects?.length) return null;
 
+  // Objects were drawn on (and their coordinates serialized from) the Fabric
+  // editing canvas's scaled-down size, not the image's native pixel size —
+  // the viewBox must match that same scaled coordinate space for shapes to
+  // land exactly where they were drawn, at any rendered display size.
+  const { width, height } = getAnnotationCanvasSize(imageWidth, imageHeight);
+
   return (
     <svg
-      viewBox={`0 0 ${imageWidth} ${imageHeight}`}
+      viewBox={`0 0 ${width} ${height}`}
       className="pointer-events-none absolute inset-0 h-full w-full"
       aria-hidden
     >
@@ -76,12 +83,31 @@ function renderObject(obj: FabricObjectJson, key: number) {
       return <line key={key} x1={obj.x1} y1={obj.y1} x2={obj.x2} y2={obj.y2} stroke={obj.stroke} strokeWidth={obj.strokeWidth ?? 3} />;
     case "IText":
     case "Textbox":
-    case "Text":
+    case "Text": {
+      // The label tool anchors text top-left (the default), but the
+      // numbered-marker tool anchors its number center/center on the
+      // circle's own center — SVG has no "center" origin for <text>, so a
+      // center-anchored object needs text-anchor + dominant-baseline
+      // instead of the top-left baseline-offset math below.
+      const isCenteredX = obj.originX === "center";
+      const isCenteredY = obj.originY === "center";
+      const x = obj.left ?? 0;
+      const y = isCenteredY ? (obj.top ?? 0) : (obj.top ?? 0) + (obj.fontSize ?? 16);
       return (
-        <text key={key} x={obj.left} y={(obj.top ?? 0) + (obj.fontSize ?? 16)} fill={obj.fill} fontSize={obj.fontSize ?? 16} fontWeight={600}>
+        <text
+          key={key}
+          x={x}
+          y={y}
+          fill={obj.fill}
+          fontSize={obj.fontSize ?? 16}
+          fontWeight={600}
+          textAnchor={isCenteredX ? "middle" : "start"}
+          dominantBaseline={isCenteredY ? "central" : "auto"}
+        >
           {obj.text}
         </text>
       );
+    }
     case "Group": {
       // Fabric stores group children relative to the group's own center.
       const cx = (obj.left ?? 0) + (obj.width ?? 0) / 2;

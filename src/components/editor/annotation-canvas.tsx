@@ -4,9 +4,8 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import * as fabric from "fabric";
 import { Square, MoveUpRight, CircleDot, Type, EyeOff, Trash2, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getAnnotationCanvasSize } from "@/lib/annotation-canvas-size";
 import type { AnnotationJson, AnnotationToolType } from "@/lib/types";
-
-const MAX_CANVAS_WIDTH = 960;
 
 const TOOLS: { type: AnnotationToolType; icon: typeof Square; label: string }[] = [
   { type: "box", icon: Square, label: "Kotak" },
@@ -41,9 +40,7 @@ export function AnnotationCanvas({ imageUrl, imageWidth, imageHeight, initialAnn
   const [nextMarkerNumber, setNextMarkerNumber] = useState(initialAnnotation?.nextMarkerNumber ?? 1);
   const [hasSelection, setHasSelection] = useState(false);
 
-  const scale = imageWidth > MAX_CANVAS_WIDTH ? MAX_CANVAS_WIDTH / imageWidth : 1;
-  const displayWidth = Math.round(imageWidth * scale);
-  const displayHeight = Math.round(imageHeight * scale);
+  const { scale, width: displayWidth, height: displayHeight } = getAnnotationCanvasSize(imageWidth, imageHeight);
 
   const activeToolRef = useRef(activeTool);
   const activeColorRef = useRef(activeColor);

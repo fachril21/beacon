@@ -1,13 +1,36 @@
 "use client";
 
-import { useSyncExternalStore, useCallback } from "react";
+import { useSyncExternalStore, useCallback, useEffect } from "react";
 import { screenshotBlocksStore } from "@/lib/supabase/stores";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { mapScreenshotBlockRow, type ScreenshotBlockRow } from "@/lib/supabase/mappers";
 import type { AnnotationJson, ScreenshotBlock } from "@/lib/types";
 
-export function useScreenshotBlock(id: string | undefined) {
+/**
+ * The store only ever gets patched in-place by the create/update mutations
+ * below, so a fresh page load (no upload/edit in this session) starts with
+ * an empty store — the block a page's content refers to was never fetched,
+ * so it silently fails to render. `pageId` mirrors usePageVersions' pattern:
+ * lazily load every screenshot_blocks row for the page once, so a reload
+ * (or a Viewer who never uploaded anything) still resolves existing blocks.
+ */
+export function useScreenshotBlock(id: string | undefined, pageId: string | undefined) {
   const blocks = useSyncExternalStore(screenshotBlocksStore.subscribe, screenshotBlocksStore.getState, screenshotBlocksStore.getState);
+
+  useEffect(() => {
+    if (!pageId) return;
+    screenshotBlocksStore.ensureLoaded(
+      `page:${pageId}`,
+      async () => {
+        const supabase = getSupabaseBrowserClient();
+        const { data, error } = await supabase.from("screenshot_blocks").select("*").eq("page_id", pageId);
+        if (error) throw error;
+        return ((data ?? []) as ScreenshotBlockRow[]).map(mapScreenshotBlockRow);
+      },
+      (error) => console.error("[beacon] failed to load screenshot blocks:", error),
+    );
+  }, [pageId]);
+
   return id ? blocks.find((b) => b.id === id) : undefined;
 }
 

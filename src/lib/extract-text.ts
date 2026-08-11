@@ -29,6 +29,13 @@ function walkBlock(block: BNPartialBlock, parts: string[]) {
   (block.children as BNPartialBlock[] | undefined)?.forEach((child) => walkBlock(child, parts));
 }
 
+/** Flattens one block's own inline content (not its children) to plain text — used for heading labels in PageToc. */
+export function extractBlockOwnText(content: unknown): string {
+  const parts: string[] = [];
+  walkContent(content, parts);
+  return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+
 function walkContent(content: unknown, parts: string[]) {
   if (!content) return;
   if (typeof content === "string") {

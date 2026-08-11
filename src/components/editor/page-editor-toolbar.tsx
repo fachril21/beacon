@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { MoreHorizontal, History } from "lucide-react";
+import { ChevronDown, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -88,61 +89,75 @@ export function PageEditorToolbar({ page, space, title, saveStatus, role, onOpen
   return (
     <header className="flex shrink-0 flex-col border-b border-border">
       <div className="flex items-center justify-between gap-4 px-6 py-3">
+        {/* Breadcrumb, left — status/mode badges sit inline beside it */}
         <nav className="flex min-w-0 items-center gap-1.5 text-body-sm text-muted-foreground">
           <Link href={`/spaces/${space.id}`} className="truncate hover:text-foreground">
             {space.name}
           </Link>
-          <span>/</span>
+          <span className="text-muted-foreground/50">/</span>
           <span className="truncate text-foreground">{title || "Halaman tanpa judul"}</span>
           {page.isPublished && <StatusBadge status={status} className="ml-1" />}
           {canEdit && helpfulness.total > 0 && (
-            <span className="ml-2 shrink-0 text-caption text-muted-foreground">
-              {Math.round((helpfulness.rate ?? 0) * 100)}% membantu ({helpfulness.total} respons)
-            </span>
+            <Badge variant="outline" className="ml-1 shrink-0 font-normal text-muted-foreground">
+              {Math.round((helpfulness.rate ?? 0) * 100)}% membantu · {helpfulness.total} respons
+            </Badge>
           )}
         </nav>
+
+        {/* Right-aligned utility row, then the primary action + overflow joined as one control */}
         <div className="flex shrink-0 items-center gap-3">
           <SaveStatusIndicator status={saveStatus} />
 
-          {!canEdit ? null : page.isPublished ? (
-            <Button size="sm" variant="secondary" onClick={handleUpdate} disabled={!pendingChanges}>
-              Perbarui
-            </Button>
-          ) : disabledReason ? (
-            <Tooltip>
-              <TooltipTrigger render={<span tabIndex={0} />}>
-                <Button
-                  size="sm"
-                  disabled
-                  className="pointer-events-none bg-secondary text-muted-foreground opacity-100 hover:bg-secondary"
-                >
-                  Publikasikan
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent className={!space.isPublishable ? "" : "border-t-2 border-t-warning"}>{disabledReason}</TooltipContent>
-            </Tooltip>
-          ) : (
-            <Button size="sm" onClick={handlePublishClick}>
-              Publikasikan
-            </Button>
-          )}
+          <div data-slot="button-group" className="flex items-stretch overflow-hidden rounded-md">
+            {!canEdit ? null : page.isPublished ? (
+              <Button size="sm" variant="secondary" onClick={handleUpdate} disabled={!pendingChanges} className="rounded-r-none">
+                Perbarui
+              </Button>
+            ) : disabledReason ? (
+              <Tooltip>
+                <TooltipTrigger render={<span tabIndex={0} />}>
+                  <Button
+                    size="sm"
+                    disabled
+                    className="pointer-events-none rounded-r-none bg-secondary text-muted-foreground opacity-100 hover:bg-secondary"
+                  >
+                    Publikasikan
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent className={!space.isPublishable ? "" : "border-t-2 border-t-warning"}>{disabledReason}</TooltipContent>
+              </Tooltip>
+            ) : (
+              <Button size="sm" onClick={handlePublishClick} className="rounded-r-none">
+                Publikasikan
+              </Button>
+            )}
 
-          <DropdownMenu>
-            <DropdownMenuTrigger render={<Button size="icon-sm" variant="ghost" aria-label="Menu lainnya" />}>
-              <MoreHorizontal className="size-4" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onOpenVersionHistory?.()}>
-                <History className="size-3.5" />
-                Riwayat Versi
-              </DropdownMenuItem>
-              {canEdit && page.isPublished && (
-                <DropdownMenuItem variant="destructive" onClick={() => setUnpublishOpen(true)}>
-                  Batalkan Publikasi
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    size="icon-sm"
+                    variant={!canEdit ? "ghost" : canEdit && !page.isPublished && !disabledReason ? "default" : "secondary"}
+                    aria-label="Menu lainnya"
+                    className={canEdit ? "rounded-l-none border-l border-l-background/20" : ""}
+                  />
+                }
+              >
+                <ChevronDown className="size-3.5" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onOpenVersionHistory?.()}>
+                  <History className="size-3.5" />
+                  Riwayat Versi
                 </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                {canEdit && page.isPublished && (
+                  <DropdownMenuItem variant="destructive" onClick={() => setUnpublishOpen(true)}>
+                    Batalkan Publikasi
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
 

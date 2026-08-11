@@ -7,6 +7,7 @@ import { useSession } from "@/hooks/use-session";
 import { useNotifications, useMarkNotificationRead } from "@/hooks/use-notifications";
 import { useUser } from "@/hooks/use-users";
 import { usePage } from "@/hooks/use-pages";
+import { sidebarNavIconClass, sidebarNavRowClass } from "./sidebar-row";
 import type { Notification } from "@/lib/types";
 
 function formatTimestamp(iso: string) {
@@ -44,23 +45,16 @@ export function NotificationBell() {
 
   return (
     <Popover>
-      <PopoverTrigger
-        render={
-          <button
-            type="button"
-            aria-label="Notifikasi"
-            className="relative flex size-7 shrink-0 items-center justify-center rounded-sm text-sidebar-foreground hover:bg-sidebar-accent"
-          />
-        }
-      >
-        <Bell className="size-4" />
+      <PopoverTrigger render={<button type="button" className={sidebarNavRowClass} />}>
+        <Bell className={sidebarNavIconClass} />
+        <span className="min-w-0 flex-1 truncate text-left">Notifikasi</span>
         {unreadCount > 0 && (
-          <span className="absolute top-0.5 right-0.5 flex size-3.5 items-center justify-center rounded-full bg-primary text-[9px] font-semibold text-primary-foreground">
+          <span className="flex size-4.5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-80 p-1">
+      <PopoverContent side="right" align="start" className="w-80 p-1">
         <div className="max-h-80 overflow-y-auto">
           {notifications.length === 0 ? (
             <p className="py-4 text-center text-caption text-muted-foreground">Belum ada notifikasi.</p>

@@ -28,7 +28,7 @@ function ScreenshotBlockRender({ block, editor }: ScreenshotBlockRenderProps) {
   const blockId = block.props.screenshotBlockId;
   const readOnly = !editor.isEditable;
   const pageId = usePageId();
-  const screenshotBlock = useScreenshotBlock(blockId || undefined);
+  const screenshotBlock = useScreenshotBlock(blockId || undefined, pageId);
   const uploadScreenshot = useUploadScreenshot();
   const updateAnnotation = useUpdateScreenshotAnnotation();
   const updateDescription = useUpdateScreenshotDescription();

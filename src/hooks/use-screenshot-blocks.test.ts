@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
 import { screenshotBlocksStore } from "@/lib/supabase/stores";
 
 const mockSupabase = { from: vi.fn() };
 vi.mock("@/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => mockSupabase }));
 
-const { useCreateScreenshotBlock, useUpdateScreenshotAnnotation, useUploadScreenshot } = await import(
+const { useScreenshotBlock, useCreateScreenshotBlock, useUpdateScreenshotAnnotation, useUploadScreenshot } = await import(
   "./use-screenshot-blocks"
 );
 
@@ -13,6 +13,44 @@ function resetStore() {
   screenshotBlocksStore.setState([]);
   screenshotBlocksStore.invalidate("all");
 }
+
+describe("useScreenshotBlock", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetStore();
+  });
+
+  it("loads existing screenshot_blocks rows for the page when the store starts empty, e.g. after a browser reload", async () => {
+    const row = {
+      id: "shot-1",
+      page_id: "page-1",
+      order: 0,
+      image_object_key: "screenshots/page-1/abc.png",
+      image_width: 800,
+      image_height: 600,
+      annotation_json: null,
+      description: "",
+      alt_text: null,
+      created_at: "t",
+      updated_at: "t",
+    };
+    const eq = vi.fn(() => Promise.resolve({ data: [row], error: null }));
+    mockSupabase.from.mockReturnValue({ select: () => ({ eq }) });
+
+    const { result } = renderHook(() => useScreenshotBlock("shot-1", "page-1"));
+
+    expect(result.current).toBeUndefined();
+    await waitFor(() => expect(result.current).toMatchObject({ id: "shot-1", imageUrl: "screenshots/page-1/abc.png" }));
+    expect(mockSupabase.from).toHaveBeenCalledWith("screenshot_blocks");
+    expect(eq).toHaveBeenCalledWith("page_id", "page-1");
+  });
+
+  it("does not query Supabase when the page id is not yet known", () => {
+    const { result } = renderHook(() => useScreenshotBlock("shot-1", undefined));
+    expect(result.current).toBeUndefined();
+    expect(mockSupabase.from).not.toHaveBeenCalled();
+  });
+});
 
 describe("useCreateScreenshotBlock", () => {
   beforeEach(() => {
