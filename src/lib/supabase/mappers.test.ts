@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { emptyDoc } from "@/lib/mock/lexical-content";
+import { emptyDoc } from "@/lib/mock/blocknote-content";
 import {
   mapOrganizationRow,
   mapProfileRow,

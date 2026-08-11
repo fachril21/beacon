@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, waitFor, act } from "@testing-library/react";
 import "fake-indexeddb/auto";
-import { emptyDoc } from "@/lib/mock/lexical-content";
+import { emptyDoc } from "@/lib/mock/blocknote-content";
 import { loadPendingEdit, savePendingEdit, clearPendingEdit } from "@/lib/offline-buffer";
 
 const updateContent = vi.fn();

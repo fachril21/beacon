@@ -5,7 +5,7 @@
  * Keyed by pageId — one pending edit per Page, latest write wins.
  */
 import { openDB, type IDBPDatabase } from "idb";
-import type { SerializedEditorState } from "lexical";
+import type { PageContent } from "@/lib/types";
 
 const DB_NAME = "beacon-offline-buffer";
 const DB_VERSION = 1;
@@ -13,7 +13,7 @@ const STORE_NAME = "pending-page-edits";
 
 interface PendingEditRecord {
   pageId: string;
-  content: SerializedEditorState;
+  content: PageContent;
   savedAt: string;
 }
 
@@ -30,13 +30,13 @@ function getDb(): Promise<IDBPDatabase> {
   return dbPromise;
 }
 
-export async function savePendingEdit(pageId: string, content: SerializedEditorState): Promise<void> {
+export async function savePendingEdit(pageId: string, content: PageContent): Promise<void> {
   const db = await getDb();
   const record: PendingEditRecord = { pageId, content, savedAt: new Date().toISOString() };
   await db.put(STORE_NAME, record);
 }
 
-export async function loadPendingEdit(pageId: string): Promise<SerializedEditorState | null> {
+export async function loadPendingEdit(pageId: string): Promise<PageContent | null> {
   const db = await getDb();
   const record = (await db.get(STORE_NAME, pageId)) as PendingEditRecord | undefined;
   return record ? record.content : null;

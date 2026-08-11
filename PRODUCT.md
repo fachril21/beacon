@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-Next.js (App Router) + Tailwind CSS + shadcn/ui, deployed to the company's existing paid Vercel account. Rich text editor: Lexical. Screenshot annotation: Fabric.js. Backend (Phase 1b, not yet wired): self-hosted Supabase (Postgres + Auth + PostgREST + Edge Functions) on the company VPS; image storage on AWS S3 (prod) / MinIO (dev). Phase 1a — the current phase — is UI-only against typed mock data behind hook abstractions (`usePages()`, `usePage(id)`, etc.); no backend calls exist yet. Single frontend repository, one `npm run dev` command.
+Next.js (App Router) + Tailwind CSS + shadcn/ui, deployed to the company's existing paid Vercel account. Rich text editor: BlockNote (with the official `@blocknote/shadcn` UI package, matching the rest of the product's component system). Screenshot annotation: Fabric.js. Backend (Phase 1b, not yet wired): self-hosted Supabase (Postgres + Auth + PostgREST + Edge Functions) on the company VPS; image storage on AWS S3 (prod) / MinIO (dev). Phase 1a — the current phase — is UI-only against typed mock data behind hook abstractions (`usePages()`, `usePage(id)`, etc.); no backend calls exist yet. Single frontend repository, one `npm run dev` command.
 
 ## Users
 
@@ -28,7 +28,7 @@ The unifying mechanism a neighboring generic doc tool (Notion, GitBook) could no
 
 ## Operating Context
 
-- **Authoring workflow:** User opens/creates a Page inside a Space (nested Space → Page → Sub-page tree), writes with a Notion-like block editor (Lexical: headings, lists, checklists, tables, code, quotes, dividers, slash-command block insertion), drags/pastes/uploads screenshots, annotates them in-canvas, adds a description in the same block, and autosaves continuously (no explicit save action; must survive network/crash without data loss).
+- **Authoring workflow:** User opens/creates a Page inside a Space (nested Space → Page → Sub-page tree), writes with a Notion-like block editor (BlockNote: headings, lists, checklists, tables, code, quotes, dividers, slash-command block insertion), drags/pastes/uploads screenshots, annotates them in-canvas, adds a description in the same block, and autosaves continuously (no explicit save action; must survive network/crash without data loss).
 - **Publishing workflow:** a Page defaults to internal/private. Publishing is an explicit, separate action taken unilaterally by the page's author/editor — no approval gate. Published pages render on a public, anonymous, read-only site; the author can keep editing privately and Viewers see the last published snapshot until an explicit "Update" re-publish. Unpublish is available at any time.
 - **Multi-tenant/domain workflow:** Dibimbing Group operates multiple business lines (Dibimbing, Cakrawala University, more later), each an `Organization` with its own independently-branded custom domain (e.g. `docs.dibimbing.id`, `docs.cakrawala.ac.id`), resolved by incoming Host header via Vercel for Platforms + Next.js Middleware. Content never crosses Organizations.
 - **Reading workflow (Viewer):** anonymous visitor lands on a public help-center site scoped to one Organization's domain, browses/searches a simplified nav/TOC, reads a guideline (including annotated screenshots, with internal-only elements like comments/mentions/edit history stripped), and can answer a lightweight "Was this helpful?" (yes/no + optional free text) at the end of the page.
@@ -38,7 +38,7 @@ The unifying mechanism a neighboring generic doc tool (Notion, GitBook) could no
 
 - Bahasa Indonesia only for both authoring UI and public content in Phase 1 — no i18n framework or per-locale content structure required yet.
 - No custom backend API: all CRUD/auth/file-handling routes through Supabase directly (self-hosted) once Phase 1b begins; the only server-side code is one Next.js API route for S3 presigned upload URLs.
-- Cost constraint is hard: every tool/library choice must be free/open-source or already-owned infra — this shaped the stack (Lexical over TipTap/BlockNote, self-hosted Supabase, existing company S3/Vercel) and is a durable constraint on any future dependency additions, not just historical rationale.
+- Cost constraint is hard: every tool/library choice must be free/open-source or already-owned infra — this shaped the stack (BlockNote over TipTap's paid Collaboration/AI Toolkit tiers, self-hosted Supabase, existing company S3/Vercel) and is a durable constraint on any future dependency additions, not just historical rationale.
 - **Current phase (Phase 1a) is pure frontend UI-slicing against typed mock data — no backend, no Supabase/S3 wiring exists yet.** Both the User (authoring) and Viewer (public) experiences must be sliced from the start since they are meaningfully different UIs on the same content model.
 - Non-goals: not a project-management tool, not a video editor (static-image annotation only), not a Figma replacement, no third-party integrations (Slack/SSO) in Phase 1.
 - Editor must remain responsive under fast typing with no perceptible input lag, even on pages with many blocks/annotated screenshots.

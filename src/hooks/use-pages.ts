@@ -4,10 +4,9 @@ import { useSyncExternalStore, useCallback, useEffect } from "react";
 import { pagesStore } from "@/lib/supabase/stores";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { mapPageRow, type PageRow } from "@/lib/supabase/mappers";
-import { emptyDoc } from "@/lib/mock/lexical-content";
+import { emptyDoc } from "@/lib/mock/blocknote-content";
 import { extractPlainText } from "@/lib/extract-text";
-import type { Page } from "@/lib/types";
-import type { SerializedEditorState } from "lexical";
+import type { Page, PageContent } from "@/lib/types";
 
 export function usePages(spaceId?: string) {
   const pages = useSyncExternalStore(pagesStore.subscribe, pagesStore.getState, pagesStore.getState);
@@ -107,7 +106,7 @@ export function useUpdatePageTitle() {
 }
 
 export function useUpdatePageContent() {
-  return useCallback(async (id: string, content: SerializedEditorState) => {
+  return useCallback(async (id: string, content: PageContent) => {
     const supabase = getSupabaseBrowserClient();
     // search_text mirrors content in plain text so Postgres full-text search
     // (Epic 14, pages.search_vector) stays in sync on every content save.

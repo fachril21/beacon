@@ -58,8 +58,8 @@ Beacon serves two audiences from the same content: internal Users who author and
 ## 5. Feature Specs
 
 ### 5.1 Rich Text Editor
-- **Mechanic:** block-based editing (Lexical core) — headings, paragraphs, lists, checklists, code blocks, quotes, tables, dividers, plus a slash (`/`) command menu for block insertion.
-- **Truth source:** Lexical's editor state tree, serialized to JSON and persisted per Page (to a mock in-memory/localStorage store in Stage 1, to Supabase in Stage 2).
+- **Mechanic:** block-based editing (BlockNote core) — headings, paragraphs, lists, checklists, code blocks, quotes, tables, dividers, plus a slash (`/`) command menu for block insertion.
+- **Truth source:** BlockNote's `Block[]` document tree, serialized to JSON and persisted per Page (to a mock in-memory/localStorage store in Stage 1, to Supabase in Stage 2).
 - **Reliability logic:** debounce autosave (fires ≤3s after last keystroke); local IndexedDB buffer as a fallback so edits survive offline/crash scenarios and sync automatically on reconnect once wired to Supabase.
 - **Content requirements:** must correctly convert pasted content from Word/Google Docs into native blocks (not raw HTML dumps).
 
@@ -93,7 +93,7 @@ Beacon serves two audiences from the same content: internal Users who author and
 | Frontend framework | Next.js (App Router) | Only piece of "server logic" needed — S3 presigned URL generation — lives as a co-located API route, keeping the whole project one repo, one `npm run dev` command (Principle 6). |
 | Backend / Database / Auth / API | Supabase, self-hosted on the company's existing VPS | Auto-generated REST/GraphQL API + Auth + Edge Functions, removing the need for a custom API server entirely. |
 | Access control | Postgres Row Level Security (RLS) | Single source of truth for every permission and visibility rule (viewer/editor/admin, internal-vs-public) — enforced at the database layer, not duplicated across endpoints. |
-| Rich text editor | Lexical (Meta, MIT) | 100% free, no paid tier at any usage level; framework-level control needed for the custom Screenshot Block. |
+| Rich text editor | BlockNote (MPL-2.0) | Free for commercial/closed-source use, no paid tier for anything Beacon needs (real-time collaboration ships free/self-hostable via Yjs — only optional AI/multi-column/export "XL" add-ons are paid, none required here); ships an official shadcn/ui-compatible UI package and a block-schema API well-suited to the custom Screenshot Block. |
 | Screenshot annotation | Fabric.js (MIT) | Mature, free canvas library sufficient for shapes/arrows/labels/blur. |
 | Image storage (production) | AWS S3 — the company's existing bucket | Images stay on infrastructure the company already operates; no migration, no new service. |
 | Image storage (local dev) | MinIO (Docker, zero account) | S3-API-compatible, so the presigned-URL code is identical to production — only env vars differ. Chosen over LocalStack, which stopped offering a true no-account free tier in March 2026. |
@@ -242,8 +242,8 @@ Every epic in this stage is buildable and demoable with zero Supabase project an
 
 **AC:** all of Flow 2's steps and failure paths are implemented against mock data; sidebar nesting renders to 3+ levels; reorder persists across a client-side re-render (not necessarily a hard reload, since there's no backend yet).
 
-#### Epic 4: Rich Text Editor UI (Lexical)
-- **US4.1:** As a User, I can type into a real Lexical-powered block editor with no perceptible lag (< 50ms), per Flow 3 steps 1–2.
+#### Epic 4: Rich Text Editor UI (BlockNote)
+- **US4.1:** As a User, I can type into a real BlockNote-powered block editor with no perceptible lag (< 50ms), per Flow 3 steps 1–2.
 - **US4.2:** As a User, I can use the `/` slash command to insert any standard block type.
 - **US4.3:** As a User, my content persists to local component/mock state with a visible save-status indicator, simulating the autosave behavior described in Flow 3 (real Supabase persistence comes in Stage 2).
 - **US4.4:** As a User, pasting from Word/Google Docs converts into native blocks, not broken HTML.
@@ -399,7 +399,7 @@ No new UI is built in this stage — every epic here swaps a Stage 1 mock-data h
 | Risk | Impact | Mitigation |
 |---|---|---|
 | Stage 1 mock data types drift from the real schema once Stage 2 begins | Rework of UI components during integration, defeating the point of the phased approach | Treat Epic 1's TypeScript types as a first-class schema draft, reviewed against PROJECT.md 9.4 before Stage 1 begins in earnest, not adjusted ad hoc per screen |
-| Lexical is a low-level framework, not a ready UI — building toolbar/UI ourselves may take longer than expected | Stage 1 (Epic 4) schedule slip | Timebox Epic 4 to a fixed sprint budget; if slipping, ship a reduced block set for v1 and expand post-launch |
+| `@blocknote/shadcn` is a newer, less battle-tested UI package than BlockNote's default Mantine styling — visual/interaction gaps may surface against DESIGN.md's spec | Stage 1 (Epic 4) schedule slip or visual QA rework | Timebox Epic 4 to a fixed sprint budget; budget explicit visual-QA passes against DESIGN.md §6; fall back to CSS-variable overrides on the default styling if a `@blocknote/shadcn` gap blocks a specific component |
 | Fabric.js canvas performance on low-end devices/mobile browsers | Degraded annotation UX for some Users | Performance-test on a low-end device profile early in Epic 5; cap max annotation objects per screenshot |
 | Accidental public exposure of internal content once real RLS policies are written (Epic 9) | Severe — leaks internal SOPs/sensitive data to Viewers | Automated CI tests attempting anonymous reads of internal content, required to pass before any deploy touching RLS policies |
 | No approval gate before publishing (by design) | A low-quality or incorrect guideline can go live and damage user trust | Make Unpublish/Update fast and frictionless (Epic 6/13); surface helpfulness feedback (Epic 15) prominently so bad content gets caught and fixed quickly |

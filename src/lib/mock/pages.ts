@@ -1,5 +1,5 @@
 import type { Page } from "@/lib/types";
-import { doc, paragraph, heading, quote, bulletList, checklist, codeBlock, divider, screenshotNode, emptyDoc } from "./lexical-content";
+import { doc, paragraph, heading, quote, bulletList, checklist, codeBlock, divider, screenshotBlock, emptyDoc } from "./blocknote-content";
 
 export const mockPages: Page[] = [
   // space-mobile-app — 3 levels of nesting (Flow 2 step 5 / Epic 3 AC)
@@ -13,14 +13,14 @@ export const mockPages: Page[] = [
       paragraph(
         "Panduan ini menjelaskan langkah pertama menggunakan aplikasi mobile Dibimbing, mulai dari masuk hingga menjelajahi beranda.",
       ),
-      heading("h2", "Langkah 1 — Masuk ke akun Anda"),
-      screenshotNode("shot-login-1"),
+      heading(2, "Langkah 1 — Masuk ke akun Anda"),
+      screenshotBlock("shot-login-1"),
       paragraph("Gunakan email yang sama dengan akun Dibimbing Anda di web."),
-      heading("h2", "Langkah 2 — Menjelajahi Beranda"),
-      screenshotNode("shot-login-2"),
+      heading(2, "Langkah 2 — Menjelajahi Beranda"),
+      screenshotBlock("shot-login-2"),
       quote("Tips: ikon profil di kanan atas menyimpan pengaturan akun dan notifikasi."),
-      heading("h2", "Yang perlu disiapkan"),
-      checklist([
+      heading(2, "Yang perlu disiapkan"),
+      ...checklist([
         { text: "Email terdaftar di Dibimbing", checked: true },
         { text: "Kata sandi aktif", checked: true },
         { text: "Koneksi internet stabil", checked: false },
@@ -62,7 +62,7 @@ export const mockPages: Page[] = [
     order: 0,
     content: doc([
       paragraph("Solusi untuk masalah umum saat mencoba masuk ke aplikasi."),
-      bulletList([
+      ...bulletList([
         "Pastikan email dan kata sandi benar",
         "Periksa koneksi internet",
         "Reset kata sandi jika lupa",
@@ -101,7 +101,7 @@ export const mockPages: Page[] = [
     order: 1,
     content: doc([
       paragraph("Kumpulan pertanyaan yang paling sering diajukan pengguna."),
-      heading("h3", "Apakah aplikasi tersedia untuk iOS dan Android?"),
+      heading(3, "Apakah aplikasi tersedia untuk iOS dan Android?"),
       paragraph("Ya, aplikasi tersedia di App Store dan Google Play."),
       codeBlock("beacon --version\n> beacon 1.0.0", "bash"),
     ]),
@@ -123,7 +123,7 @@ export const mockPages: Page[] = [
     order: 0,
     content: doc([
       paragraph("Panduan internal untuk tim yang mengelola Dashboard Admin Dibimbing."),
-      screenshotNode("shot-admin-1"),
+      screenshotBlock("shot-admin-1"),
       paragraph("Data pengguna pada tangkapan layar di atas telah disamarkan untuk contoh ini."),
     ]),
     visibility: "internal",
@@ -162,7 +162,7 @@ export const mockPages: Page[] = [
     order: 0,
     content: doc([
       paragraph("Panduan singkat untuk dosen baru menggunakan Platform LMS Cakrawala University."),
-      screenshotNode("shot-lms-1"),
+      screenshotBlock("shot-lms-1"),
     ]),
     visibility: "publishable",
     isPublished: false,
@@ -211,9 +211,9 @@ const faqPage = mockPages.find((p) => p.id === "page-mobile-faq");
 if (faqPage) {
   faqPage.content = doc([
     paragraph("Kumpulan pertanyaan yang paling sering diajukan pengguna."),
-    heading("h3", "Apakah aplikasi tersedia untuk iOS dan Android?"),
+    heading(3, "Apakah aplikasi tersedia untuk iOS dan Android?"),
     paragraph("Ya, aplikasi tersedia di App Store dan Google Play, gratis untuk diunduh."),
-    heading("h3", "Apakah aplikasi mendukung mode offline?"),
+    heading(3, "Apakah aplikasi mendukung mode offline?"),
     paragraph("Sebagian konten dapat diakses offline setelah dibuka sekali secara online."),
   ]);
   faqPage.updatedAt = "2026-08-05T02:00:00.000Z";

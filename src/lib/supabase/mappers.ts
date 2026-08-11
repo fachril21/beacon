@@ -11,6 +11,7 @@ import type {
   Permission,
   PendingInvite,
   Page,
+  PageContent,
   ScreenshotBlock,
   Version,
   PublishedContentSnapshot,
@@ -18,7 +19,6 @@ import type {
   Feedback,
   Notification,
 } from "@/lib/types";
-import type { SerializedEditorState } from "lexical";
 
 export interface OrganizationRow {
   id: string;
@@ -126,7 +126,7 @@ export interface PageRow {
   parent_page_id: string | null;
   title: string;
   order: number;
-  content: SerializedEditorState;
+  content: PageContent;
   visibility: string;
   is_published: boolean;
   published_content_snapshot: PublishedContentSnapshot | null;
@@ -189,7 +189,7 @@ export interface VersionRow {
   id: string;
   page_id: string;
   title: string;
-  content: SerializedEditorState;
+  content: PageContent;
   created_by_user_id: string;
   created_at: string;
   is_restore_of: string | null;

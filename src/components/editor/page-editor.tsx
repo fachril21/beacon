@@ -1,47 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { LexicalComposer } from "@lexical/react/LexicalComposer";
-import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
-import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
-import { ContentEditable } from "@lexical/react/LexicalContentEditable";
-import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
-import { ListPlugin } from "@lexical/react/LexicalListPlugin";
-import { CheckListPlugin } from "@lexical/react/LexicalCheckListPlugin";
-import { TablePlugin } from "@lexical/react/LexicalTablePlugin";
-import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
-import { TabIndentationPlugin } from "@lexical/react/LexicalTabIndentationPlugin";
-import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
-import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
-import type { EditorState } from "lexical";
-import { editorTheme } from "./editor-theme";
-import { editorNodes } from "./nodes";
-import { SlashCommandPlugin } from "./slash-command-plugin";
-import { FloatingToolbarPlugin } from "./floating-toolbar-plugin";
-import { FloatingLinkEditorPlugin } from "./floating-link-editor-plugin";
-import { CodeBlockExitPlugin } from "./code-block-exit-plugin";
+import { useCallback, useEffect } from "react";
+import { filterSuggestionItems } from "@blocknote/core";
+import { en } from "@blocknote/core/locales";
+import { useCreateBlockNote, SuggestionMenuController, LinkToolbarController, type DefaultReactSuggestionItem } from "@blocknote/react";
+import { BlockNoteView } from "@blocknote/shadcn";
+import { editorSchema } from "./schema";
+import { getSlashMenuItems } from "./slash-menu-items";
+import { EditorFormattingToolbar } from "./formatting-toolbar";
+import { codeBlockExitExtension } from "./code-block-exit-extension";
 import { usePageAutosave, type SaveStatus } from "@/hooks/use-page-autosave";
 import { PageIdProvider } from "./page-id-context";
-import type { Page } from "@/lib/types";
+import { normalizePageContent } from "@/lib/legacy-lexical-content";
+import type { Page, PageContent } from "@/lib/types";
 
-/**
- * LexicalComposer's `initialConfig.editable` only sets the editor's editable
- * state at construction time -- it is never re-read after mount. Our
- * `editable` prop starts false on every page load (useSpaceRole resolves
- * asynchronously, so `role` is null and `canEdit` is false for the first
- * render or two), so without this plugin every page -- for every role,
- * including editors/admins -- got permanently stuck read-only the moment
- * PageEditor first rendered. `editor.setEditable()` is Lexical's documented
- * imperative API for changing editable state after construction; this
- * plugin just keeps it in sync with the React prop on every change.
- */
-function EditableSyncPlugin({ editable }: { editable: boolean }) {
-  const [editor] = useLexicalComposerContext();
-  useEffect(() => {
-    editor.setEditable(editable);
-  }, [editor, editable]);
-  return null;
-}
+const dictionary = {
+  ...en,
+  placeholders: {
+    ...en.placeholders,
+    default: "Mulai menulis, atau ketik “/” untuk menyisipkan blok…",
+    step: "Judul langkah",
+  },
+};
 
 export function PageEditor({
   page,
@@ -59,56 +39,43 @@ export function PageEditor({
     onStatusChange?.(status);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
-  const [initialConfig] = useState(() => ({
-    namespace: `beacon-page-${page.id}`,
-    theme: editorTheme,
-    nodes: editorNodes,
-    editorState: JSON.stringify(page.content),
-    editable,
-    onError: (error: Error) => {
-      console.error("Lexical error:", error);
-    },
-  }));
 
-  const handleChange = useCallback(
-    (editorState: EditorState) => {
-      scheduleSave(editorState.toJSON());
-    },
-    [scheduleSave],
-  );
+  const editor = useCreateBlockNote({
+    schema: editorSchema,
+    // Pages saved before the BlockNote migration still hold Lexical JSON —
+    // normalizePageContent converts it on the fly so old pages open instead
+    // of crashing `initialContent` (any edit then autosaves it forward).
+    initialContent: normalizePageContent(page.content),
+    extensions: [codeBlockExitExtension],
+    dictionary,
+  });
+
+  const handleChange = useCallback(() => {
+    // editor.document is a full Block[]; TS can't always see this satisfies
+    // the looser PartialBlock[] shape through BlockNote's deeply generic
+    // schema union, though it always does at runtime.
+    scheduleSave(editor.document as PageContent);
+  }, [editor, scheduleSave]);
 
   return (
-    <LexicalComposer initialConfig={initialConfig}>
-      <PageIdProvider pageId={page.id}>
-        <EditableSyncPlugin editable={editable} />
-        <div className="relative">
-          <RichTextPlugin
-            contentEditable={
-              <ContentEditable
-                className="min-h-[60vh] text-body text-foreground outline-none [&_.editor-checklist-checked_+_br]:hidden"
-                aria-placeholder="Mulai menulis, atau ketik “/” untuk menyisipkan blok…"
-                placeholder={
-                  <div className="pointer-events-none absolute top-0 text-body text-muted-foreground">
-                    Mulai menulis, atau ketik “/” untuk menyisipkan blok…
-                  </div>
-                }
-              />
-            }
-            ErrorBoundary={LexicalErrorBoundary}
-          />
-        </div>
-        <HistoryPlugin />
-        <ListPlugin />
-        <CheckListPlugin />
-        <TablePlugin />
-        <LinkPlugin />
-        <TabIndentationPlugin />
-        <SlashCommandPlugin />
-        <FloatingToolbarPlugin />
-        <FloatingLinkEditorPlugin />
-        <CodeBlockExitPlugin />
-        <OnChangePlugin onChange={handleChange} ignoreSelectionChange />
-      </PageIdProvider>
-    </LexicalComposer>
+    <PageIdProvider pageId={page.id}>
+      <BlockNoteView
+        editor={editor}
+        editable={editable}
+        onChange={handleChange}
+        formattingToolbar={false}
+        linkToolbar={false}
+        slashMenu={false}
+        theme="dark"
+        className="min-h-[60vh]"
+      >
+        <SuggestionMenuController
+          triggerCharacter="/"
+          getItems={async (query) => filterSuggestionItems(getSlashMenuItems(editor), query) as DefaultReactSuggestionItem[]}
+        />
+        <EditorFormattingToolbar />
+        <LinkToolbarController />
+      </BlockNoteView>
+    </PageIdProvider>
   );
 }

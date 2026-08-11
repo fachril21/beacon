@@ -4,29 +4,37 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { Pencil } from "lucide-react";
 import { toast } from "sonner";
-import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
-import { $getNodeByKey } from "lexical";
+import { createReactBlockSpec, type ReactCustomBlockRenderProps } from "@blocknote/react";
 import { useScreenshotBlock, useUploadScreenshot, useUpdateScreenshotAnnotation, useUpdateScreenshotDescription } from "@/hooks/use-screenshot-blocks";
 import { resolveScreenshotUrl } from "@/lib/s3/screenshot-url";
 import { usePageId } from "./page-id-context";
-import { $isScreenshotNode } from "./screenshot-node";
 import { ScreenshotUploadPrompt } from "./screenshot-upload-prompt";
 import { AnnotationCanvas } from "./annotation-canvas";
 import { AnnotationOverlay } from "./annotation-overlay";
 import { CommentThreadPanel } from "./comment-thread-panel";
 import { Textarea } from "@/components/ui/textarea";
 
-export function ScreenshotBlockView({ blockId, nodeKey }: { blockId: string; nodeKey: string }) {
-  const [editor] = useLexicalComposerContext();
-  const readOnly = !editor.isEditable();
+export const screenshotBlockConfig = {
+  type: "screenshot",
+  propSchema: {
+    screenshotBlockId: { default: "" },
+  },
+  content: "none",
+} as const;
+
+type ScreenshotBlockRenderProps = ReactCustomBlockRenderProps<typeof screenshotBlockConfig>;
+
+function ScreenshotBlockRender({ block, editor }: ScreenshotBlockRenderProps) {
+  const blockId = block.props.screenshotBlockId;
+  const readOnly = !editor.isEditable;
   const pageId = usePageId();
-  const block = useScreenshotBlock(blockId || undefined);
+  const screenshotBlock = useScreenshotBlock(blockId || undefined);
   const uploadScreenshot = useUploadScreenshot();
   const updateAnnotation = useUpdateScreenshotAnnotation();
   const updateDescription = useUpdateScreenshotDescription();
   const [isAnnotating, setIsAnnotating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [description, setDescription] = useState(block?.description ?? "");
+  const [description, setDescription] = useState(screenshotBlock?.description ?? "");
   const descriptionSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -37,18 +45,15 @@ export function ScreenshotBlockView({ blockId, nodeKey }: { blockId: string; nod
 
   function handleDescriptionChange(value: string) {
     setDescription(value);
-    if (!block) return;
+    if (!screenshotBlock) return;
     if (descriptionSaveRef.current) clearTimeout(descriptionSaveRef.current);
     descriptionSaveRef.current = setTimeout(() => {
-      updateDescription(block.id, value).catch(() => toast.error("Gagal menyimpan deskripsi, silakan coba lagi."));
+      updateDescription(screenshotBlock.id, value).catch(() => toast.error("Gagal menyimpan deskripsi, silakan coba lagi."));
     }, 800);
   }
 
   function assignBlockId(id: string) {
-    editor.update(() => {
-      const node = $getNodeByKey(nodeKey);
-      if ($isScreenshotNode(node)) node.setScreenshotBlockId(id);
-    });
+    editor.updateBlock(block, { type: "screenshot", props: { screenshotBlockId: id } });
   }
 
   async function handleUpload(file: File, width: number, height: number) {
@@ -64,7 +69,7 @@ export function ScreenshotBlockView({ blockId, nodeKey }: { blockId: string; nod
     }
   }
 
-  if (!blockId || !block) {
+  if (!blockId || !screenshotBlock) {
     return readOnly ? null : <ScreenshotUploadPrompt onUpload={(file, w, h) => void handleUpload(file, w, h)} isUploading={isUploading} />;
   }
 
@@ -73,16 +78,16 @@ export function ScreenshotBlockView({ blockId, nodeKey }: { blockId: string; nod
       <div className="my-4 w-full max-w-screenshot-breakout">
         <div className="relative overflow-hidden rounded-lg border border-card bg-background">
           <Image
-            src={resolveScreenshotUrl(block.imageUrl)}
-            alt={block.altText ?? ""}
-            width={block.imageWidth}
-            height={block.imageHeight}
+            src={resolveScreenshotUrl(screenshotBlock.imageUrl)}
+            alt={screenshotBlock.altText ?? ""}
+            width={screenshotBlock.imageWidth}
+            height={screenshotBlock.imageHeight}
             className="h-auto w-full"
             unoptimized
           />
-          <AnnotationOverlay annotation={block.annotationJson} imageWidth={block.imageWidth} imageHeight={block.imageHeight} />
+          <AnnotationOverlay annotation={screenshotBlock.annotationJson} imageWidth={screenshotBlock.imageWidth} imageHeight={screenshotBlock.imageHeight} />
         </div>
-        {block.description && <p className="mt-2 text-body-sm text-muted-foreground">{block.description}</p>}
+        {screenshotBlock.description && <p className="mt-2 text-body-sm text-muted-foreground">{screenshotBlock.description}</p>}
       </div>
     );
   }
@@ -90,12 +95,12 @@ export function ScreenshotBlockView({ blockId, nodeKey }: { blockId: string; nod
   if (isAnnotating) {
     return (
       <AnnotationCanvas
-        imageUrl={resolveScreenshotUrl(block.imageUrl)}
-        imageWidth={block.imageWidth}
-        imageHeight={block.imageHeight}
-        initialAnnotation={block.annotationJson}
+        imageUrl={resolveScreenshotUrl(screenshotBlock.imageUrl)}
+        imageWidth={screenshotBlock.imageWidth}
+        imageHeight={screenshotBlock.imageHeight}
+        initialAnnotation={screenshotBlock.annotationJson}
         onDone={(annotation) => {
-          updateAnnotation(block.id, annotation).catch(() => toast.error("Gagal menyimpan anotasi, silakan coba lagi."));
+          updateAnnotation(screenshotBlock.id, annotation).catch(() => toast.error("Gagal menyimpan anotasi, silakan coba lagi."));
           setIsAnnotating(false);
         }}
         onCancel={() => setIsAnnotating(false)}
@@ -112,14 +117,14 @@ export function ScreenshotBlockView({ blockId, nodeKey }: { blockId: string; nod
       >
         <div className="relative">
           <Image
-            src={resolveScreenshotUrl(block.imageUrl)}
-            alt={block.altText ?? ""}
-            width={block.imageWidth}
-            height={block.imageHeight}
+            src={resolveScreenshotUrl(screenshotBlock.imageUrl)}
+            alt={screenshotBlock.altText ?? ""}
+            width={screenshotBlock.imageWidth}
+            height={screenshotBlock.imageHeight}
             className="h-auto w-full"
             unoptimized
           />
-          <AnnotationOverlay annotation={block.annotationJson} imageWidth={block.imageWidth} imageHeight={block.imageHeight} />
+          <AnnotationOverlay annotation={screenshotBlock.annotationJson} imageWidth={screenshotBlock.imageWidth} imageHeight={screenshotBlock.imageHeight} />
         </div>
         <div className="absolute inset-0 hidden items-center justify-center bg-background/60 group-hover:flex">
           <span className="flex items-center gap-1.5 rounded-md bg-popover px-3 py-1.5 text-body-sm text-popover-foreground shadow-[0_8px_24px_-8px_oklch(0.06_0.02_250_/_0.6)]">
@@ -129,7 +134,7 @@ export function ScreenshotBlockView({ blockId, nodeKey }: { blockId: string; nod
         </div>
       </button>
       <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100">
-        <CommentThreadPanel blockId={block.id} className="bg-popover shadow-[0_8px_24px_-8px_oklch(0.06_0.02_250_/_0.6)]" />
+        <CommentThreadPanel blockId={screenshotBlock.id} className="bg-popover shadow-[0_8px_24px_-8px_oklch(0.06_0.02_250_/_0.6)]" />
       </div>
       <Textarea
         value={description}
@@ -140,3 +145,7 @@ export function ScreenshotBlockView({ blockId, nodeKey }: { blockId: string; nod
     </div>
   );
 }
+
+export const screenshotBlockSpec = createReactBlockSpec(screenshotBlockConfig, {
+  render: ScreenshotBlockRender,
+})();

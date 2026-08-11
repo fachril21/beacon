@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useUpdatePageContent } from "@/hooks/use-pages";
 import { savePendingEdit, loadPendingEdit, clearPendingEdit } from "@/lib/offline-buffer";
-import type { SerializedEditorState } from "lexical";
+import type { PageContent } from "@/lib/types";
 
 export type SaveStatus = "idle" | "saving" | "saved" | "offline" | "syncing" | "error";
 
@@ -27,10 +27,10 @@ export function usePageAutosave(pageId: string, simulateFailure = false) {
   // A retry needs to call "whatever persistNow is on the next render," not
   // the specific closure that scheduled it — a plain self-reference inside
   // the useCallback body would instead pin the retry to a stale closure.
-  const persistNowRef = useRef<(content: SerializedEditorState) => Promise<void>>(async () => {});
+  const persistNowRef = useRef<(content: PageContent) => Promise<void>>(async () => {});
 
   const persistNow = useCallback(
-    async (content: SerializedEditorState) => {
+    async (content: PageContent) => {
       if (simulateFailure) {
         await savePendingEdit(pageId, content);
         setStatus("error");
@@ -94,7 +94,7 @@ export function usePageAutosave(pageId: string, simulateFailure = false) {
   }, [pageId]);
 
   const scheduleSave = useCallback(
-    (content: SerializedEditorState) => {
+    (content: PageContent) => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       if (savedFadeRef.current) clearTimeout(savedFadeRef.current);
       if (retryRef.current) clearTimeout(retryRef.current);

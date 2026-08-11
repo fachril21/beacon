@@ -1,5 +1,7 @@
 # TDD Evidence Report: Lexical Editor Doc/Playground Conformance
 
+> **Superseded:** Beacon's editor has since migrated from Lexical to BlockNote (see PROJECT.md §9.2, PRD.md §5.1/§6). This report is kept as an honest historical record of the TDD work actually performed against the Lexical implementation — it no longer describes the current `src/components/editor/` code.
+
 ## Source plan
 
 No `*.plan.md` artifact — this was an inline `/plan` (conversational mode) followed by `/tdd-workflow`. The plan compared beacon's existing Lexical editor (`src/components/editor/`) against the official [lexical.dev docs](https://lexical.dev/docs) and the `lexical-playground` reference implementation (fetched from `facebook/lexical` on GitHub), and found one real conformance gap plus one confirmed scope addition:

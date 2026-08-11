@@ -10,7 +10,7 @@ Dark-mode-primary design system for Beacon's authoring product and public readin
 
 1. **Green is a signal, not a wash.** The neon primary marks action and state — buttons, active nav, links, focus, badges. It never becomes a surface color the eye has to read across a 3,000-word guideline. If a screen's dominant color is green, the system has been misapplied.
 2. **Midnight, not terminal.** Backgrounds carry a deliberate blue undertone (`hue 250` in OKLCH) rather than true neutral gray or brown-black. Depth comes from soft green-tinted glows and offset shadows, never flat gray card shadows. The reference is premium software at night, not a CRT hacker aesthetic.
-3. **One editor, two audiences, one grammar.** The authoring product (Lexical editor, Fabric.js annotation canvas, sidebar) and the public reading site consume the exact same tokens. Density, chrome, and affordances differ by audience; color, type character, and radius language never do.
+3. **One editor, two audiences, one grammar.** The authoring product (BlockNote editor, Fabric.js annotation canvas, sidebar) and the public reading site consume the exact same tokens. Density, chrome, and affordances differ by audience; color, type character, and radius language never do.
 4. **Contrast is measured, not assumed.** Every text-on-fill pairing below carries a verified WCAG ratio, computed from the actual OKLCH→sRGB values, not eyeballed. Tones that fail body-text contrast are labeled accent/fill-only and are never defaulted into running text.
 5. **Calm density for a writing tool.** Hierarchy comes from type scale and spacing rhythm first. Beacon is written in and read from for long stretches — the neon accent punctuates decisions and states, it doesn't compete with the content Users spent five minutes producing.
 
@@ -260,9 +260,9 @@ A distinct shape from badges, taken directly from the reference screenshot's con
 
 These are the product's signature surfaces (per PRODUCT.md's positioning — the screenshot-annotate-describe loop is the differentiator) and get their own deliberate treatment rather than generic component reuse.
 
-### 6.1 Lexical block editor — toolbar
+### 6.1 BlockNote editor — toolbar
 
-A **floating, contextual toolbar** (appears on text selection, not a permanently docked ribbon) — matches "zero context-switch" and keeps the writing surface uncluttered for long-form authoring:
+A **floating, contextual toolbar** (appears on text selection, not a permanently docked ribbon) — matches "zero context-switch" and keeps the writing surface uncluttered for long-form authoring. Implemented as a custom `FormattingToolbar` composition (via `@blocknote/react`'s `FormattingToolbarController`) restyled with `@blocknote/shadcn`, not the framework's default Mantine chrome:
 
 - `--popover` background, `radius-md`, `1px solid --border`, subtle elevation shadow (`0 8px 24px -8px oklch(0.06 0.02 250 / 0.6)` — a genuinely dark, cool-toned shadow, not default gray).
 - Icon buttons: 32×32px, `radius-sm`, `--muted-foreground` icon at rest, `--foreground` on hover with `--accent` background, `--primary` icon color when the mark is active on the current selection (Bold/Italic/etc. toggled state) — this is the toolbar's one use of green, and it's a state signal, not decoration.

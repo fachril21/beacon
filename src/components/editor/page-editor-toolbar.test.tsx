@@ -38,7 +38,7 @@ const draftPage: Page = {
   parentPageId: null,
   title: "Untitled",
   order: 0,
-  content: { root: { children: [], direction: null, format: "", indent: 0, type: "root", version: 1 } },
+  content: [],
   visibility: "internal",
   isPublished: false,
   publishedContentSnapshot: null,

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import "fake-indexeddb/auto";
 import { savePendingEdit, loadPendingEdit, clearPendingEdit } from "./offline-buffer";
-import { emptyDoc } from "@/lib/mock/lexical-content";
+import { emptyDoc, doc, paragraph } from "@/lib/mock/blocknote-content";
 
 describe("offline-buffer", () => {
   beforeEach(async () => {
@@ -27,8 +27,7 @@ describe("offline-buffer", () => {
 
   it("overwrites a prior pending edit for the same Page with the latest one", async () => {
     await savePendingEdit("page-1", emptyDoc());
-    const second = emptyDoc();
-    second.root.children = [];
+    const second = doc([paragraph("changed")]);
     await savePendingEdit("page-1", second);
     expect(await loadPendingEdit("page-1")).toEqual(second);
   });

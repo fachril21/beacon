@@ -43,7 +43,7 @@ export default function PageEditorPage({ params }: { params: Promise<{ spaceId: 
           onOpenVersionHistory={() => setIsVersionHistoryOpen(true)}
         />
         <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-editor-column px-6 py-10">
+          <div className="mx-auto max-w-editor-column px-40 py-10">
             <input
               id="page-title"
               name="page-title"

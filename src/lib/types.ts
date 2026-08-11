@@ -4,7 +4,16 @@
  * Stage 2 swaps hook internals for real Supabase calls without changing these
  * shapes or any component — see PRD.md §7.
  */
-import type { SerializedEditorState } from "lexical";
+import type { PartialBlock as BNPartialBlock } from "@blocknote/core";
+
+/**
+ * A Page's document content — BlockNote's block tree. Typed as `PartialBlock[]`
+ * (not the stricter `Block[]`) so hand-authored fixtures don't need every
+ * default prop spelled out; `editor.document` (a full `Block[]`) is always
+ * assignable here, and this is exactly the shape `useCreateBlockNote({
+ * initialContent })` expects when re-opening stored content.
+ */
+export type PageContent = BNPartialBlock[];
 
 export type ID = string;
 export type ISODateString = string;
@@ -86,7 +95,7 @@ export type PageVisibility = "internal" | "publishable";
 /** Decoupled last-published copy of a Page's content — Viewers see this until "Update" (PRD.md §5.3). */
 export interface PublishedContentSnapshot {
   title: string;
-  content: SerializedEditorState;
+  content: PageContent;
   screenshotBlocks: Record<ID, ScreenshotBlock>;
   publishedAt: ISODateString;
 }
@@ -98,8 +107,8 @@ export interface Page {
   title: string;
   /** Sibling order within the same parent, for sidebar drag-and-drop reorder (Flow 2 step 5). */
   order: number;
-  /** Live-draft Lexical editor state — the truth source for the editor (PRD.md §5.1). */
-  content: SerializedEditorState;
+  /** Live-draft BlockNote document — the truth source for the editor (PRD.md §5.1). */
+  content: PageContent;
   visibility: PageVisibility;
   isPublished: boolean;
   publishedContentSnapshot: PublishedContentSnapshot | null;
@@ -113,15 +122,15 @@ export interface Page {
 // Block — a unit of content within a Page, PROJECT.md §9.4
 //
 // Stage 1 modeling note (flagged assumption): ordinary text/heading/list/etc.
-// blocks live inside `Page.content` as native Lexical nodes — that JSON tree
-// IS their "Block" representation, per PRD.md §5.1's truth-source rule, so no
-// parallel per-paragraph row exists. The one Block subtype that needs to be a
-// first-class, independently addressable entity is ScreenshotBlock (it owns
-// non-text state — image ref + annotation layer + description — that must
-// survive being re-opened without re-uploading, and that Comments/Version
-// History need to reference by a stable id independent of Lexical's own node
-// keys). BlockType also enumerates every insertable block kind for the slash
-// command menu (Flow 3 step 2).
+// blocks live inside `Page.content` as native BlockNote blocks — that JSON
+// tree IS their "Block" representation, per PRD.md §5.1's truth-source rule,
+// so no parallel per-paragraph row exists. The one Block subtype that needs
+// to be a first-class, independently addressable entity is ScreenshotBlock
+// (it owns non-text state — image ref + annotation layer + description —
+// that must survive being re-opened without re-uploading, and that
+// Comments/Version History need to reference by a stable id independent of
+// BlockNote's own block ids). BlockType also enumerates every insertable
+// block kind for the slash command menu (Flow 3 step 2).
 // ---------------------------------------------------------------------------
 
 export type BlockType =
@@ -182,7 +191,7 @@ export interface Version {
   id: ID;
   pageId: ID;
   title: string;
-  content: SerializedEditorState;
+  content: PageContent;
   createdByUserId: ID;
   createdAt: ISODateString;
   /** True when this Version was itself created as a result of a restore (Flow 9 step 3 — restoring is never destructive). */
@@ -196,7 +205,7 @@ export interface Version {
 export interface Comment {
   id: ID;
   pageId: ID;
-  /** References a stable block-level id — either a ScreenshotBlock.id or a Lexical top-level node's beaconBlockId attribute. */
+  /** References a stable block-level id — either a ScreenshotBlock.id or a BlockNote top-level block's id. */
   blockId: ID;
   authorUserId: ID;
   body: string;

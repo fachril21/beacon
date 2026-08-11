@@ -1,12 +1,12 @@
 import type { Version } from "@/lib/types";
-import { doc, heading, paragraph } from "./lexical-content";
+import { doc, heading, paragraph } from "./blocknote-content";
 
 export const mockVersions: Version[] = [
   {
     id: "version-1",
     pageId: "page-getting-started",
     title: "Memulai dengan Aplikasi Mobile",
-    content: doc([heading("h1", "Memulai dengan Aplikasi Mobile"), paragraph("Draf pertama, belum lengkap.")]),
+    content: doc([heading(1, "Memulai dengan Aplikasi Mobile"), paragraph("Draf pertama, belum lengkap.")]),
     createdByUserId: "user-fachril",
     createdAt: "2025-11-04T00:30:00.000Z",
     isRestoreOf: null,
@@ -16,7 +16,7 @@ export const mockVersions: Version[] = [
     pageId: "page-getting-started",
     title: "Memulai dengan Aplikasi Mobile",
     content: doc([
-      heading("h1", "Memulai dengan Aplikasi Mobile"),
+      heading(1, "Memulai dengan Aplikasi Mobile"),
       paragraph("Menambahkan langkah masuk dan tangkapan layar pertama."),
     ]),
     createdByUserId: "user-fachril",
@@ -28,7 +28,7 @@ export const mockVersions: Version[] = [
     pageId: "page-getting-started",
     title: "Memulai dengan Aplikasi Mobile",
     content: doc([
-      heading("h1", "Memulai dengan Aplikasi Mobile"),
+      heading(1, "Memulai dengan Aplikasi Mobile"),
       paragraph("Versi lengkap dengan langkah masuk, beranda, dan checklist persiapan."),
     ]),
     createdByUserId: "user-fachril",
@@ -39,7 +39,7 @@ export const mockVersions: Version[] = [
     id: "version-4",
     pageId: "page-mobile-faq",
     title: "FAQ Aplikasi Mobile",
-    content: doc([heading("h1", "FAQ Aplikasi Mobile"), paragraph("Versi awal FAQ.")]),
+    content: doc([heading(1, "FAQ Aplikasi Mobile"), paragraph("Versi awal FAQ.")]),
     createdByUserId: "user-fachril",
     createdAt: "2025-11-15T03:00:00.000Z",
     isRestoreOf: null,

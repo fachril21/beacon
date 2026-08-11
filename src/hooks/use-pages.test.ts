@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { pagesStore } from "@/lib/supabase/stores";
-import { emptyDoc, doc, paragraph } from "@/lib/mock/lexical-content";
+import { emptyDoc, doc, paragraph } from "@/lib/mock/blocknote-content";
 
 const mockSupabase = { from: vi.fn(), rpc: vi.fn() };
 vi.mock("@/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => mockSupabase }));
