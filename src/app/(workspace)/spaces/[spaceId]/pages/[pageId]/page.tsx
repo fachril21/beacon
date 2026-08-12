@@ -1,11 +1,13 @@
 "use client";
 
-import { use, useRef, useState } from "react";
+import { use, useCallback, useRef, useState } from "react";
 import { FileText } from "lucide-react";
+import { toast } from "sonner";
 import { EmptyState } from "@/components/beacon/empty-state";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useSpace, useSpaceRole } from "@/hooks/use-spaces";
-import { usePage, useUpdatePageTitle } from "@/hooks/use-pages";
+import { usePage } from "@/hooks/use-pages";
+import { useTitleAutosave } from "@/hooks/use-title-autosave";
 import { useSession } from "@/hooks/use-session";
 import { useUser } from "@/hooks/use-users";
 import { PageEditor } from "@/components/editor/page-editor";
@@ -23,8 +25,10 @@ export default function PageEditorPage({ params }: { params: Promise<{ spaceId: 
   const author = useUser(page?.createdByUserId);
   const role = useSpaceRole(spaceId, user?.id);
   const canEdit = role === "editor" || role === "admin";
-  const updateTitle = useUpdatePageTitle();
-  const [title, setTitle] = useState(page?.title ?? "");
+  const handleTitleSaveError = useCallback(() => {
+    toast.error("Judul gagal disimpan, silakan coba lagi.");
+  }, []);
+  const { title, scheduleTitleSave, flushTitleSave } = useTitleAutosave(pageId, page?.title, handleTitleSaveError);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [isVersionHistoryOpen, setIsVersionHistoryOpen] = useState(false);
   const scrollRootRef = useRef<HTMLElement | null>(null);
@@ -56,10 +60,8 @@ export default function PageEditorPage({ params }: { params: Promise<{ spaceId: 
                 id="page-title"
                 name="page-title"
                 value={title}
-                onChange={(e) => {
-                  setTitle(e.target.value);
-                  updateTitle(pageId, e.target.value);
-                }}
+                onChange={(e) => scheduleTitleSave(e.target.value)}
+                onBlur={() => void flushTitleSave()}
                 readOnly={!canEdit}
                 placeholder="Halaman tanpa judul"
                 autoFocus={!page.title}

@@ -106,7 +106,15 @@ export function useCreateSpace() {
       .insert({ space_id: space.id, user_id: input.createdByUserId, role: "admin" })
       .select()
       .single();
-    if (permissionError) throw permissionError;
+    if (permissionError) {
+      // Without this, a failed bootstrap Permission insert (RLS hiccup,
+      // network blip) leaves the Space row behind with no Permission on it
+      // at all — permanently orphaned, since nothing else can ever grant
+      // access to it. Best-effort: the delete's own outcome doesn't change
+      // what we report to the caller either way.
+      await supabase.from("spaces").delete().eq("id", space.id);
+      throw permissionError;
+    }
 
     spacesStore.setState((prev) => [...prev, space]);
     permissionsStore.setState((prev) => [...prev, mapPermissionRow(permissionRow as PermissionRow)]);

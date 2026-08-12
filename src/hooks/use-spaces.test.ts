@@ -63,6 +63,47 @@ describe("useCreateSpace", () => {
     expect(spacesStore.getState()).toEqual([expect.objectContaining({ id: "space-1" })]);
     expect(permissionsStore.getState()).toEqual([expect.objectContaining({ spaceId: "space-1", role: "admin" })]);
   });
+
+  it("deletes the just-created Space if the bootstrap Permission insert fails, instead of leaving an inaccessible orphan", async () => {
+    const spaceRow = {
+      id: "space-1",
+      organization_id: "org-1",
+      name: "Mobile App",
+      category: null,
+      is_publishable: false,
+      created_by_user_id: "user-1",
+      created_at: "2026-01-01T00:00:00Z",
+    };
+    const permissionError = { message: "new row violates row-level security policy for table permissions" };
+
+    const spacesInsert = vi.fn(() => ({ select: () => ({ single: () => Promise.resolve({ data: spaceRow, error: null }) }) }));
+    const permissionsInsert = vi.fn(() => ({ select: () => ({ single: () => Promise.resolve({ data: null, error: permissionError }) }) }));
+    const spacesDeleteEq = vi.fn(() => Promise.resolve({ error: null }));
+    const spacesDelete = vi.fn(() => ({ eq: spacesDeleteEq }));
+
+    mockSupabase.from.mockImplementation((table: string) => {
+      if (table === "spaces") return { insert: spacesInsert, delete: spacesDelete };
+      if (table === "permissions") return { insert: permissionsInsert };
+      throw new Error(`unexpected table ${table}`);
+    });
+
+    const { result } = renderHook(() => useCreateSpace());
+    await expect(
+      act(async () => {
+        await result.current({
+          organizationId: "org-1",
+          name: "Mobile App",
+          isPublishable: false,
+          createdByUserId: "user-1",
+        });
+      }),
+    ).rejects.toEqual(permissionError);
+
+    expect(spacesDelete).toHaveBeenCalled();
+    expect(spacesDeleteEq).toHaveBeenCalledWith("id", "space-1");
+    expect(spacesStore.getState()).toEqual([]);
+    expect(permissionsStore.getState()).toEqual([]);
+  });
 });
 
 describe("useUpdateSpaceRole", () => {
