@@ -9,12 +9,12 @@ import { PublicSearchCommand } from "./public-search-command";
 import type { Organization } from "@/lib/types";
 
 export function PublicNav({ organization }: { organization: Organization }) {
-  const { organizations, setOrgId } = usePublicOrgContext();
+  const { organizations, setOrgId, basePath } = usePublicOrgContext();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-border bg-background/95 px-6 py-4 backdrop-blur-sm">
-      <Link href="/public" className="flex items-center gap-2.5">
+      <Link href={basePath} className="flex items-center gap-2.5">
         <div className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
           <svg viewBox="0 0 24 24" fill="none" className="size-4.5" aria-hidden>
             <path d="M12 2 4 6v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V6l-8-4Z" fill="currentColor" />
