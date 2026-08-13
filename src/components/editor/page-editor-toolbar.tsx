@@ -45,12 +45,12 @@ export function PageEditorToolbar({ page, space, title, saveStatus, role, onOpen
   const [isOffline, setIsOffline] = useState(typeof navigator !== "undefined" && !navigator.onLine);
   const canEdit = role === "editor" || role === "admin";
 
-  const orgVerified = organization?.isDomainVerified ?? false;
+  // Publishing only ever depends on the Space's own isPublishable flag — a
+  // verified custom domain is no longer required, since every Organization
+  // can publish under the platform domain (/public/{orgSlug}) by default.
   const disabledReason = !space.isPublishable
     ? "Minta admin Space untuk menandai Space ini sebagai dapat dipublikasikan."
-    : !orgVerified
-      ? "Organisasi Anda memerlukan domain terverifikasi sebelum dapat memublikasikan — lihat Pengaturan Organisasi."
-      : null;
+    : null;
 
   const pendingChanges = hasUnpublishedChanges(page);
   const status = getPageStatus(page);
@@ -63,9 +63,11 @@ export function PageEditorToolbar({ page, space, title, saveStatus, role, onOpen
       return;
     }
     try {
-      await publish(page.id);
+      const publishedPage = await publish(page.id);
+      const publicUrl =
+        organization && publishedPage?.slug ? `/public/${organization.slug}/pages/${publishedPage.slug}` : `/spaces/${space.id}`;
       toast.success("Halaman berhasil dipublikasikan", {
-        action: { label: "Lihat halaman publik", onClick: () => router.push(`/public/pages/${page.id}`) },
+        action: { label: "Lihat halaman publik", onClick: () => router.push(publicUrl) },
       });
     } catch {
       toast.error("Gagal memublikasikan halaman, silakan coba lagi.");
