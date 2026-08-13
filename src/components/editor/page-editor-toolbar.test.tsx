@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PageEditorToolbar } from "./page-editor-toolbar";
 import type { Page, Space } from "@/lib/types";
@@ -9,13 +9,21 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
+const mockToastSuccess = vi.fn();
+vi.mock("sonner", () => ({
+  toast: Object.assign(vi.fn(), { success: (...args: unknown[]) => mockToastSuccess(...args), error: vi.fn() }),
+}));
+
 vi.mock("@/hooks/use-organizations", () => ({
   useOrganization: () => ({ id: "org-1", slug: "test-org", isDomainVerified: false }),
 }));
 
 const mockDeletePage = vi.fn(() => Promise.resolve());
+const mockPublish = vi.fn(() =>
+  Promise.resolve({ id: "page-1", slug: "untitled", isPublished: true } as Partial<Page> as Page),
+);
 vi.mock("@/hooks/use-pages", () => ({
-  usePublishActions: () => ({ publish: vi.fn(), update: vi.fn(), unpublish: vi.fn() }),
+  usePublishActions: () => ({ publish: mockPublish, update: vi.fn(), unpublish: vi.fn() }),
   useDeletePage: () => mockDeletePage,
   hasUnpublishedChanges: () => false,
   getPageStatus: () => "draft",
@@ -77,6 +85,24 @@ describe("PageEditorToolbar publish gate (platform-domain publishing)", () => {
       />,
     );
     expect(screen.getByRole("button", { name: "Publikasikan" })).toBeDisabled();
+  });
+
+  it("links 'Lihat halaman publik' to the platform-domain slug URL from the freshly-published Page, not a stale UUID URL", async () => {
+    mockToastSuccess.mockClear();
+    mockPublish.mockClear();
+    const user = userEvent.setup();
+    renderToolbar("editor");
+
+    await user.click(screen.getByRole("button", { name: "Publikasikan" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Publikasikan" }));
+
+    await vi.waitFor(() => expect(mockPublish).toHaveBeenCalledWith("page-1"));
+    await vi.waitFor(() => expect(mockToastSuccess).toHaveBeenCalled());
+
+    const [, options] = mockToastSuccess.mock.calls[0] as [string, { action: { label: string; onClick: () => void } }];
+    options.action.onClick();
+    expect(mockPush).toHaveBeenCalledWith("/public/test-org/pages/untitled");
   });
 });
 
