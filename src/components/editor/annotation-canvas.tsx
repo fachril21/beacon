@@ -5,6 +5,14 @@ import * as fabric from "fabric";
 import { Square, MoveUpRight, CircleDot, Type, EyeOff, Trash2, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getAnnotationCanvasSize } from "@/lib/annotation-canvas-size";
+import {
+  getAnnotationDraft,
+  setAnnotationDraft,
+  clearAnnotationDraft,
+  getAnnotationToolState,
+  setAnnotationToolState,
+  clearAnnotationToolState,
+} from "@/lib/annotation-draft-store";
 import type { AnnotationJson, AnnotationToolType } from "@/lib/types";
 
 const TOOLS: { type: AnnotationToolType; icon: typeof Square; label: string }[] = [
@@ -24,6 +32,8 @@ const SWATCHES = [
 ];
 
 interface AnnotationCanvasProps {
+  /** The screenshot block's own stable id — the draft store's key, not the block's screenshotBlockId prop. */
+  blockId: string;
   imageUrl: string;
   imageWidth: number;
   imageHeight: number;
@@ -32,12 +42,21 @@ interface AnnotationCanvasProps {
   onCancel: () => void;
 }
 
-export function AnnotationCanvas({ imageUrl, imageWidth, imageHeight, initialAnnotation, onDone, onCancel }: AnnotationCanvasProps) {
-  const canvasElRef = useRef<HTMLCanvasElement>(null);
+export function AnnotationCanvas({ blockId, imageUrl, imageWidth, imageHeight, initialAnnotation, onDone, onCancel }: AnnotationCanvasProps) {
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
   const fabricRef = useRef<fabric.Canvas | null>(null);
-  const [activeTool, setActiveTool] = useState<AnnotationToolType | null>(null);
-  const [activeColor, setActiveColor] = useState(SWATCHES[2].value);
-  const [nextMarkerNumber, setNextMarkerNumber] = useState(initialAnnotation?.nextMarkerNumber ?? 1);
+  // A draft (unsaved edits from a prior mount of this same block, wiped out
+  // by the remount itself) takes priority over the last explicitly-saved
+  // annotation — see annotation-draft-store.ts.
+  const draftAnnotation = getAnnotationDraft(blockId);
+  // Same remount-survival problem as the drawn shapes: activeTool/activeColor
+  // are local state too, so without this a mid-session remount silently
+  // deselects the tool the user just picked, and the next canvas click does
+  // nothing (handleMouseDown's `if (!tool) return`).
+  const draftToolState = getAnnotationToolState(blockId);
+  const [activeTool, setActiveTool] = useState<AnnotationToolType | null>(draftToolState?.activeTool ?? null);
+  const [activeColor, setActiveColor] = useState(draftToolState?.activeColor ?? SWATCHES[2].value);
+  const [nextMarkerNumber, setNextMarkerNumber] = useState(draftAnnotation?.nextMarkerNumber ?? initialAnnotation?.nextMarkerNumber ?? 1);
   const [hasSelection, setHasSelection] = useState(false);
 
   const { scale, width: displayWidth, height: displayHeight } = getAnnotationCanvasSize(imageWidth, imageHeight);
@@ -49,13 +68,36 @@ export function AnnotationCanvas({ imageUrl, imageWidth, imageHeight, initialAnn
     activeToolRef.current = activeTool;
     activeColorRef.current = activeColor;
     nextMarkerRef.current = nextMarkerNumber;
-  }, [activeTool, activeColor, nextMarkerNumber]);
+    // Every activeTool/activeColor change (button click, or the
+    // auto-deselect after placing a label/shape) gets mirrored here, so
+    // whichever one triggered it doesn't matter — the store always reflects
+    // the latest selection.
+    setAnnotationToolState(blockId, { activeTool, activeColor });
+  }, [activeTool, activeColor, nextMarkerNumber, blockId]);
 
-  // Init canvas once.
+  const saveDraft = useCallback(
+    (canvas: fabric.Canvas, nextMarker: number) => {
+      const json = canvas.toJSON();
+      const objects = (json.objects as Record<string, unknown>[]).filter((obj) => obj.type !== "Image");
+      setAnnotationDraft(blockId, { version: "7.0", objects, nextMarkerNumber: nextMarker });
+    },
+    [blockId],
+  );
+
+  // Init canvas once. Fabric takes ownership of the <canvas> DOM node it's
+  // given and physically detaches it on dispose() (confirmed via its
+  // cleanupDOM -> Node.removeChild call) — a JSX-managed ref can't survive
+  // that, since React 19 dev-mode Strict Mode mounts every new subtree
+  // twice (mount -> cleanup -> mount) and the second mount would reuse the
+  // now-detached node. Creating the <canvas> element imperatively here, one
+  // fresh node per effect run, gives Fabric something it can safely own and
+  // destroy on each of those runs.
   useEffect(() => {
-    if (!canvasElRef.current) return;
+    if (!canvasContainerRef.current) return;
+    const canvasEl = document.createElement("canvas");
+    canvasContainerRef.current.appendChild(canvasEl);
     let isDisposed = false;
-    const canvas = new fabric.Canvas(canvasElRef.current, {
+    const canvas = new fabric.Canvas(canvasEl, {
       width: displayWidth,
       height: displayHeight,
       backgroundColor: "transparent",
@@ -74,8 +116,9 @@ export function AnnotationCanvas({ imageUrl, imageWidth, imageHeight, initialAnn
       if (isDisposed) return;
       img.set({ selectable: false, evented: false, scaleX: scale, scaleY: scale, left: 0, top: 0, originX: "left", originY: "top" });
 
-      if (initialAnnotation?.objects?.length) {
-        await canvas.loadFromJSON({ objects: initialAnnotation.objects });
+      const objectsToLoad = draftAnnotation?.objects?.length ? draftAnnotation.objects : initialAnnotation?.objects;
+      if (objectsToLoad?.length) {
+        await canvas.loadFromJSON({ objects: objectsToLoad });
       }
       if (isDisposed) return;
       canvas.add(img);
@@ -90,6 +133,15 @@ export function AnnotationCanvas({ imageUrl, imageWidth, imageHeight, initialAnn
     canvas.on("selection:created", updateSelectionState);
     canvas.on("selection:updated", updateSelectionState);
     canvas.on("selection:cleared", updateSelectionState);
+
+    // Persist every meaningful edit outside the component tree so it
+    // survives this NodeView being torn down and recreated mid-session.
+    function persistDraft() {
+      saveDraft(canvas, nextMarkerRef.current);
+    }
+    canvas.on("object:added", persistDraft);
+    canvas.on("object:removed", persistDraft);
+    canvas.on("object:modified", persistDraft);
 
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.key === "Delete" || e.key === "Backspace") && !(document.activeElement instanceof HTMLTextAreaElement)) {
@@ -108,6 +160,7 @@ export function AnnotationCanvas({ imageUrl, imageWidth, imageHeight, initialAnn
       isDisposed = true;
       window.removeEventListener("keydown", handleKeyDown);
       canvas.dispose();
+      canvasEl.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -177,9 +230,16 @@ export function AnnotationCanvas({ imageUrl, imageWidth, imageHeight, initialAnn
           originX: "left",
           originY: "top",
         });
+        // Bump the ref before adding the shape: canvas.add() synchronously
+        // fires "object:added", whose persistDraft() reads nextMarkerRef —
+        // it needs to already see the post-increment value, since the
+        // setNextMarkerNumber below won't reach the ref until the next
+        // render's sync effect runs.
+        const next = number + 1;
+        nextMarkerRef.current = next;
         canvas.add(group);
         canvas.renderAll();
-        setNextMarkerNumber((n) => n + 1);
+        setNextMarkerNumber(next);
       } else if (tool === "label") {
         const text = new fabric.IText("Label", {
           left: pointer.x,
@@ -263,7 +323,15 @@ export function AnnotationCanvas({ imageUrl, imageWidth, imageHeight, initialAnn
     const json = canvas.toJSON();
     const objects = (json.objects as Record<string, unknown>[]).filter((obj) => obj.type !== "Image");
     onDone({ version: "7.0", objects, nextMarkerNumber });
-  }, [onDone, nextMarkerNumber]);
+    clearAnnotationDraft(blockId);
+    clearAnnotationToolState(blockId);
+  }, [onDone, nextMarkerNumber, blockId]);
+
+  const handleCancel = useCallback(() => {
+    clearAnnotationDraft(blockId);
+    clearAnnotationToolState(blockId);
+    onCancel();
+  }, [onCancel, blockId]);
 
   const handleDeleteSelected = useCallback(() => {
     const canvas = fabricRef.current;
@@ -282,7 +350,7 @@ export function AnnotationCanvas({ imageUrl, imageWidth, imageHeight, initialAnn
             type="button"
             aria-label={label}
             title={label}
-            onClick={() => setActiveTool((t) => (t === type ? null : type))}
+            onClick={() => setActiveTool(activeTool === type ? null : type)}
             className={cn(
               "relative flex size-12 items-center justify-center rounded-md text-muted-foreground hover:bg-accent",
               activeTool === type && "bg-primary text-primary-foreground hover:bg-primary",
@@ -342,9 +410,9 @@ export function AnnotationCanvas({ imageUrl, imageWidth, imageHeight, initialAnn
           </button>
         </div>
         <div className="flex items-center justify-center overflow-auto p-4">
-          <canvas ref={canvasElRef} />
+          <div ref={canvasContainerRef} />
         </div>
-        <button type="button" onClick={onCancel} className="self-end px-4 pb-3 text-caption text-muted-foreground hover:text-foreground">
+        <button type="button" onClick={handleCancel} className="self-end px-4 pb-3 text-caption text-muted-foreground hover:text-foreground">
           Batal
         </button>
       </div>

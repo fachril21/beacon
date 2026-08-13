@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import { Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { createReactBlockSpec, type ReactCustomBlockRenderProps } from "@blocknote/react";
 import { useScreenshotBlock, useUploadScreenshot, useUpdateScreenshotAnnotation, useUpdateScreenshotDescription } from "@/hooks/use-screenshot-blocks";
 import { resolveScreenshotUrl } from "@/lib/s3/screenshot-url";
+import { createStore } from "@/lib/store";
 import { usePageId } from "./page-id-context";
 import { ScreenshotUploadPrompt } from "./screenshot-upload-prompt";
 import { AnnotationCanvas } from "./annotation-canvas";
@@ -24,6 +25,32 @@ export const screenshotBlockConfig = {
 
 type ScreenshotBlockRenderProps = ReactCustomBlockRenderProps<typeof screenshotBlockConfig>;
 
+/**
+ * Whether the annotator is open, keyed by the block's own stable ProseMirror
+ * id (not the local React component instance). BlockNote/Turbopack's dev
+ * server recreates this block's NodeView roughly once a second in dev mode
+ * only (confirmed absent from a production build) for reasons that survived
+ * removing every piece of this file's own logic down to a static div — so
+ * local `useState` here gets wiped mid-interaction. Reading this from a
+ * store outside the component tree means the open/closed flag survives
+ * whatever remounts the node view, in dev and in prod alike.
+ */
+const annotatingBlockIds = createStore<ReadonlySet<string>>(new Set());
+
+function setAnnotating(blockId: string, isAnnotating: boolean) {
+  annotatingBlockIds.setState((prev) => {
+    const next = new Set(prev);
+    if (isAnnotating) next.add(blockId);
+    else next.delete(blockId);
+    return next;
+  });
+}
+
+function useIsAnnotating(blockId: string) {
+  const ids = useSyncExternalStore(annotatingBlockIds.subscribe, annotatingBlockIds.getState, annotatingBlockIds.getState);
+  return ids.has(blockId);
+}
+
 function ScreenshotBlockRender({ block, editor }: ScreenshotBlockRenderProps) {
   const blockId = block.props.screenshotBlockId;
   const readOnly = !editor.isEditable;
@@ -32,7 +59,7 @@ function ScreenshotBlockRender({ block, editor }: ScreenshotBlockRenderProps) {
   const uploadScreenshot = useUploadScreenshot();
   const updateAnnotation = useUpdateScreenshotAnnotation();
   const updateDescription = useUpdateScreenshotDescription();
-  const [isAnnotating, setIsAnnotating] = useState(false);
+  const isAnnotating = useIsAnnotating(block.id);
   const [isUploading, setIsUploading] = useState(false);
   const [description, setDescription] = useState(screenshotBlock?.description ?? "");
   const descriptionSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -61,7 +88,7 @@ function ScreenshotBlockRender({ block, editor }: ScreenshotBlockRenderProps) {
     try {
       const newBlock = await uploadScreenshot({ pageId, order: 0, file, width, height });
       assignBlockId(newBlock.id);
-      setIsAnnotating(true);
+      setAnnotating(block.id, true);
     } catch {
       toast.error("Gagal mengunggah gambar, silakan coba lagi.");
     } finally {
@@ -95,15 +122,16 @@ function ScreenshotBlockRender({ block, editor }: ScreenshotBlockRenderProps) {
   if (isAnnotating) {
     return (
       <AnnotationCanvas
+        blockId={block.id}
         imageUrl={resolveScreenshotUrl(screenshotBlock.imageUrl)}
         imageWidth={screenshotBlock.imageWidth}
         imageHeight={screenshotBlock.imageHeight}
         initialAnnotation={screenshotBlock.annotationJson}
         onDone={(annotation) => {
           updateAnnotation(screenshotBlock.id, annotation).catch(() => toast.error("Gagal menyimpan anotasi, silakan coba lagi."));
-          setIsAnnotating(false);
+          setAnnotating(block.id, false);
         }}
-        onCancel={() => setIsAnnotating(false)}
+        onCancel={() => setAnnotating(block.id, false)}
       />
     );
   }
@@ -112,7 +140,7 @@ function ScreenshotBlockRender({ block, editor }: ScreenshotBlockRenderProps) {
     <div className="group relative my-4 w-full max-w-screenshot-breakout">
       <button
         type="button"
-        onClick={() => setIsAnnotating(true)}
+        onClick={() => setAnnotating(block.id, true)}
         className="relative block w-full overflow-hidden rounded-lg border border-card bg-background text-left"
       >
         <div className="relative">

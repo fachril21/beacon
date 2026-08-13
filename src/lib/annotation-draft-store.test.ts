@@ -74,4 +74,9 @@ describe("annotation tool selection state", () => {
     expect(getAnnotationToolState("tool-c1")).toBeUndefined();
     expect(getAnnotationToolState("tool-c2")).toBeDefined();
   });
+
+  it("clearing a block with no tool state is a no-op", () => {
+    expect(() => clearAnnotationToolState("tool-missing")).not.toThrow();
+    expect(getAnnotationToolState("tool-missing")).toBeUndefined();
+  });
 });
