@@ -44,3 +44,18 @@ export function resolveOrganizationForHost(host: string, organizations: Organiza
   if (!match || !match.isDomainVerified) return null;
   return match;
 }
+
+/**
+ * Which Organization id the public site (src/app/(public)/*) should render
+ * for the current request. The `x-beacon-organization-id` header (set by
+ * proxy.ts only for a verified custom-domain request) always wins over the
+ * dev-only localStorage switcher (use-public-org.ts) — a real visitor on a
+ * real domain must never be affected by another developer's local preview
+ * state, and the two are never blended.
+ */
+export function resolvePublicOrganizationId(
+  headerOrganizationId: string | null,
+  devSwitcherOrganizationId: string | null,
+): string | null {
+  return headerOrganizationId ? headerOrganizationId : devSwitcherOrganizationId;
+}
