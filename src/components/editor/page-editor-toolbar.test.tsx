@@ -10,7 +10,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/hooks/use-organizations", () => ({
-  useOrganization: () => ({ id: "org-1", isDomainVerified: true }),
+  useOrganization: () => ({ id: "org-1", slug: "test-org", isDomainVerified: false }),
 }));
 
 const mockDeletePage = vi.fn(() => Promise.resolve());
@@ -58,6 +58,27 @@ function renderToolbar(role: "viewer" | "editor" | "admin" | null) {
     <PageEditorToolbar page={draftPage} space={space} title={draftPage.title} saveStatus="idle" role={role} />,
   );
 }
+
+describe("PageEditorToolbar publish gate (platform-domain publishing)", () => {
+  it("enables Publish for a publishable Space even when the Organization has no verified custom domain", () => {
+    renderToolbar("editor");
+    const publishButton = screen.getByRole("button", { name: "Publikasikan" });
+    expect(publishButton).not.toBeDisabled();
+  });
+
+  it("disables Publish (with an explanatory tooltip) when the Space itself is not publishable, regardless of domain status", () => {
+    render(
+      <PageEditorToolbar
+        page={draftPage}
+        space={{ ...space, isPublishable: false }}
+        title={draftPage.title}
+        saveStatus="idle"
+        role="editor"
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Publikasikan" })).toBeDisabled();
+  });
+});
 
 describe("PageEditorToolbar role gating (US17.2)", () => {
   it("shows the Publish button for an editor", () => {
