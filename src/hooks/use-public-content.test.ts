@@ -66,7 +66,7 @@ describe("usePublicToc", () => {
 describe("usePublicPage", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("returns null (never a fallback) when the Page's Space belongs to a different Organization", async () => {
+  it("looks the Page up by (organization_id, slug) — never a bare slug across Organizations", async () => {
     const pageRow = {
       id: "page-1",
       space_id: "space-1",
@@ -75,6 +75,50 @@ describe("usePublicPage", () => {
       order: 0,
       content: emptyDoc(),
       visibility: "publishable",
+      slug: "getting-started",
+      is_published: true,
+      published_content_snapshot: { title: "Getting started", content: emptyDoc(), screenshotBlocks: {}, publishedAt: "t" },
+      published_at: "t",
+      created_by_user_id: "user-1",
+      created_at: "t",
+      updated_at: "t",
+    };
+    const spaceRow = {
+      id: "space-1",
+      organization_id: "org-1",
+      name: "Mobile App",
+      category: null,
+      is_publishable: true,
+      created_by_user_id: "user-1",
+      created_at: "t",
+    };
+
+    const pagesEqSlug = vi.fn(() => ({ single: () => Promise.resolve({ data: pageRow, error: null }) }));
+    const pagesEqOrg = vi.fn(() => ({ eq: pagesEqSlug }));
+    mockSupabase.from.mockImplementation((table: string) => {
+      if (table === "pages") return { select: () => ({ eq: pagesEqOrg }) };
+      if (table === "spaces") return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: spaceRow, error: null }) }) }) };
+      throw new Error(`unexpected table ${table}`);
+    });
+
+    const { result } = renderHook(() => usePublicPage("getting-started", "org-1"));
+    await waitFor(() => expect(result.current).not.toBeNull());
+
+    expect(pagesEqOrg).toHaveBeenCalledWith("organization_id", "org-1");
+    expect(pagesEqSlug).toHaveBeenCalledWith("slug", "getting-started");
+    expect(result.current).toMatchObject({ page: { id: "page-1", slug: "getting-started" }, space: { id: "space-1" } });
+  });
+
+  it("returns null (never a fallback) when the Page's Space belongs to a different Organization than expected", async () => {
+    const pageRow = {
+      id: "page-1",
+      space_id: "space-1",
+      parent_page_id: null,
+      title: "Getting started",
+      order: 0,
+      content: emptyDoc(),
+      visibility: "publishable",
+      slug: "getting-started",
       is_published: true,
       published_content_snapshot: { title: "Getting started", content: emptyDoc(), screenshotBlocks: {}, publishedAt: "t" },
       published_at: "t",
@@ -93,49 +137,12 @@ describe("usePublicPage", () => {
     };
 
     mockSupabase.from.mockImplementation((table: string) => {
-      if (table === "pages") return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: pageRow, error: null }) }) }) };
+      if (table === "pages") return { select: () => ({ eq: () => ({ eq: () => ({ single: () => Promise.resolve({ data: pageRow, error: null }) }) }) }) };
       if (table === "spaces") return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: spaceRow, error: null }) }) }) };
       throw new Error(`unexpected table ${table}`);
     });
 
-    const { result } = renderHook(() => usePublicPage("page-1", "org-1"));
+    const { result } = renderHook(() => usePublicPage("getting-started", "org-1"));
     await waitFor(() => expect(result.current).toBeNull());
-  });
-
-  it("returns the page+space when everything matches", async () => {
-    const pageRow = {
-      id: "page-1",
-      space_id: "space-1",
-      parent_page_id: null,
-      title: "Getting started",
-      order: 0,
-      content: emptyDoc(),
-      visibility: "publishable",
-      is_published: true,
-      published_content_snapshot: { title: "Getting started", content: emptyDoc(), screenshotBlocks: {}, publishedAt: "t" },
-      published_at: "t",
-      created_by_user_id: "user-1",
-      created_at: "t",
-      updated_at: "t",
-    };
-    const spaceRow = {
-      id: "space-1",
-      organization_id: "org-1",
-      name: "Mobile App",
-      category: null,
-      is_publishable: true,
-      created_by_user_id: "user-1",
-      created_at: "t",
-    };
-
-    mockSupabase.from.mockImplementation((table: string) => {
-      if (table === "pages") return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: pageRow, error: null }) }) }) };
-      if (table === "spaces") return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: spaceRow, error: null }) }) }) };
-      throw new Error(`unexpected table ${table}`);
-    });
-
-    const { result } = renderHook(() => usePublicPage("page-1", "org-1"));
-    await waitFor(() => expect(result.current).not.toBeNull());
-    expect(result.current).toMatchObject({ page: { id: "page-1" }, space: { id: "space-1" } });
   });
 });
