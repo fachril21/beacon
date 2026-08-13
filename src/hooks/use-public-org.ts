@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useContext, useSyncExternalStore } from "react";
 import { useOrganizations } from "./use-organizations";
+import { PublicOrgHeaderContext } from "./public-org-header-context";
+import { resolvePublicOrganizationId } from "@/lib/organization-resolution";
 
 const STORAGE_KEY = "beacon.devPublicOrgId";
 const SERVER_SNAPSHOT: string | null = null;
@@ -20,23 +22,34 @@ function getServerSnapshot(): string | null {
 }
 
 /**
- * Stage 1 has no real Host-header domain routing (that's Epic 14a, Stage 2) —
- * this dev-only switcher simulates "which Organization's public domain am I
- * on" so the public site can be previewed under >=2 Organization contexts
- * without content bleeding between them (Epic 7 AC). Reads localStorage via
- * useSyncExternalStore so the client's first render matches the server's
- * (both start from `null`) and only diverges after hydration completes.
+ * "Which Organization's public domain am I on." Prefers the real
+ * `x-beacon-organization-id` header resolved by proxy.ts's Host-header
+ * middleware (Epic 14a) — set only for a verified custom-domain request.
+ * Falls back to a dev-only localStorage switcher when no header is present
+ * (the app's own host: localhost / Vercel preview), so the public site can
+ * still be previewed under >=2 Organization contexts locally (Epic 7 AC).
+ * Reads localStorage via useSyncExternalStore so the client's first render
+ * matches the server's (both start from `null`) and only diverges after
+ * hydration completes.
  */
 export function usePublicOrgContext() {
   const organizations = useOrganizations();
   const storedOrgId = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const headerOrgId = useContext(PublicOrgHeaderContext);
 
   const setOrgId = useCallback((id: string) => {
     window.localStorage.setItem(STORAGE_KEY, id);
     window.dispatchEvent(new StorageEvent("storage"));
   }, []);
 
-  const organization = organizations.find((o) => o.id === storedOrgId) ?? organizations[0] ?? null;
+  if (headerOrgId) {
+    // A real custom-domain request must never reveal that other
+    // Organizations exist (PRD.md Flow 5) or fall back to an unrelated one.
+    const organization = organizations.find((o) => o.id === headerOrgId) ?? null;
+    return { organization, organizations: organization ? [organization] : [], setOrgId };
+  }
 
+  const resolvedId = resolvePublicOrganizationId(null, storedOrgId);
+  const organization = organizations.find((o) => o.id === resolvedId) ?? organizations[0] ?? null;
   return { organization, organizations, setOrgId };
 }
