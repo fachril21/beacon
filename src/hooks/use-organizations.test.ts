@@ -104,6 +104,58 @@ describe("useOrganizationDomainActions", () => {
     );
   });
 
+  it("verifyDomain calls the verify-domain API route and patches the store when verified", async () => {
+    organizationsStore.setState((prev) =>
+      prev.map((o) => (o.id === "org-1" ? { ...o, domain: "docs.dibimbing.id", pendingDnsToken: "beacon-verify=abc" } : o)),
+    );
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ verified: true }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { result } = renderHook(() => useOrganizationDomainActions("org-1"));
+    let success = false;
+    await act(async () => {
+      success = await result.current.verifyDomain();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/organizations/org-1/verify-domain", { method: "POST" });
+    expect(success).toBe(true);
+    expect(organizationsStore.getState()[0]).toMatchObject({ isDomainVerified: true, pendingDnsToken: null });
+    vi.unstubAllGlobals();
+  });
+
+  it("verifyDomain returns false without patching the store when DNS isn't propagated yet", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ verified: false, reason: "TXT record belum ditemukan." }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { result } = renderHook(() => useOrganizationDomainActions("org-1"));
+    let success = true;
+    await act(async () => {
+      success = await result.current.verifyDomain();
+    });
+
+    expect(success).toBe(false);
+    expect(organizationsStore.getState()[0].isDomainVerified).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
+  it("verifyDomain throws a friendly error when the API route rejects the request (e.g. rate limited)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      json: () => Promise.resolve({ error: "Terlalu banyak percobaan verifikasi. Coba lagi dalam beberapa menit." }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { result } = renderHook(() => useOrganizationDomainActions("org-1"));
+    await expect(result.current.verifyDomain()).rejects.toThrow("Terlalu banyak percobaan verifikasi");
+    vi.unstubAllGlobals();
+  });
+
   it("removeDomain clears domain fields and patches the store", async () => {
     mockSupabase.from.mockReturnValue({
       update: () => ({ eq: () => Promise.resolve({ error: null }) }),

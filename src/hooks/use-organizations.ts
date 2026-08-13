@@ -70,27 +70,24 @@ export function useOrganizationDomainActions(organizationId: string) {
   );
 
   /**
-   * TODO(Epic 14a, deferred): real verification calls Vercel's Domains API
-   * to check DNS propagation. No Vercel account/domain access is available
-   * in this environment (see the Stage 2 evidence report), so this keeps
-   * Stage 1's randomized placeholder rather than silently marking every
-   * domain "verified" without ever having checked anything.
+   * Calls the real DNS TXT-based ownership check (src/lib/dns/verify-domain.ts,
+   * via /api/organizations/[id]/verify-domain) — Vercel Domains API
+   * registration/SSL provisioning is a separate, still-deferred concern (no
+   * Vercel account is available in this environment), but this is a genuine
+   * verification, not the old randomized placeholder.
    */
   const verifyDomain = useCallback(async () => {
-    await new Promise((r) => setTimeout(r, 700));
-    const succeeded = Math.random() < 0.6;
-    if (succeeded) {
-      const supabase = getSupabaseBrowserClient();
-      const { error } = await supabase
-        .from("organizations")
-        .update({ is_domain_verified: true, pending_dns_token: null })
-        .eq("id", organizationId);
-      if (error) throw error;
+    const res = await fetch(`/api/organizations/${organizationId}/verify-domain`, { method: "POST" });
+    const body = (await res.json()) as { verified?: boolean; reason?: string | null; error?: string };
+    if (!res.ok) {
+      throw new Error(body.error ?? "Verifikasi domain gagal.");
+    }
+    if (body.verified) {
       organizationsStore.setState((prev) =>
         prev.map((o) => (o.id === organizationId ? { ...o, isDomainVerified: true, pendingDnsToken: null } : o)),
       );
     }
-    return succeeded;
+    return Boolean(body.verified);
   }, [organizationId]);
 
   const removeDomain = useCallback(async () => {

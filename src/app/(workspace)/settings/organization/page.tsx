@@ -40,12 +40,17 @@ export default function OrganizationSettingsPage() {
   async function handleVerify() {
     setIsVerifying(true);
     setVerifyFailed(false);
-    const success = await verifyDomain();
-    setIsVerifying(false);
-    if (success) {
-      toast.success("Domain berhasil diverifikasi.");
-    } else {
-      setVerifyFailed(true);
+    try {
+      const success = await verifyDomain();
+      if (success) {
+        toast.success("Domain berhasil diverifikasi.");
+      } else {
+        setVerifyFailed(true);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Verifikasi domain gagal, silakan coba lagi.");
+    } finally {
+      setIsVerifying(false);
     }
   }
 
