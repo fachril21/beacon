@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CommandDialog, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { SearchX } from "lucide-react";
 import { usePublicSearch } from "@/hooks/use-search";
+import { usePublicOrgContext } from "@/hooks/use-public-org";
 import { SearchResultRow } from "@/components/beacon/search-result-row";
 
 export function PublicSearchCommand({
@@ -17,6 +18,7 @@ export function PublicSearchCommand({
   onOpenChange: (open: boolean) => void;
 }) {
   const router = useRouter();
+  const { basePath } = usePublicOrgContext();
   const [query, setQuery] = useState("");
   const results = usePublicSearch(query, organizationId);
 
@@ -45,22 +47,24 @@ export function PublicSearchCommand({
         )}
         {results.length > 0 && (
           <CommandGroup heading="Halaman">
-            {results.map((result) => (
-              <CommandItem
-                key={result.pageId}
-                value={`${result.pageTitle}-${result.pageId}`}
-                onSelect={() => {
-                  onOpenChange(false);
-                  router.push(`/public/pages/${result.pageId}`);
-                }}
-                className="flex-col items-start gap-0.5"
-              >
-                <SearchResultRow result={result} />
-                {result.snippet && (
-                  <p className="pl-5.5 text-caption text-muted-foreground line-clamp-1">{result.snippet}</p>
-                )}
-              </CommandItem>
-            ))}
+            {results
+              .filter((result) => result.pageSlug)
+              .map((result) => (
+                <CommandItem
+                  key={result.pageId}
+                  value={`${result.pageTitle}-${result.pageId}`}
+                  onSelect={() => {
+                    onOpenChange(false);
+                    router.push(`${basePath}/pages/${result.pageSlug}`);
+                  }}
+                  className="flex-col items-start gap-0.5"
+                >
+                  <SearchResultRow result={result} />
+                  {result.snippet && (
+                    <p className="pl-5.5 text-caption text-muted-foreground line-clamp-1">{result.snippet}</p>
+                  )}
+                </CommandItem>
+              ))}
           </CommandGroup>
         )}
       </CommandList>

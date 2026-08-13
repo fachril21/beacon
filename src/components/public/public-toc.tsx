@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { usePublicToc } from "@/hooks/use-public-content";
+import { usePublicOrgContext } from "@/hooks/use-public-org";
 import { cn } from "@/lib/utils";
 
 export function PublicToc({ organizationId }: { organizationId: string }) {
   const toc = usePublicToc(organizationId);
+  const { basePath } = usePublicOrgContext();
   const pathname = usePathname();
 
   if (toc.length === 0) {
@@ -18,8 +20,8 @@ export function PublicToc({ organizationId }: { organizationId: string }) {
       {toc.map(({ space, pages }) => (
         <div key={space.id} className="flex flex-col gap-1">
           <p className="px-2 text-caption font-semibold tracking-[0.04em] text-muted-foreground uppercase">{space.name}</p>
-          {pages.map((page) => {
-            const href = `/public/pages/${page.id}`;
+          {pages.filter((page) => page.slug).map((page) => {
+            const href = `${basePath}/pages/${page.slug}`;
             const isActive = pathname === href;
             return (
               <Link

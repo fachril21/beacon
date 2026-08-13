@@ -11,6 +11,7 @@ interface PageSearchRow {
   id: string;
   space_id: string;
   title: string;
+  slug: string | null;
   is_published: boolean;
   published_content_snapshot: { title: string } | null;
   search_text: string;
@@ -44,7 +45,7 @@ export function useInternalSearch(query: string, userId: string | undefined): Se
       const supabase = getSupabaseBrowserClient();
       const { data, error } = await supabase
         .from("pages")
-        .select("id, space_id, title, is_published, published_content_snapshot, search_text, spaces(name)")
+        .select("id, space_id, title, slug, is_published, published_content_snapshot, search_text, spaces(name)")
         .textSearch("search_vector", trimmed, { type: "websearch", config: "simple" });
       if (error) {
         console.error("[beacon] internal search failed:", error);
@@ -55,6 +56,7 @@ export function useInternalSearch(query: string, userId: string | undefined): Se
         .filter((row) => row.spaces)
         .map((row) => ({
           pageId: row.id,
+          pageSlug: row.slug,
           spaceId: row.space_id,
           spaceName: row.spaces!.name,
           pageTitle: row.title,
@@ -92,7 +94,7 @@ export function usePublicSearch(query: string, organizationId: string | undefine
       const supabase = getSupabaseBrowserClient();
       const { data, error } = await supabase
         .from("pages")
-        .select("id, space_id, title, is_published, published_content_snapshot, search_text, spaces(name, organization_id, is_publishable)")
+        .select("id, space_id, title, slug, is_published, published_content_snapshot, search_text, spaces(name, organization_id, is_publishable)")
         .textSearch("search_vector", trimmed, { type: "websearch", config: "simple" });
       if (error) {
         console.error("[beacon] public search failed:", error);
@@ -109,6 +111,7 @@ export function usePublicSearch(query: string, organizationId: string | undefine
         )
         .map((row) => ({
           pageId: row.id,
+          pageSlug: row.slug,
           spaceId: row.space_id,
           spaceName: row.spaces!.name,
           pageTitle: row.published_content_snapshot!.title,
