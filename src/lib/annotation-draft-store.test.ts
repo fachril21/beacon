@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { getAnnotationDraft, setAnnotationDraft, clearAnnotationDraft } from "./annotation-draft-store";
+import {
+  getAnnotationDraft,
+  setAnnotationDraft,
+  clearAnnotationDraft,
+  getAnnotationToolState,
+  setAnnotationToolState,
+  clearAnnotationToolState,
+} from "./annotation-draft-store";
 import type { AnnotationJson } from "./types";
 
 function makeDraft(overrides: Partial<AnnotationJson> = {}): AnnotationJson {
@@ -41,5 +48,30 @@ describe("annotation draft store", () => {
   it("clearing a block with no draft is a no-op", () => {
     expect(() => clearAnnotationDraft("block-missing")).not.toThrow();
     expect(getAnnotationDraft("block-missing")).toBeUndefined();
+  });
+});
+
+describe("annotation tool selection state", () => {
+  it("returns undefined for a block with no stored tool state", () => {
+    expect(getAnnotationToolState("tool-none")).toBeUndefined();
+  });
+
+  it("returns the active tool and color that were set for a block", () => {
+    setAnnotationToolState("tool-a", { activeTool: "marker", activeColor: "#ff0000" });
+    expect(getAnnotationToolState("tool-a")).toEqual({ activeTool: "marker", activeColor: "#ff0000" });
+  });
+
+  it("overwrites a previous tool state for the same block", () => {
+    setAnnotationToolState("tool-b", { activeTool: "box", activeColor: "#ff0000" });
+    setAnnotationToolState("tool-b", { activeTool: null, activeColor: "#00ff00" });
+    expect(getAnnotationToolState("tool-b")).toEqual({ activeTool: null, activeColor: "#00ff00" });
+  });
+
+  it("removes the tool state for a block on clear, leaving other blocks intact", () => {
+    setAnnotationToolState("tool-c1", { activeTool: "arrow", activeColor: "#ff0000" });
+    setAnnotationToolState("tool-c2", { activeTool: "blur", activeColor: "#00ff00" });
+    clearAnnotationToolState("tool-c1");
+    expect(getAnnotationToolState("tool-c1")).toBeUndefined();
+    expect(getAnnotationToolState("tool-c2")).toBeDefined();
   });
 });
