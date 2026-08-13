@@ -68,12 +68,17 @@ export function usePublicToc(organizationId: string | undefined) {
   return organizationId ? entries : [];
 }
 
-/** A single published Page, scoped to its Organization — returns null if not published, not found, or belongs to a different Organization (never a fallback). */
-export function usePublicPage(pageId: string | undefined, organizationId: string | undefined) {
+/**
+ * A single published Page, looked up by its slug scoped to its Organization
+ * (slugs are unique per-Organization, not globally — see
+ * pages_organization_id_slug_unique) — returns null if not published, not
+ * found, or belongs to a different Organization (never a fallback).
+ */
+export function usePublicPage(pageSlug: string | undefined, organizationId: string | undefined) {
   const [result, setResult] = useState<{ page: Page; space: Space } | null>(null);
 
   useEffect(() => {
-    if (!pageId || !organizationId) return;
+    if (!pageSlug || !organizationId) return;
     let cancelled = false;
 
     (async () => {
@@ -81,7 +86,8 @@ export function usePublicPage(pageId: string | undefined, organizationId: string
       const { data: pageRow, error: pageError } = await supabase
         .from("pages")
         .select("*")
-        .eq("id", pageId)
+        .eq("organization_id", organizationId)
+        .eq("slug", pageSlug)
         .single();
       if (pageError || !pageRow) {
         if (!cancelled) setResult(null);
@@ -114,7 +120,7 @@ export function usePublicPage(pageId: string | undefined, organizationId: string
     return () => {
       cancelled = true;
     };
-  }, [pageId, organizationId]);
+  }, [pageSlug, organizationId]);
 
-  return pageId && organizationId ? result : null;
+  return pageSlug && organizationId ? result : null;
 }
