@@ -68,6 +68,7 @@ describe("usePublicSearch", () => {
     const row = pageRow({
       is_published: true,
       visibility: "publishable",
+      slug: "menghubungkan-akun-google",
       published_content_snapshot: { title: "Menghubungkan akun Google", content: emptyDoc(), screenshotBlocks: {}, publishedAt: "t" },
       spaces: { name: "Mobile App", organization_id: "org-1", is_publishable: true },
     });
@@ -77,7 +78,7 @@ describe("usePublicSearch", () => {
 
     const { result } = renderHook(() => usePublicSearch("google", "org-1"));
     await waitFor(() => expect(result.current).toHaveLength(1));
-    expect(result.current[0]).toMatchObject({ pageId: "page-1", spaceName: "Mobile App" });
+    expect(result.current[0]).toMatchObject({ pageId: "page-1", pageSlug: "menghubungkan-akun-google", spaceName: "Mobile App" });
   });
 
   it("never returns a result from a different Organization than the one requested", async () => {

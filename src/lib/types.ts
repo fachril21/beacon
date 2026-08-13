@@ -251,6 +251,8 @@ export interface Notification {
 
 export interface SearchResult {
   pageId: ID;
+  /** Public URL slug — null for internal search results (unpublished Pages have none). */
+  pageSlug: string | null;
   spaceId: ID;
   spaceName: string;
   pageTitle: string;
