@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeHost, isAppHost, resolveOrganizationForHost } from "./organization-resolution";
+import { normalizeHost, isAppHost, resolveOrganizationForHost, resolvePublicOrganizationId } from "./organization-resolution";
 
 describe("normalizeHost", () => {
   it("lowercases and strips a port number", () => {
@@ -55,5 +55,27 @@ describe("resolveOrganizationForHost", () => {
   it("never lets one Organization's domain resolve to a different Organization's row", () => {
     const result = resolveOrganizationForHost("docs.cakrawala.ac.id", [dibimbing]);
     expect(result).toBeNull();
+  });
+});
+
+describe("resolvePublicOrganizationId", () => {
+  it("prefers the middleware-resolved header Organization id when present (real custom-domain request)", () => {
+    expect(resolvePublicOrganizationId("org-1", "org-2")).toBe("org-1");
+  });
+
+  it("ignores the dev-switcher selection entirely once a header id is present — never a mix of the two", () => {
+    expect(resolvePublicOrganizationId("org-1", "org-1-should-be-irrelevant")).toBe("org-1");
+  });
+
+  it("falls back to the dev-switcher id when no header is present (app host / localhost)", () => {
+    expect(resolvePublicOrganizationId(null, "org-2")).toBe("org-2");
+  });
+
+  it("treats an empty-string header as absent and falls back to the dev switcher", () => {
+    expect(resolvePublicOrganizationId("", "org-2")).toBe("org-2");
+  });
+
+  it("returns null when neither a header nor a dev-switcher selection exists", () => {
+    expect(resolvePublicOrganizationId(null, null)).toBeNull();
   });
 });
