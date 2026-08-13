@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, waitFor } from "@testing-library/react";
-import { BlockNoteEditor } from "@blocknote/core";
+import { BlockNoteEditor, type PartialBlock } from "@blocknote/core";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { editorSchema } from "./schema";
@@ -15,7 +15,13 @@ vi.mock("@/hooks/use-screenshot-blocks", () => ({
   useUpdateScreenshotDescription: () => vi.fn(),
 }));
 
-function createTestEditor(initialContent: Parameters<typeof BlockNoteEditor.create>[0]["initialContent"]) {
+type EditorInitialContent = PartialBlock<
+  typeof editorSchema.blockSchema,
+  typeof editorSchema.inlineContentSchema,
+  typeof editorSchema.styleSchema
+>[];
+
+function createTestEditor(initialContent: EditorInitialContent) {
   return BlockNoteEditor.create({ schema: editorSchema, initialContent });
 }
 
@@ -64,7 +70,7 @@ describe("ensureTrailingParagraph", () => {
   });
 });
 
-function TestEditor({ initialContent }: { initialContent: Parameters<typeof BlockNoteEditor.create>[0]["initialContent"] }) {
+function TestEditor({ initialContent }: { initialContent: EditorInitialContent }) {
   const editor = useCreateBlockNote({
     schema: editorSchema,
     initialContent,
