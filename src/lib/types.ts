@@ -25,6 +25,8 @@ export type ISODateString = string;
 export interface Organization {
   id: ID;
   name: string;
+  /** Platform-domain identity (/public/{slug}) — always set, auto-generated from name, independent of custom-domain verification. */
+  slug: string;
   domain: string | null;
   isDomainVerified: boolean;
   /** DNS TXT record value the owner must add — present only while a domain add is pending verification (Flow 7a). */
@@ -110,6 +112,8 @@ export interface Page {
   /** Live-draft BlockNote document — the truth source for the editor (PRD.md §5.1). */
   content: PageContent;
   visibility: PageVisibility;
+  /** Public URL slug (/public/{orgSlug}/pages/{slug}) — null until first published; assigned by publish_page(), stable afterward. */
+  slug: string | null;
   isPublished: boolean;
   publishedContentSnapshot: PublishedContentSnapshot | null;
   publishedAt: ISODateString | null;

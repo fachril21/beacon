@@ -172,8 +172,8 @@ describe("useDeleteSpace", () => {
       { id: "space-2", organizationId: "org-1", name: "Web App", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
     ]);
     pagesStore.setState([
-      { id: "page-1", spaceId: "space-1", parentPageId: null, title: "A", order: 0, content: emptyDoc(), visibility: "internal", isPublished: false, publishedContentSnapshot: null, publishedAt: null, createdByUserId: "user-1", createdAt: "t", updatedAt: "t" },
-      { id: "page-2", spaceId: "space-2", parentPageId: null, title: "B", order: 0, content: emptyDoc(), visibility: "internal", isPublished: false, publishedContentSnapshot: null, publishedAt: null, createdByUserId: "user-1", createdAt: "t", updatedAt: "t" },
+      { id: "page-1", spaceId: "space-1", parentPageId: null, title: "A", order: 0, content: emptyDoc(), visibility: "internal", slug: null, isPublished: false, publishedContentSnapshot: null, publishedAt: null, createdByUserId: "user-1", createdAt: "t", updatedAt: "t" },
+      { id: "page-2", spaceId: "space-2", parentPageId: null, title: "B", order: 0, content: emptyDoc(), visibility: "internal", slug: null, isPublished: false, publishedContentSnapshot: null, publishedAt: null, createdByUserId: "user-1", createdAt: "t", updatedAt: "t" },
     ]);
     permissionsStore.setState([
       { id: "perm-1", spaceId: "space-1", userId: "user-1", role: "admin" },

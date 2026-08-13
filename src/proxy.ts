@@ -50,6 +50,7 @@ async function lookupOrganizationForHost(host: string): Promise<Organization | n
   const organizations: Organization[] = rows.map((row) => ({
     id: row.id as string,
     name: row.name as string,
+    slug: row.slug as string,
     domain: row.domain as string | null,
     isDomainVerified: row.is_domain_verified as boolean,
     pendingDnsToken: row.pending_dns_token as string | null,

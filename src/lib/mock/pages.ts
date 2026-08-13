@@ -1,5 +1,6 @@
 import type { Page } from "@/lib/types";
 import { doc, paragraph, heading, quote, bulletList, checklist, codeBlock, divider, screenshotBlock, emptyDoc } from "./blocknote-content";
+import { slugify } from "@/lib/slug";
 
 export const mockPages: Page[] = [
   // space-mobile-app — 3 levels of nesting (Flow 2 step 5 / Epic 3 AC)
@@ -29,6 +30,7 @@ export const mockPages: Page[] = [
       paragraph("Jika mengalami kendala, lihat panduan Mengatasi Masalah Login."),
     ]),
     visibility: "publishable",
+    slug: null,
     isPublished: true,
     publishedContentSnapshot: null, // filled in below to avoid self-reference before doc() runs twice
     publishedAt: "2025-11-04T01:10:00.000Z",
@@ -47,6 +49,7 @@ export const mockPages: Page[] = [
       paragraph("Draf ini belum dipublikasikan — masih dalam proses penulisan."),
     ]),
     visibility: "internal",
+    slug: null,
     isPublished: false,
     publishedContentSnapshot: null,
     publishedAt: null,
@@ -69,6 +72,7 @@ export const mockPages: Page[] = [
       ]),
     ]),
     visibility: "internal",
+    slug: null,
     isPublished: false,
     publishedContentSnapshot: null,
     publishedAt: null,
@@ -86,6 +90,7 @@ export const mockPages: Page[] = [
       paragraph("Cara mengaktifkan dan menonaktifkan notifikasi push pada aplikasi mobile."),
     ]),
     visibility: "internal",
+    slug: null,
     isPublished: false,
     publishedContentSnapshot: null,
     publishedAt: null,
@@ -106,6 +111,7 @@ export const mockPages: Page[] = [
       codeBlock("beacon --version\n> beacon 1.0.0", "bash"),
     ]),
     visibility: "publishable",
+    slug: null,
     isPublished: true,
     publishedContentSnapshot: null,
     publishedAt: "2025-11-15T04:00:00.000Z",
@@ -127,6 +133,7 @@ export const mockPages: Page[] = [
       paragraph("Data pengguna pada tangkapan layar di atas telah disamarkan untuk contoh ini."),
     ]),
     visibility: "internal",
+    slug: null,
     isPublished: false,
     publishedContentSnapshot: null,
     publishedAt: null,
@@ -144,6 +151,7 @@ export const mockPages: Page[] = [
     order: 0,
     content: emptyDoc(),
     visibility: "internal",
+    slug: null,
     isPublished: false,
     publishedContentSnapshot: null,
     publishedAt: null,
@@ -152,8 +160,9 @@ export const mockPages: Page[] = [
     updatedAt: "2025-11-20T01:30:00.000Z",
   },
 
-  // space-lms (org-cakrawala) — publishable Space, but Organization has no
-  // verified domain yet, so Publish stays disabled (Epic 6/8a).
+  // space-lms (org-cakrawala) — publishable Space; org-cakrawala has no
+  // custom domain, but can still publish under the platform domain
+  // (/public/cakrawala-university/...) once Publish is clicked.
   {
     id: "page-lms-intro",
     spaceId: "space-lms",
@@ -165,6 +174,7 @@ export const mockPages: Page[] = [
       screenshotBlock("shot-lms-1"),
     ]),
     visibility: "publishable",
+    slug: null,
     isPublished: false,
     publishedContentSnapshot: null,
     publishedAt: null,
@@ -182,6 +192,7 @@ export const mockPages: Page[] = [
       paragraph("Langkah-langkah membuat kursus baru di Platform LMS."),
     ]),
     visibility: "internal",
+    slug: null,
     isPublished: false,
     publishedContentSnapshot: null,
     publishedAt: null,
@@ -202,6 +213,11 @@ for (const page of mockPages) {
       screenshotBlocks: {},
       publishedAt: page.publishedAt,
     };
+    // Mirrors publish_page()'s slug assignment (supabase/migrations/
+    // 20260813010000_organization_page_slugs.sql) — a real collision-safe
+    // suffix isn't needed here since no two published mock Pages share a
+    // title within the same Organization.
+    page.slug = slugify(page.title);
   }
 }
 

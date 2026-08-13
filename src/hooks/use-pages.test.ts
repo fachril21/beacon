@@ -79,6 +79,7 @@ describe("useUpdatePageContent", () => {
         order: 0,
         content: emptyDoc(),
         visibility: "internal",
+        slug: null,
         isPublished: false,
         publishedContentSnapshot: null,
         publishedAt: null,
@@ -122,8 +123,8 @@ describe("useReorderPages", () => {
     vi.clearAllMocks();
     resetStore();
     pagesStore.setState([
-      { id: "a", spaceId: "space-1", parentPageId: null, title: "A", order: 0, content: emptyDoc(), visibility: "internal", isPublished: false, publishedContentSnapshot: null, publishedAt: null, createdByUserId: "user-1", createdAt: "t", updatedAt: "t" },
-      { id: "b", spaceId: "space-1", parentPageId: null, title: "B", order: 1, content: emptyDoc(), visibility: "internal", isPublished: false, publishedContentSnapshot: null, publishedAt: null, createdByUserId: "user-1", createdAt: "t", updatedAt: "t" },
+      { id: "a", spaceId: "space-1", parentPageId: null, title: "A", order: 0, content: emptyDoc(), visibility: "internal", slug: null, isPublished: false, publishedContentSnapshot: null, publishedAt: null, createdByUserId: "user-1", createdAt: "t", updatedAt: "t" },
+      { id: "b", spaceId: "space-1", parentPageId: null, title: "B", order: 1, content: emptyDoc(), visibility: "internal", slug: null, isPublished: false, publishedContentSnapshot: null, publishedAt: null, createdByUserId: "user-1", createdAt: "t", updatedAt: "t" },
     ]);
   });
 
@@ -157,6 +158,7 @@ describe("usePublishActions", () => {
         order: 0,
         content: emptyDoc(),
         visibility: "publishable",
+        slug: null,
         isPublished: false,
         publishedContentSnapshot: null,
         publishedAt: null,
@@ -240,6 +242,7 @@ function makePage(overrides: Partial<import("@/lib/types").Page> & { id: string 
     order: 0,
     content: emptyDoc(),
     visibility: "internal" as const,
+    slug: null,
     isPublished: false,
     publishedContentSnapshot: null,
     publishedAt: null,

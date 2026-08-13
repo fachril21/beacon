@@ -11,6 +11,7 @@ vi.mock("./use-session", () => ({
 const dibimbing = {
   id: "org-dibimbing",
   name: "Dibimbing",
+  slug: "dibimbing",
   domain: "docs.dibimbing.id",
   isDomainVerified: true,
   pendingDnsToken: null,
@@ -19,6 +20,7 @@ const dibimbing = {
 const cakrawala = {
   id: "org-cakrawala",
   name: "Cakrawala University",
+  slug: "cakrawala-university",
   domain: null,
   isDomainVerified: false,
   pendingDnsToken: null,

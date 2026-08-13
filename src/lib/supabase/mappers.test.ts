@@ -16,6 +16,7 @@ describe("mapOrganizationRow", () => {
     const row = {
       id: "org-1",
       name: "Dibimbing",
+      slug: "dibimbing",
       domain: "docs.dibimbing.id",
       is_domain_verified: true,
       pending_dns_token: null,
@@ -24,6 +25,7 @@ describe("mapOrganizationRow", () => {
     expect(mapOrganizationRow(row)).toEqual({
       id: "org-1",
       name: "Dibimbing",
+      slug: "dibimbing",
       domain: "docs.dibimbing.id",
       isDomainVerified: true,
       pendingDnsToken: null,
@@ -116,6 +118,7 @@ describe("mapPageRow", () => {
       order: 0,
       content: emptyDoc(),
       visibility: "internal",
+      slug: null,
       is_published: false,
       published_content_snapshot: null,
       published_at: null,
@@ -131,6 +134,7 @@ describe("mapPageRow", () => {
       order: 0,
       content: emptyDoc(),
       visibility: "internal",
+      slug: null,
       isPublished: false,
       publishedContentSnapshot: null,
       publishedAt: null,

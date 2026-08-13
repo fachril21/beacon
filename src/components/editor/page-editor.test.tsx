@@ -16,6 +16,7 @@ const page: Page = {
   order: 0,
   content: emptyDoc(),
   visibility: "internal",
+  slug: null,
   isPublished: false,
   publishedContentSnapshot: null,
   publishedAt: null,

@@ -23,6 +23,7 @@ import type {
 export interface OrganizationRow {
   id: string;
   name: string;
+  slug: string;
   domain: string | null;
   is_domain_verified: boolean;
   pending_dns_token: string | null;
@@ -33,6 +34,7 @@ export function mapOrganizationRow(row: OrganizationRow): Organization {
   return {
     id: row.id,
     name: row.name,
+    slug: row.slug,
     domain: row.domain,
     isDomainVerified: row.is_domain_verified,
     pendingDnsToken: row.pending_dns_token,
@@ -128,6 +130,7 @@ export interface PageRow {
   order: number;
   content: PageContent;
   visibility: string;
+  slug: string | null;
   is_published: boolean;
   published_content_snapshot: PublishedContentSnapshot | null;
   published_at: string | null;
@@ -145,6 +148,7 @@ export function mapPageRow(row: PageRow): Page {
     order: row.order,
     content: row.content,
     visibility: row.visibility as Page["visibility"],
+    slug: row.slug,
     isPublished: row.is_published,
     publishedContentSnapshot: row.published_content_snapshot,
     publishedAt: row.published_at,

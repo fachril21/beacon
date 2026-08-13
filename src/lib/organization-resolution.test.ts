@@ -29,8 +29,8 @@ describe("isAppHost", () => {
 });
 
 describe("resolveOrganizationForHost", () => {
-  const dibimbing = { id: "org-1", name: "Dibimbing", domain: "docs.dibimbing.id", isDomainVerified: true, pendingDnsToken: null, createdAt: "t" };
-  const cakrawala = { id: "org-2", name: "Cakrawala University", domain: "docs.cakrawala.ac.id", isDomainVerified: false, pendingDnsToken: "beacon-verify=abc", createdAt: "t" };
+  const dibimbing = { id: "org-1", name: "Dibimbing", slug: "dibimbing", domain: "docs.dibimbing.id", isDomainVerified: true, pendingDnsToken: null, createdAt: "t" };
+  const cakrawala = { id: "org-2", name: "Cakrawala University", slug: "cakrawala-university", domain: "docs.cakrawala.ac.id", isDomainVerified: false, pendingDnsToken: "beacon-verify=abc", createdAt: "t" };
 
   it("resolves a verified custom domain to its Organization", () => {
     const result = resolveOrganizationForHost("docs.dibimbing.id", [dibimbing, cakrawala]);

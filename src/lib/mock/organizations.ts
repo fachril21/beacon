@@ -9,6 +9,7 @@ export const mockOrganizations: Organization[] = [
   {
     id: "org-dibimbing",
     name: "Dibimbing",
+    slug: "dibimbing",
     domain: "docs.dibimbing.id",
     isDomainVerified: true,
     pendingDnsToken: null,
@@ -17,6 +18,7 @@ export const mockOrganizations: Organization[] = [
   {
     id: "org-cakrawala",
     name: "Cakrawala University",
+    slug: "cakrawala-university",
     domain: null,
     isDomainVerified: false,
     pendingDnsToken: null,

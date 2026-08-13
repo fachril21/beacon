@@ -36,6 +36,7 @@ describe("useOrganizations", () => {
             {
               id: "org-1",
               name: "Dibimbing",
+              slug: "dibimbing",
               domain: null,
               is_domain_verified: false,
               pending_dns_token: null,
@@ -52,6 +53,7 @@ describe("useOrganizations", () => {
         {
           id: "org-1",
           name: "Dibimbing",
+          slug: "dibimbing",
           domain: null,
           isDomainVerified: false,
           pendingDnsToken: null,
@@ -70,6 +72,7 @@ describe("useOrganizationDomainActions", () => {
       {
         id: "org-1",
         name: "Dibimbing",
+        slug: "dibimbing",
         domain: null,
         isDomainVerified: false,
         pendingDnsToken: null,
