@@ -6,7 +6,7 @@ import { emptyDoc, doc, paragraph } from "@/lib/mock/blocknote-content";
 const mockSupabase = { from: vi.fn(), rpc: vi.fn() };
 vi.mock("@/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => mockSupabase }));
 
-const { useCreatePage, useUpdatePageContent, useReorderPages, usePublishActions } = await import("./use-pages");
+const { useCreatePage, useUpdatePageContent, useReorderPages, usePublishActions, useDeletePage } = await import("./use-pages");
 
 function resetStore() {
   pagesStore.setState([]);
@@ -229,5 +229,74 @@ describe("usePublishActions", () => {
     const { result } = renderHook(() => usePublishActions());
     await expect(result.current.publish("page-1")).rejects.toThrow();
     expect(pagesStore.getState()[0].isPublished).toBe(false);
+  });
+});
+
+function makePage(overrides: Partial<import("@/lib/types").Page> & { id: string }) {
+  return {
+    spaceId: "space-1",
+    parentPageId: null,
+    title: "Untitled",
+    order: 0,
+    content: emptyDoc(),
+    visibility: "internal" as const,
+    isPublished: false,
+    publishedContentSnapshot: null,
+    publishedAt: null,
+    createdByUserId: "user-1",
+    createdAt: "t",
+    updatedAt: "t",
+    ...overrides,
+  };
+}
+
+describe("useDeletePage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetStore();
+  });
+
+  it("deletes the row in Supabase and removes it from the local store", async () => {
+    pagesStore.setState([makePage({ id: "page-1" }), makePage({ id: "page-2" })]);
+    const eqMock = vi.fn(() => Promise.resolve({ error: null }));
+    const deleteMock = vi.fn(() => ({ eq: eqMock }));
+    mockSupabase.from.mockReturnValue({ delete: deleteMock });
+
+    const { result } = renderHook(() => useDeletePage());
+    await act(async () => {
+      await result.current("page-1");
+    });
+
+    expect(deleteMock).toHaveBeenCalled();
+    expect(eqMock).toHaveBeenCalledWith("id", "page-1");
+    expect(pagesStore.getState().map((p) => p.id)).toEqual(["page-2"]);
+  });
+
+  it("also removes descendant pages from the local store, mirroring the DB's on-delete-cascade", async () => {
+    pagesStore.setState([
+      makePage({ id: "parent", parentPageId: null }),
+      makePage({ id: "child", parentPageId: "parent" }),
+      makePage({ id: "grandchild", parentPageId: "child" }),
+      makePage({ id: "unrelated", parentPageId: null }),
+    ]);
+    const eqMock = vi.fn(() => Promise.resolve({ error: null }));
+    mockSupabase.from.mockReturnValue({ delete: () => ({ eq: eqMock }) });
+
+    const { result } = renderHook(() => useDeletePage());
+    await act(async () => {
+      await result.current("parent");
+    });
+
+    expect(pagesStore.getState().map((p) => p.id)).toEqual(["unrelated"]);
+  });
+
+  it("throws when Supabase returns an error, without touching the local store", async () => {
+    pagesStore.setState([makePage({ id: "page-1" })]);
+    const eqMock = vi.fn(() => Promise.resolve({ error: { message: "permission denied" } }));
+    mockSupabase.from.mockReturnValue({ delete: () => ({ eq: eqMock }) });
+
+    const { result } = renderHook(() => useDeletePage());
+    await expect(result.current("page-1")).rejects.toEqual({ message: "permission denied" });
+    expect(pagesStore.getState().map((p) => p.id)).toEqual(["page-1"]);
   });
 });

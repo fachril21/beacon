@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { spacesStore, permissionsStore, pendingInvitesStore } from "@/lib/supabase/stores";
+import { spacesStore, permissionsStore, pendingInvitesStore, pagesStore } from "@/lib/supabase/stores";
+import { emptyDoc } from "@/lib/mock/blocknote-content";
 
 const mockSupabase = { from: vi.fn() };
 vi.mock("@/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => mockSupabase }));
 
-const { useCreateSpace, useUpdateSpaceRole, useInviteToSpace } = await import("./use-spaces");
+const { useCreateSpace, useUpdateSpaceRole, useInviteToSpace, useDeleteSpace } = await import("./use-spaces");
 
 function resetStores() {
   spacesStore.setState([]);
@@ -13,6 +14,7 @@ function resetStores() {
   permissionsStore.setState([]);
   permissionsStore.invalidate("all");
   pendingInvitesStore.setState([]);
+  pagesStore.setState([]);
 }
 
 describe("useCreateSpace", () => {
@@ -155,5 +157,59 @@ describe("useInviteToSpace", () => {
     expect(pendingInvitesStore.getState()).toEqual([
       expect.objectContaining({ id: "invite-1", email: "new@dibimbing.id", role: "viewer" }),
     ]);
+  });
+});
+
+describe("useDeleteSpace", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetStores();
+  });
+
+  it("deletes the row and removes the Space plus everything scoped to it from local stores", async () => {
+    spacesStore.setState([
+      { id: "space-1", organizationId: "org-1", name: "Mobile App", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
+      { id: "space-2", organizationId: "org-1", name: "Web App", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
+    ]);
+    pagesStore.setState([
+      { id: "page-1", spaceId: "space-1", parentPageId: null, title: "A", order: 0, content: emptyDoc(), visibility: "internal", isPublished: false, publishedContentSnapshot: null, publishedAt: null, createdByUserId: "user-1", createdAt: "t", updatedAt: "t" },
+      { id: "page-2", spaceId: "space-2", parentPageId: null, title: "B", order: 0, content: emptyDoc(), visibility: "internal", isPublished: false, publishedContentSnapshot: null, publishedAt: null, createdByUserId: "user-1", createdAt: "t", updatedAt: "t" },
+    ]);
+    permissionsStore.setState([
+      { id: "perm-1", spaceId: "space-1", userId: "user-1", role: "admin" },
+      { id: "perm-2", spaceId: "space-2", userId: "user-1", role: "admin" },
+    ]);
+    pendingInvitesStore.setState([
+      { id: "invite-1", spaceId: "space-1", email: "a@dibimbing.id", role: "viewer", invitedByUserId: "user-1", createdAt: "t" },
+      { id: "invite-2", spaceId: "space-2", email: "b@dibimbing.id", role: "viewer", invitedByUserId: "user-1", createdAt: "t" },
+    ]);
+
+    const eqMock = vi.fn(() => Promise.resolve({ error: null }));
+    const deleteMock = vi.fn(() => ({ eq: eqMock }));
+    mockSupabase.from.mockReturnValue({ delete: deleteMock });
+
+    const { result } = renderHook(() => useDeleteSpace());
+    await act(async () => {
+      await result.current("space-1");
+    });
+
+    expect(deleteMock).toHaveBeenCalled();
+    expect(eqMock).toHaveBeenCalledWith("id", "space-1");
+    expect(spacesStore.getState().map((s) => s.id)).toEqual(["space-2"]);
+    expect(pagesStore.getState().map((p) => p.id)).toEqual(["page-2"]);
+    expect(permissionsStore.getState().map((p) => p.id)).toEqual(["perm-2"]);
+    expect(pendingInvitesStore.getState().map((i) => i.id)).toEqual(["invite-2"]);
+  });
+
+  it("throws when Supabase returns an error, without touching the local store", async () => {
+    spacesStore.setState([
+      { id: "space-1", organizationId: "org-1", name: "Mobile App", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
+    ]);
+    const eqMock = vi.fn(() => Promise.resolve({ error: { message: "permission denied" } }));
+    mockSupabase.from.mockReturnValue({ delete: () => ({ eq: eqMock }) });
+
+    const { result } = renderHook(() => useDeleteSpace());
+    await expect(result.current("space-1")).rejects.toEqual({ message: "permission denied" });
+    expect(spacesStore.getState().map((s) => s.id)).toEqual(["space-1"]);
   });
 });

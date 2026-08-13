@@ -9,6 +9,7 @@ import { editorSchema } from "./schema";
 import { getSlashMenuItems } from "./slash-menu-items";
 import { EditorFormattingToolbar } from "./formatting-toolbar";
 import { codeBlockExitExtension } from "./code-block-exit-extension";
+import { trailingParagraphExtension } from "./trailing-paragraph-extension";
 import { usePageAutosave, type SaveStatus } from "@/hooks/use-page-autosave";
 import { PageIdProvider } from "./page-id-context";
 import { normalizePageContent } from "@/lib/legacy-lexical-content";
@@ -46,7 +47,7 @@ export function PageEditor({
     // normalizePageContent converts it on the fly so old pages open instead
     // of crashing `initialContent` (any edit then autosaves it forward).
     initialContent: normalizePageContent(page.content),
-    extensions: [codeBlockExitExtension],
+    extensions: [codeBlockExitExtension, trailingParagraphExtension()],
     dictionary,
   });
 

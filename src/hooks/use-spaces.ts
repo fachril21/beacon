@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore, useCallback, useEffect } from "react";
-import { spacesStore, permissionsStore, pendingInvitesStore } from "@/lib/supabase/stores";
+import { spacesStore, permissionsStore, pendingInvitesStore, pagesStore } from "@/lib/supabase/stores";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   mapSpaceRow,
@@ -120,6 +120,26 @@ export function useCreateSpace() {
     permissionsStore.setState((prev) => [...prev, mapPermissionRow(permissionRow as PermissionRow)]);
 
     return space;
+  }, []);
+}
+
+/**
+ * Deletes a Space. Postgres cascades the delete to every Page in it (and, in
+ * turn, each Page's screenshot_blocks/versions/comments/feedback), plus the
+ * Space's own permissions/pending_invites rows — but the local stores have
+ * no way to know that happened server-side, so this drops the same rows from
+ * pagesStore/permissionsStore/pendingInvitesStore too.
+ */
+export function useDeleteSpace() {
+  return useCallback(async (id: string) => {
+    const supabase = getSupabaseBrowserClient();
+    const { error } = await supabase.from("spaces").delete().eq("id", id);
+    if (error) throw error;
+
+    spacesStore.setState((prev) => prev.filter((s) => s.id !== id));
+    pagesStore.setState((prev) => prev.filter((p) => p.spaceId !== id));
+    permissionsStore.setState((prev) => prev.filter((p) => p.spaceId !== id));
+    pendingInvitesStore.setState((prev) => prev.filter((i) => i.spaceId !== id));
   }, []);
 }
 

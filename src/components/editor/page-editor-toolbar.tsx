@@ -4,15 +4,16 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChevronDown, History } from "lucide-react";
+import { ChevronDown, History, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DeleteConfirmDialog } from "@/components/workspace/delete-confirm-dialog";
 import { SaveStatusIndicator } from "./save-status-indicator";
 import { useOrganization } from "@/hooks/use-organizations";
-import { usePublishActions, hasUnpublishedChanges, getPageStatus } from "@/hooks/use-pages";
+import { usePublishActions, useDeletePage, hasUnpublishedChanges, getPageStatus } from "@/hooks/use-pages";
 import { useHelpfulnessRate } from "@/hooks/use-feedback";
 import { isPageNearlyEmpty } from "@/lib/content-empty";
 import { StatusBadge } from "@/components/beacon/status-badge";
@@ -35,9 +36,12 @@ export function PageEditorToolbar({ page, space, title, saveStatus, role, onOpen
   const router = useRouter();
   const organization = useOrganization(space.organizationId);
   const { publish, update, unpublish } = usePublishActions();
+  const deletePage = useDeletePage();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [emptyWarningOpen, setEmptyWarningOpen] = useState(false);
   const [unpublishOpen, setUnpublishOpen] = useState(false);
+  const [deletePageOpen, setDeletePageOpen] = useState(false);
+  const [isDeletingPage, setIsDeletingPage] = useState(false);
   const [isOffline, setIsOffline] = useState(typeof navigator !== "undefined" && !navigator.onLine);
   const canEdit = role === "editor" || role === "admin";
 
@@ -83,6 +87,19 @@ export function PageEditorToolbar({ page, space, title, saveStatus, role, onOpen
       toast.success("Pembaruan telah dipublikasikan.");
     } catch {
       toast.error("Gagal memublikasikan pembaruan, silakan coba lagi.");
+    }
+  }
+
+  async function handleDeletePage() {
+    setIsDeletingPage(true);
+    try {
+      await deletePage(page.id);
+      setDeletePageOpen(false);
+      toast("Halaman telah dihapus.");
+      router.push(`/spaces/${space.id}`);
+    } catch {
+      toast.error("Gagal menghapus Halaman, silakan coba lagi.");
+      setIsDeletingPage(false);
     }
   }
 
@@ -154,6 +171,15 @@ export function PageEditorToolbar({ page, space, title, saveStatus, role, onOpen
                   <DropdownMenuItem variant="destructive" onClick={() => setUnpublishOpen(true)}>
                     Batalkan Publikasi
                   </DropdownMenuItem>
+                )}
+                {canEdit && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem variant="destructive" onClick={() => setDeletePageOpen(true)}>
+                      <Trash2 className="size-3.5" />
+                      Hapus Halaman
+                    </DropdownMenuItem>
+                  </>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
@@ -245,6 +271,16 @@ export function PageEditorToolbar({ page, space, title, saveStatus, role, onOpen
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DeleteConfirmDialog
+        open={deletePageOpen}
+        onOpenChange={setDeletePageOpen}
+        title="Hapus Halaman ini?"
+        description="Halaman ini beserta seluruh sub-halaman di dalamnya akan dihapus permanen. Tindakan ini tidak dapat dibatalkan."
+        confirmLabel="Hapus Halaman"
+        isDeleting={isDeletingPage}
+        onConfirm={() => void handleDeletePage()}
+      />
     </header>
   );
 }

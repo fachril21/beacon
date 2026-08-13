@@ -137,6 +137,40 @@ export function useReorderPages() {
 }
 
 /**
+ * Deletes a Page. Postgres cascades the delete to every descendant Page
+ * (parent_page_id references pages(id) on delete cascade) plus their
+ * screenshot_blocks/versions/comments/feedback — but the local store has no
+ * way to know that happened server-side, so this walks the same parent/child
+ * relationship client-side to drop the deleted subtree from pagesStore too.
+ */
+export function useDeletePage() {
+  return useCallback(async (id: string) => {
+    const supabase = getSupabaseBrowserClient();
+    const { error } = await supabase.from("pages").delete().eq("id", id);
+    if (error) throw error;
+
+    pagesStore.setState((prev) => {
+      const childrenByParent = new Map<string, Page[]>();
+      for (const p of prev) {
+        if (!p.parentPageId) continue;
+        const siblings = childrenByParent.get(p.parentPageId) ?? [];
+        siblings.push(p);
+        childrenByParent.set(p.parentPageId, siblings);
+      }
+
+      const toRemove = new Set<string>();
+      const collect = (pageId: string) => {
+        toRemove.add(pageId);
+        for (const child of childrenByParent.get(pageId) ?? []) collect(child.id);
+      };
+      collect(id);
+
+      return prev.filter((p) => !toRemove.has(p.id));
+    });
+  }, []);
+}
+
+/**
  * Publish/Update/Unpublish (Flow 4) each call a single Postgres RPC
  * (20260806100200_publishing_rpcs.sql) that sets is_published and
  * published_content_snapshot together, atomically — a Viewer can never

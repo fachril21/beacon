@@ -4,11 +4,12 @@ import { use, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { FileText, Plus, Settings } from "lucide-react";
+import { FileText, Plus, Settings, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/beacon/empty-state";
-import { useSpace, useSpaceRole } from "@/hooks/use-spaces";
+import { DeleteConfirmDialog } from "@/components/workspace/delete-confirm-dialog";
+import { useSpace, useSpaceRole, useDeleteSpace } from "@/hooks/use-spaces";
 import { useChildPages, useCreatePage } from "@/hooks/use-pages";
 import { useSession } from "@/hooks/use-session";
 
@@ -20,7 +21,10 @@ export default function SpacePage({ params }: { params: Promise<{ spaceId: strin
   const role = useSpaceRole(spaceId, user?.id);
   const rootPages = useChildPages(spaceId, null);
   const createPage = useCreatePage();
+  const deleteSpace = useDeleteSpace();
   const [isCreating, setIsCreating] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   async function handleNewPage() {
     if (!user) return;
@@ -31,6 +35,18 @@ export default function SpacePage({ params }: { params: Promise<{ spaceId: strin
     } catch {
       toast.error("Tidak dapat membuat Halaman, silakan coba lagi.");
       setIsCreating(false);
+    }
+  }
+
+  async function handleDeleteSpace() {
+    setIsDeleting(true);
+    try {
+      await deleteSpace(spaceId);
+      toast("Space telah dihapus.");
+      router.push("/");
+    } catch {
+      toast.error("Gagal menghapus Space, silakan coba lagi.");
+      setIsDeleting(false);
     }
   }
 
@@ -59,12 +75,18 @@ export default function SpacePage({ params }: { params: Promise<{ spaceId: strin
           </div>
           <div className="flex shrink-0 gap-2">
             {role === "admin" && (
-              <Link href={`/spaces/${spaceId}/members`}>
-                <Button variant="secondary" size="sm">
-                  <Settings className="size-3.5" />
-                  Anggota
+              <>
+                <Link href={`/spaces/${spaceId}/members`}>
+                  <Button variant="secondary" size="sm">
+                    <Settings className="size-3.5" />
+                    Anggota
+                  </Button>
+                </Link>
+                <Button variant="secondary" size="sm" onClick={() => setIsDeleteOpen(true)}>
+                  <Trash2 className="size-3.5" />
+                  Hapus Space
                 </Button>
-              </Link>
+              </>
             )}
             <Button size="sm" onClick={() => void handleNewPage()} disabled={isCreating}>
               <Plus className="size-3.5" />
@@ -97,6 +119,16 @@ export default function SpacePage({ params }: { params: Promise<{ spaceId: strin
           </div>
         )}
       </div>
+
+      <DeleteConfirmDialog
+        open={isDeleteOpen}
+        onOpenChange={setIsDeleteOpen}
+        title={`Hapus Space "${space.name}"?`}
+        description="Seluruh Halaman di dalam Space ini akan ikut dihapus permanen. Tindakan ini tidak dapat dibatalkan."
+        confirmLabel="Hapus Space"
+        isDeleting={isDeleting}
+        onConfirm={() => void handleDeleteSpace()}
+      />
     </main>
   );
 }

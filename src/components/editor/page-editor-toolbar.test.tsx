@@ -1,18 +1,22 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { PageEditorToolbar } from "./page-editor-toolbar";
 import type { Page, Space } from "@/lib/types";
 
+const mockPush = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: mockPush }),
 }));
 
 vi.mock("@/hooks/use-organizations", () => ({
   useOrganization: () => ({ id: "org-1", isDomainVerified: true }),
 }));
 
+const mockDeletePage = vi.fn(() => Promise.resolve());
 vi.mock("@/hooks/use-pages", () => ({
   usePublishActions: () => ({ publish: vi.fn(), update: vi.fn(), unpublish: vi.fn() }),
+  useDeletePage: () => mockDeletePage,
   hasUnpublishedChanges: () => false,
   getPageStatus: () => "draft",
 }));
@@ -132,5 +136,41 @@ describe("PageEditorToolbar helpfulness rate (US15.2)", () => {
       />,
     );
     expect(screen.queryByText(/respons/)).not.toBeInTheDocument();
+  });
+});
+
+describe("PageEditorToolbar delete page", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockDeletePage.mockResolvedValue(undefined);
+  });
+
+  async function openOverflowMenu() {
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Menu lainnya" }));
+    return user;
+  }
+
+  it("shows Hapus Halaman in the overflow menu for an editor", async () => {
+    renderToolbar("editor");
+    await openOverflowMenu();
+    expect(await screen.findByRole("menuitem", { name: /Hapus Halaman/ })).toBeInTheDocument();
+  });
+
+  it("hides Hapus Halaman in the overflow menu for a viewer", async () => {
+    renderToolbar("viewer");
+    await openOverflowMenu();
+    await screen.findByRole("menuitem", { name: "Riwayat Versi" });
+    expect(screen.queryByRole("menuitem", { name: /Hapus Halaman/ })).not.toBeInTheDocument();
+  });
+
+  it("deletes the page and redirects to the Space on confirm", async () => {
+    renderToolbar("admin");
+    const user = await openOverflowMenu();
+    await user.click(await screen.findByRole("menuitem", { name: /Hapus Halaman/ }));
+    await user.click(await screen.findByRole("button", { name: "Hapus Halaman" }));
+
+    expect(mockDeletePage).toHaveBeenCalledWith("page-1");
+    await vi.waitFor(() => expect(mockPush).toHaveBeenCalledWith("/spaces/space-1"));
   });
 });
