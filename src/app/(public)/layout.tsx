@@ -1,23 +1,21 @@
-"use client";
+import { headers } from "next/headers";
+import { PublicOrgHeaderContext } from "@/hooks/public-org-header-context";
+import { PublicLayoutClient } from "./public-layout-client";
 
-import { usePublicOrgContext } from "@/hooks/use-public-org";
-import { PublicNav } from "@/components/public/public-nav";
-import { PublicToc } from "@/components/public/public-toc";
-
-export default function PublicLayout({ children }: { children: React.ReactNode }) {
-  const { organization } = usePublicOrgContext();
-
-  if (!organization) return null;
+/**
+ * Server Component boundary so the public site can read the real
+ * `x-beacon-organization-id` header set by proxy.ts (Epic 14a) — a plain
+ * Client Component can't access request headers directly. The value is
+ * handed to usePublicOrgContext (via PublicOrgHeaderContext) which prefers
+ * it over the dev-only localStorage switcher.
+ */
+export default async function PublicLayout({ children }: { children: React.ReactNode }) {
+  const headerList = await headers();
+  const organizationId = headerList.get("x-beacon-organization-id");
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <PublicNav organization={organization} />
-      <div className="mx-auto flex w-full max-w-[90rem] flex-1">
-        <aside className="hidden w-toc-rail shrink-0 border-r border-border lg:block">
-          <PublicToc organizationId={organization.id} />
-        </aside>
-        <div className="flex min-w-0 flex-1 flex-col">{children}</div>
-      </div>
-    </div>
+    <PublicOrgHeaderContext.Provider value={organizationId}>
+      <PublicLayoutClient>{children}</PublicLayoutClient>
+    </PublicOrgHeaderContext.Provider>
   );
 }
