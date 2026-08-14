@@ -3,10 +3,10 @@ import { renderHook, act } from "@testing-library/react";
 import { spacesStore, permissionsStore, pendingInvitesStore, pagesStore } from "@/lib/supabase/stores";
 import { emptyDoc } from "@/lib/mock/blocknote-content";
 
-const mockSupabase = { from: vi.fn() };
+const mockSupabase = { from: vi.fn(), rpc: vi.fn() };
 vi.mock("@/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => mockSupabase }));
 
-const { useCreateSpace, useUpdateSpaceRole, useInviteToSpace, useDeleteSpace } = await import("./use-spaces");
+const { useCreateSpace, useUpdateSpaceRole, useInviteToSpace, useCancelInvite, useDeleteSpace } = await import("./use-spaces");
 
 function resetStores() {
   spacesStore.setState([]);
@@ -131,12 +131,36 @@ describe("useUpdateSpaceRole", () => {
 });
 
 describe("useInviteToSpace", () => {
+  const mockRpc = vi.fn();
   beforeEach(() => {
     vi.clearAllMocks();
     resetStores();
+    mockSupabase.rpc = mockRpc;
   });
 
-  it("inserts a pending_invites row and patches the local store", async () => {
+  it("grants the Permission immediately when the invited email already has a same-Organization Account (status: added)", async () => {
+    const permissionRow = { id: "perm-9", space_id: "space-1", user_id: "user-9", role: "editor" };
+    mockRpc.mockResolvedValue({ data: { status: "added", permission: permissionRow }, error: null });
+
+    const { result } = renderHook(() => useInviteToSpace());
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await result.current("space-1", "existing@dibimbing.id", "editor", "user-1");
+    });
+
+    expect(mockRpc).toHaveBeenCalledWith("invite_to_space", {
+      p_space_id: "space-1",
+      p_email: "existing@dibimbing.id",
+      p_role: "editor",
+    });
+    expect(outcome).toEqual({ status: "added" });
+    expect(permissionsStore.getState()).toEqual([
+      expect.objectContaining({ id: "perm-9", spaceId: "space-1", userId: "user-9", role: "editor" }),
+    ]);
+    expect(pendingInvitesStore.getState()).toEqual([]);
+  });
+
+  it("creates a pending_invites row when the invited email has no Account yet (status: invited)", async () => {
     const inviteRow = {
       id: "invite-1",
       space_id: "space-1",
@@ -145,18 +169,59 @@ describe("useInviteToSpace", () => {
       invited_by_user_id: "user-1",
       created_at: "2026-01-01T00:00:00Z",
     };
-    mockSupabase.from.mockReturnValue({
-      insert: () => ({ select: () => ({ single: () => Promise.resolve({ data: inviteRow, error: null }) }) }),
-    });
+    mockRpc.mockResolvedValue({ data: { status: "invited", invite: inviteRow }, error: null });
 
     const { result } = renderHook(() => useInviteToSpace());
+    let outcome: unknown;
     await act(async () => {
-      await result.current("space-1", "new@dibimbing.id", "viewer", "user-1");
+      outcome = await result.current("space-1", "new@dibimbing.id", "viewer", "user-1");
     });
 
+    expect(outcome).toEqual({ status: "invited" });
     expect(pendingInvitesStore.getState()).toEqual([
       expect.objectContaining({ id: "invite-1", email: "new@dibimbing.id", role: "viewer" }),
     ]);
+    expect(permissionsStore.getState()).toEqual([]);
+  });
+
+  it("throws without touching either store when the invited email belongs to a different Organization", async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: { message: "EMAIL_BELONGS_TO_ANOTHER_ORGANIZATION: cannot invite this email" },
+    });
+
+    const { result } = renderHook(() => useInviteToSpace());
+    await expect(result.current("space-1", "other-org@cakrawala.ac.id", "viewer", "user-1")).rejects.toThrow(
+      "EMAIL_BELONGS_TO_ANOTHER_ORGANIZATION",
+    );
+
+    expect(permissionsStore.getState()).toEqual([]);
+    expect(pendingInvitesStore.getState()).toEqual([]);
+  });
+});
+
+describe("useCancelInvite", () => {
+  const mockDeleteEq = vi.fn();
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetStores();
+    mockDeleteEq.mockResolvedValue({ error: null });
+    mockSupabase.from.mockReturnValue({ delete: () => ({ eq: mockDeleteEq }) });
+  });
+
+  it("deletes the pending_invites row and removes it from the local store", async () => {
+    pendingInvitesStore.setState([
+      { id: "invite-1", spaceId: "space-1", email: "a@dibimbing.id", role: "viewer", invitedByUserId: "user-1", createdAt: "t" },
+      { id: "invite-2", spaceId: "space-1", email: "b@dibimbing.id", role: "viewer", invitedByUserId: "user-1", createdAt: "t" },
+    ]);
+
+    const { result } = renderHook(() => useCancelInvite());
+    await act(async () => {
+      await result.current("invite-1");
+    });
+
+    expect(mockDeleteEq).toHaveBeenCalledWith("id", "invite-1");
+    expect(pendingInvitesStore.getState().map((i) => i.id)).toEqual(["invite-2"]);
   });
 });
 
