@@ -2,14 +2,22 @@
 
 import { use, useState } from "react";
 import { toast } from "sonner";
-import { UserPlus } from "lucide-react";
+import { UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { NotFoundState } from "@/components/beacon/not-found-state";
 import { useSession } from "@/hooks/use-session";
-import { useSpace, useSpaceRole, useSpacePermissions, useUpdateSpaceRole, useSpacePendingInvites, useInviteToSpace } from "@/hooks/use-spaces";
+import {
+  useSpace,
+  useSpaceRole,
+  useSpacePermissions,
+  useUpdateSpaceRole,
+  useSpacePendingInvites,
+  useInviteToSpace,
+  useCancelInvite,
+} from "@/hooks/use-spaces";
 import { useUsers } from "@/hooks/use-users";
 import type { SpaceRole } from "@/lib/types";
 
@@ -24,6 +32,7 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
   const updateRole = useUpdateSpaceRole();
   const pendingInvites = useSpacePendingInvites(spaceId);
   const inviteToSpace = useInviteToSpace();
+  const cancelInvite = useCancelInvite();
   const allUsers = useUsers(space?.organizationId);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<SpaceRole>("viewer");
@@ -43,13 +52,27 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
   }
 
   async function handleInvite() {
-    if (!inviteEmail.trim() || !user) return;
+    if (!inviteEmail.trim()) return;
     try {
-      await inviteToSpace(spaceId, inviteEmail.trim(), inviteRole, user.id);
+      const result = await inviteToSpace(spaceId, inviteEmail.trim(), inviteRole);
       setInviteEmail("");
-      toast.success("Undangan terkirim.");
+      toast.success(result.status === "added" ? "Anggota langsung ditambahkan." : "Undangan terkirim.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message.includes("EMAIL_BELONGS_TO_ANOTHER_ORGANIZATION")) {
+        toast.error("Email ini terdaftar di Organisasi lain.");
+      } else {
+        toast.error("Tidak dapat mengirim undangan, silakan coba lagi.");
+      }
+    }
+  }
+
+  async function handleCancelInvite(inviteId: string) {
+    try {
+      await cancelInvite(inviteId);
+      toast("Undangan dibatalkan.");
     } catch {
-      toast.error("Tidak dapat mengirim undangan, silakan coba lagi.");
+      toast.error("Tidak dapat membatalkan undangan, silakan coba lagi.");
     }
   }
 
@@ -122,7 +145,17 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
               {pendingInvites.map((invite) => (
                 <div key={invite.id} className="flex items-center justify-between gap-3 rounded-md px-3 py-3">
                   <span className="text-body-sm text-muted-foreground">{invite.email}</span>
-                  <Badge variant="pending">Menunggu</Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="pending">Menunggu</Badge>
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label="Batalkan undangan"
+                      onClick={() => void handleCancelInvite(invite.id)}
+                    >
+                      <X className="size-3.5" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
