@@ -1,16 +1,27 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useSession } from "@/hooks/use-session";
+
+/**
+ * complete-invite and reset-password are the two (auth) pages that need an
+ * active session to work at all — Supabase's client establishes one from
+ * the invite/recovery email link's URL token before either page can render
+ * its set-password form (SetPasswordForm). Redirecting them away the
+ * instant they're "authenticated" would bounce every real invited/
+ * recovering User to Workspace Home before they could ever set a password.
+ */
+const SKIP_AUTHENTICATED_REDIRECT = new Set(["/complete-invite", "/reset-password"]);
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { isAuthenticated } = useSession();
 
   useEffect(() => {
-    if (isAuthenticated) router.replace("/");
-  }, [isAuthenticated, router]);
+    if (isAuthenticated && !SKIP_AUTHENTICATED_REDIRECT.has(pathname)) router.replace("/");
+  }, [isAuthenticated, pathname, router]);
 
   return (
     <div className="flex min-h-screen flex-1 flex-col items-center justify-center bg-background px-4 py-12">
