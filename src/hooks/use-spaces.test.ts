@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { spacesStore, permissionsStore, pendingInvitesStore, pagesStore } from "@/lib/supabase/stores";
 import { emptyDoc } from "@/lib/mock/blocknote-content";
 
-const mockSupabase = { from: vi.fn(), rpc: vi.fn() };
+const mockSupabase = { from: vi.fn() };
 vi.mock("@/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => mockSupabase }));
 
 const { useCreateSpace, useUpdateSpaceRole, useInviteToSpace, useCancelInvite, useDeleteSpace } = await import("./use-spaces");
@@ -131,16 +131,22 @@ describe("useUpdateSpaceRole", () => {
 });
 
 describe("useInviteToSpace", () => {
-  const mockRpc = vi.fn();
   beforeEach(() => {
     vi.clearAllMocks();
     resetStores();
-    mockSupabase.rpc = mockRpc;
   });
 
-  it("grants the Permission immediately when the invited email already has a same-Organization Account (status: added)", async () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("calls the server route (not the RPC directly), since sending the invite email needs the service-role key", async () => {
     const permissionRow = { id: "perm-9", space_id: "space-1", user_id: "user-9", role: "editor" };
-    mockRpc.mockResolvedValue({ data: { status: "added", permission: permissionRow }, error: null });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ status: "added", permission: permissionRow }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
 
     const { result } = renderHook(() => useInviteToSpace());
     let outcome: unknown;
@@ -148,10 +154,10 @@ describe("useInviteToSpace", () => {
       outcome = await result.current("space-1", "existing@dibimbing.id", "editor");
     });
 
-    expect(mockRpc).toHaveBeenCalledWith("invite_to_space", {
-      p_space_id: "space-1",
-      p_email: "existing@dibimbing.id",
-      p_role: "editor",
+    expect(fetchMock).toHaveBeenCalledWith("/api/spaces/space-1/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "existing@dibimbing.id", role: "editor" }),
     });
     expect(outcome).toEqual({ status: "added" });
     expect(permissionsStore.getState()).toEqual([
@@ -160,7 +166,7 @@ describe("useInviteToSpace", () => {
     expect(pendingInvitesStore.getState()).toEqual([]);
   });
 
-  it("creates a pending_invites row when the invited email has no Account yet (status: invited)", async () => {
+  it("creates a pending_invites row and reports whether the invite email actually sent (status: invited)", async () => {
     const inviteRow = {
       id: "invite-1",
       space_id: "space-1",
@@ -169,7 +175,11 @@ describe("useInviteToSpace", () => {
       invited_by_user_id: "user-1",
       created_at: "2026-01-01T00:00:00Z",
     };
-    mockRpc.mockResolvedValue({ data: { status: "invited", invite: inviteRow }, error: null });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ status: "invited", invite: inviteRow, emailSent: true }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
 
     const { result } = renderHook(() => useInviteToSpace());
     let outcome: unknown;
@@ -177,18 +187,44 @@ describe("useInviteToSpace", () => {
       outcome = await result.current("space-1", "new@dibimbing.id", "viewer");
     });
 
-    expect(outcome).toEqual({ status: "invited" });
+    expect(outcome).toEqual({ status: "invited", emailSent: true });
     expect(pendingInvitesStore.getState()).toEqual([
       expect.objectContaining({ id: "invite-1", email: "new@dibimbing.id", role: "viewer" }),
     ]);
     expect(permissionsStore.getState()).toEqual([]);
   });
 
-  it("throws without touching either store when the invited email belongs to a different Organization", async () => {
-    mockRpc.mockResolvedValue({
-      data: null,
-      error: { message: "EMAIL_BELONGS_TO_ANOTHER_ORGANIZATION: cannot invite this email" },
+  it("still patches the store when the invite was recorded but the notification email failed to send", async () => {
+    const inviteRow = {
+      id: "invite-2",
+      space_id: "space-1",
+      email: "unreachable@dibimbing.id",
+      role: "viewer",
+      invited_by_user_id: "user-1",
+      created_at: "2026-01-01T00:00:00Z",
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ status: "invited", invite: inviteRow, emailSent: false }),
     });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { result } = renderHook(() => useInviteToSpace());
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await result.current("space-1", "unreachable@dibimbing.id", "viewer");
+    });
+
+    expect(outcome).toEqual({ status: "invited", emailSent: false });
+    expect(pendingInvitesStore.getState()).toEqual([expect.objectContaining({ id: "invite-2" })]);
+  });
+
+  it("throws without touching either store when the invited email belongs to a different Organization", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      json: () => Promise.resolve({ error: "EMAIL_BELONGS_TO_ANOTHER_ORGANIZATION" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
 
     const { result } = renderHook(() => useInviteToSpace());
     await expect(result.current("space-1", "other-org@cakrawala.ac.id", "viewer")).rejects.toThrow(
