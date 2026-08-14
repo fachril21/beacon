@@ -56,7 +56,15 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
     try {
       const result = await inviteToSpace(spaceId, inviteEmail.trim(), inviteRole);
       setInviteEmail("");
-      toast.success(result.status === "added" ? "Anggota langsung ditambahkan." : "Undangan terkirim.");
+      if (result.status === "added") {
+        toast.success("Anggota langsung ditambahkan.");
+      } else if (result.emailSent) {
+        toast.success("Undangan terkirim.");
+      } else {
+        toast("Undangan dicatat, tapi email gagal dikirim.", {
+          description: "Beri tahu orang tersebut secara langsung untuk mendaftar.",
+        });
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       if (message.includes("EMAIL_BELONGS_TO_ANOTHER_ORGANIZATION")) {
