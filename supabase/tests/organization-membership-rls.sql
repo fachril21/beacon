@@ -56,13 +56,19 @@ returning organization_id, role as expect_owner_bootstrap_ok;
 
 -- =============================================================================
 -- Case 2: exactly one OWNER per org — a second OWNER row for the same org
--- must be rejected even from a privileged actor.
+-- must be rejected even from a privileged actor. Wrapped in a savepoint so
+-- the expected error doesn't poison the rest of this transaction (matches
+-- space-creation-rls.sql's convention of keeping expected-error assertions
+-- as the last statement in their block; a savepoint lets this one sit
+-- mid-script instead).
 -- EXPECT: ERROR (unique_violation on the partial owner index).
 -- =============================================================================
 
 reset role;
+savepoint case_2;
 insert into public.organization_memberships (organization_id, user_id, role)
 values ('e0000000-0000-0000-0000-00000000000e', 'c0000000-0000-0000-0000-00000000000c', 'owner');
+rollback to savepoint case_2;
 
 -- =============================================================================
 -- Case 3: org-membership gate on Space/Page access — User A creates a Space
@@ -93,22 +99,38 @@ reset role;
 select set_config('request.jwt.claims', json_build_object('sub', 'c0000000-0000-0000-0000-00000000000c', 'role', 'authenticated')::text, true);
 set local role authenticated;
 
+savepoint case_4;
 insert into public.permissions (space_id, user_id, role)
 values ('b0000000-0000-0000-0000-00000000000b', 'c0000000-0000-0000-0000-00000000000c', 'admin');
+rollback to savepoint case_4;
 
 -- =============================================================================
--- Case 5: read-time gate — simulate a Permission row existing for a user who
--- is NOT (or no longer) an org member (e.g. removed from the org without
--- their Space permissions being cleaned up first). user_space_role() must
--- return null / no access, not just block new inserts.
--- Done as postgres (bypassing the write-time trigger) to construct the
--- otherwise-impossible state, then re-checked as that user under RLS.
+-- Case 5: read-time gate — a Permission row that was valid when created can
+-- go stale if its owner is later removed from the Organization without
+-- their Space permissions being cleaned up in the same step (removing a
+-- member and revoking every Space grant they ever received isn't one atomic
+-- operation). user_space_role() must return null / no access for that row,
+-- not just block *new* inserts — the write-time trigger alone (Case 4)
+-- doesn't cover this, since it only fires on insert/update of `permissions`,
+-- not on deletion from `organization_memberships`.
 -- =============================================================================
 
 reset role;
+
+-- User C legitimately joins Org One, is legitimately granted Space access...
+insert into public.organization_memberships (organization_id, user_id, role)
+values ('e0000000-0000-0000-0000-00000000000e', 'c0000000-0000-0000-0000-00000000000c', 'member');
+
+select set_config('request.jwt.claims', json_build_object('sub', 'a0000000-0000-0000-0000-00000000000a', 'role', 'authenticated')::text, true);
+set local role authenticated;
 insert into public.permissions (space_id, user_id, role)
-values ('b0000000-0000-0000-0000-00000000000b', 'c0000000-0000-0000-0000-00000000000c', 'viewer')
-on conflict (space_id, user_id) do update set role = excluded.role;
+values ('b0000000-0000-0000-0000-00000000000b', 'c0000000-0000-0000-0000-00000000000c', 'viewer');
+
+-- ...then is removed from the Organization, with the Permission row left
+-- behind (the realistic "not cleaned up" case).
+reset role;
+delete from public.organization_memberships
+where organization_id = 'e0000000-0000-0000-0000-00000000000e' and user_id = 'c0000000-0000-0000-0000-00000000000c';
 
 select set_config('request.jwt.claims', json_build_object('sub', 'c0000000-0000-0000-0000-00000000000c', 'role', 'authenticated')::text, true);
 set local role authenticated;
