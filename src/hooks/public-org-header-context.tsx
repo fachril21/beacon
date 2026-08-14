@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext } from "react";
+import { createContext, type ReactNode } from "react";
 
 /**
  * Populated by the (public) Server Component layout from the real
@@ -10,3 +10,15 @@ import { createContext } from "react";
  * back to the existing dev-only localStorage switcher.
  */
 export const PublicOrgHeaderContext = createContext<string | null>(null);
+
+/**
+ * A Server Component can't render `SomeContext.Provider` directly, even when
+ * SomeContext is imported from a "use client" file — the cross-boundary
+ * client reference proxies function exports, not property access on an
+ * object export, so `.Provider` resolves to undefined at render time. The
+ * fix is to keep the Provider usage inside the client file, wrapped in its
+ * own Client Component, and have the Server Component render this instead.
+ */
+export function PublicOrgHeaderProvider({ organizationId, children }: { organizationId: string | null; children: ReactNode }) {
+  return <PublicOrgHeaderContext.Provider value={organizationId}>{children}</PublicOrgHeaderContext.Provider>;
+}

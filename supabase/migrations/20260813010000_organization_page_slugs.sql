@@ -16,6 +16,8 @@
 
 alter table public.organizations add column slug text;
 
+create extension if not exists unaccent;
+
 create function public.slugify(p_text text)
 returns text
 language sql
@@ -32,8 +34,6 @@ $$;
 
 comment on function public.slugify(text) is
   'Mirrors src/lib/slug.ts slugify() — kept in sync by hand, not generated, since Postgres and JS have no shared source. Requires the unaccent extension for diacritic stripping.';
-
-create extension if not exists unaccent;
 
 create function public.organizations_set_slug()
 returns trigger
