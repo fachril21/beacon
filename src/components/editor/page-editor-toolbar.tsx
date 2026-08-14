@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChevronDown, History, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ChevronDown, ExternalLink, History, Trash2 } from "lucide-react";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -54,6 +54,7 @@ export function PageEditorToolbar({ page, space, title, saveStatus, role, onOpen
 
   const pendingChanges = hasUnpublishedChanges(page);
   const status = getPageStatus(page);
+  const publicUrl = organization && page.slug ? `/public/${organization.slug}/pages/${page.slug}` : null;
   const helpfulness = useHelpfulnessRate(canEdit && page.isPublished ? page.id : undefined);
 
   async function doPublish() {
@@ -125,6 +126,24 @@ export function PageEditorToolbar({ page, space, title, saveStatus, role, onOpen
 
         {/* Right-aligned utility row, then the primary action + overflow joined as one control */}
         <div className="flex shrink-0 items-center gap-3">
+          {page.isPublished && publicUrl && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <a
+                    href={publicUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Lihat halaman publik"
+                    className={buttonVariants({ size: "icon-sm", variant: "ghost" })}
+                  />
+                }
+              >
+                <ExternalLink className="size-3.5" />
+              </TooltipTrigger>
+              <TooltipContent>Lihat halaman publik</TooltipContent>
+            </Tooltip>
+          )}
           <SaveStatusIndicator status={saveStatus} />
 
           <div data-slot="button-group" className="flex items-stretch overflow-hidden rounded-md">

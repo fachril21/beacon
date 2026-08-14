@@ -106,6 +106,28 @@ describe("PageEditorToolbar publish gate (platform-domain publishing)", () => {
   });
 });
 
+describe("PageEditorToolbar view published page link", () => {
+  const publishedPage: Page = { ...draftPage, isPublished: true, slug: "getting-started" };
+
+  it("links to the platform-domain public URL for a published page", () => {
+    render(<PageEditorToolbar page={publishedPage} space={space} title={publishedPage.title} saveStatus="idle" role="editor" />);
+    const link = screen.getByRole("link", { name: "Lihat halaman publik" });
+    expect(link).toHaveAttribute("href", "/public/test-org/pages/getting-started");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  it("hides the link for a draft (unpublished) page", () => {
+    renderToolbar("editor");
+    expect(screen.queryByRole("link", { name: "Lihat halaman publik" })).not.toBeInTheDocument();
+  });
+
+  it("shows the link to a viewer too, since it is a non-privileged read-only link", () => {
+    render(<PageEditorToolbar page={publishedPage} space={space} title={publishedPage.title} saveStatus="idle" role="viewer" />);
+    expect(screen.getByRole("link", { name: "Lihat halaman publik" })).toBeInTheDocument();
+  });
+});
+
 describe("PageEditorToolbar role gating (US17.2)", () => {
   it("shows the Publish button for an editor", () => {
     renderToolbar("editor");
