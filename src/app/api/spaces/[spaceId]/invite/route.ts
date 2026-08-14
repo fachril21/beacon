@@ -51,7 +51,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ spa
 
   const admin = getSupabaseAdminClient();
   const siteUrl = new URL(request.url).origin;
-  const { error: emailError } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo: `${siteUrl}/complete-invite` });
+  const redirectTo = `${siteUrl}/complete-invite`;
+  const { error: emailError } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo });
+
+  // inviteUserByEmail fails outright when an auth.users row for this email
+  // already exists (e.g. a prior invite attempt that was never completed by
+  // the invited person) — but with no `profiles` row, that person still has
+  // no Beacon Account. A hard failure here would silently drop them on a
+  // re-invite, so fall back to a recovery-style email through the same
+  // underlying account: GoTrue has no "resend invite" endpoint, but
+  // resetPasswordForEmail sends real mail to any existing auth account and
+  // lands them back on the same "create your account" screen.
+  let emailSent = !emailError;
+  if (emailError && isAlreadyRegisteredAuthError(emailError)) {
+    const { error: resendError } = await admin.auth.resetPasswordForEmail(email, { redirectTo });
+    emailSent = !resendError;
+  }
 
   // inviteUserByEmail creates the auth.users row immediately (before the
   // invited person does anything), which fires handle_new_user and may
@@ -67,7 +82,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ spa
       .eq("user_id", profile.id)
       .maybeSingle();
     if (permission) {
-      return NextResponse.json({ status: "added", permission, emailSent: !emailError });
+      return NextResponse.json({ status: "added", permission, emailSent });
     }
   }
 
@@ -75,5 +90,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ spa
   // the email itself sent — report emailSent so the UI can tell the admin
   // to notify the person manually instead of reporting a hard failure for
   // something that actually worked at the data layer.
-  return NextResponse.json({ status: "invited", invite: result.invite, emailSent: !emailError });
+  return NextResponse.json({ status: "invited", invite: result.invite, emailSent });
+}
+
+/** Mirrors the same "already registered" phrase-matching used by signUp's error handling (use-session.tsx). */
+function isAlreadyRegisteredAuthError(error: { message: string }): boolean {
+  const message = error.message.toLowerCase();
+  return (message.includes("already") && message.includes("registered")) || message.includes("already exists");
 }
