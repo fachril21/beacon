@@ -198,29 +198,34 @@ export function useSpacePendingInvites(spaceId: string | undefined) {
   return spaceId ? invites.filter((i) => i.spaceId === spaceId) : [];
 }
 
-export type InviteToSpaceResult = { status: "added" } | { status: "invited" };
+export type InviteToSpaceResult = { status: "added" } | { status: "invited"; emailSent: boolean };
 
 /**
- * A single RPC (invite_to_space, 20260814000000_invite_to_space_rpc.sql)
- * branches server-side: an email that already has a same-Organization
- * Account is granted the Permission immediately (status: "added"); an
- * unknown email falls back to a pending_invites row, resolved later by
- * handle_new_user on signup (status: "invited"); a different-Organization
- * Account is rejected — it could never resolve, since profiles.organization_id
- * is permanent. invitedByUserId is no longer a parameter: the RPC reads
- * auth.uid() itself, since it runs SECURITY DEFINER precisely so it can see
- * profiles across every Organization (needed to detect the cross-org case).
+ * Posts to /api/spaces/{id}/invite (route.ts) rather than calling the
+ * invite_to_space RPC directly, because the "no Account yet" branch needs to
+ * send a real notification email via auth.admin.inviteUserByEmail — a
+ * service-role-only operation that must run server-side, never with the
+ * anon key in the browser. That route still authorizes via the caller's own
+ * session (invite_to_space's own space_role_at_least guard), it just also
+ * has the privilege to send mail when the RPC alone can't.
  */
 export function useInviteToSpace() {
   return useCallback(async (spaceId: string, email: string, role: SpaceRole): Promise<InviteToSpaceResult> => {
-    const supabase = getSupabaseBrowserClient();
-    const { data, error } = await supabase.rpc("invite_to_space", { p_space_id: spaceId, p_email: email, p_role: role });
-    if (error) throw error;
+    const res = await fetch(`/api/spaces/${spaceId}/invite`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, role }),
+    });
+    const body = (await res.json()) as
+      | { status: "added"; permission: PermissionRow }
+      | { status: "invited"; invite: PendingInviteRow; emailSent: boolean }
+      | { error: string };
+    if (!res.ok || "error" in body) {
+      throw new Error("error" in body ? body.error : "Gagal mengirim undangan.");
+    }
 
-    const result = data as { status: "added"; permission: PermissionRow } | { status: "invited"; invite: PendingInviteRow };
-
-    if (result.status === "added") {
-      const permission = mapPermissionRow(result.permission);
+    if (body.status === "added") {
+      const permission = mapPermissionRow(body.permission);
       permissionsStore.setState((prev) => {
         const exists = prev.some((p) => p.spaceId === permission.spaceId && p.userId === permission.userId);
         return exists ? prev.map((p) => (p.id === permission.id ? permission : p)) : [...prev, permission];
@@ -229,11 +234,11 @@ export function useInviteToSpace() {
     }
 
     pendingInvitesStore.setState((prev) => {
-      const invite = mapPendingInviteRow(result.invite);
+      const invite = mapPendingInviteRow(body.invite);
       const exists = prev.some((i) => i.id === invite.id);
       return exists ? prev.map((i) => (i.id === invite.id ? invite : i)) : [...prev, invite];
     });
-    return { status: "invited" };
+    return { status: "invited", emailSent: body.emailSent };
   }, []);
 }
 
