@@ -137,3 +137,47 @@ Space invites already had a full admin UI and a working backend path — but onl
 - Full suite: **262/262 passing** (`npx vitest run`).
 - `npx tsc --noEmit --pretty false` → clean. `npx eslint` on the two touched files → clean.
 - **Known gap:** the fallback email uses Supabase's *Recovery* template copy, not an *Invite*-flavored one — Supabase Auth has no "resend invite" template distinct from the original invite email. Acceptable tradeoff (a real email that gets them to the same "create your account" screen) but the subject/body will read as a password reset rather than an invite for this one fallback path. Not verified against a real inbox this session — reasoning and the RED→GREEN route test are the evidence; live SMTP verification would require deliberately orphaning a real `auth.users` row again, which this session avoided given the cleanup cost documented in Addendum 1/2.
+
+## Addendum 4 — Root Cause Was Supabase's Rate-Limited Default Mailer; Switched to Resend SMTP
+
+**Follow-up scope, next session.** User reported invite emails were still not being delivered even after Addendum 3's fallback. Live diagnostic (a disposable-address `inviteUserByEmail` call via the service-role client, cleaned up immediately) against the real project surfaced the actual cause — not a code bug at all:
+
+```json
+{ "name": "AuthApiError", "message": "email rate limit exceeded", "code": "over_email_send_rate_limit", "status": 429 }
+```
+
+`supabase/config.toml`'s `[auth.rate_limit] email_sent` was `2` — Supabase's built-in testing-only mailer default. All the invite-testing across this feature's build history (Addenda 1-3: multiple real test invites, cleanup scripts, orphaned accounts) had been burning through that same 2-per-hour quota. No application code could fix this — it's enforced by Supabase Auth itself before the route handler's own logic ever runs. Planned via `/ecc:plan` and confirmed with the user: switch to Resend as a custom SMTP provider, starting with a sandbox sender since no domain was verified in Resend yet.
+
+### Task 10 — Wire Resend into `supabase/config.toml`
+
+- **Summary:** `[auth.email.smtp]` now points at Resend (`smtp.resend.com`, port `587`, user `resend`, `pass = "env(RESEND_API_KEY)"`, `admin_email = "onboarding@resend.dev"`, `sender_name = "Beacon"`). Only the secret `pass` field uses `env()` substitution — the non-secret fields (`host`/`port`/`user`) are hardcoded because `env()` substitution specifically for the `host` field is a known, currently-open Supabase CLI bug ([cli#3255](https://github.com/supabase/cli/issues/3255)), found via research before implementing rather than discovered the hard way. `[auth.rate_limit] email_sent` raised from `2` to `30` — that cap is enforced by Supabase Auth itself independent of which SMTP relay sits behind it, so leaving it at `2` would have kept throttling Resend-backed sends too.
+- **No application code changed.** `route.ts` and `use-session.tsx` already call Supabase Auth directly (`inviteUserByEmail`, `resetPasswordForEmail`, `signUp`) — none of them are aware of which mailer is configured. This is the key scope finding from the plan: switching providers is a single project-level config change, not N per-email-type code changes.
+- **Validate:** `npx vitest run` → 262/262 passing (unchanged, config-only diff). `npx tsc --noEmit --pretty false` → clean. No test framework applies to a TOML config file; validation here was inspection plus the live diagnostics below.
+- **Blocked path, documented rather than forced:** intended to apply this via `supabase config push`, but the CLI session in this environment is authenticated against a different Supabase account than the one owning Beacon's project — confirmed via a read-only check, `supabase projects api-keys --project-ref jrdtpmtpjowouknmuxid` → `403`. User applied the equivalent values by hand instead, via Dashboard → Authentication → Emails → SMTP Settings.
+
+### Task 11 — Live verification against the real project (multiple rounds, root-caused a second issue along the way)
+
+All rounds used a disposable diagnostic script (`.diag-invite.mjs`, gitignored via `.env*`-adjacent scratch pattern, deleted after each round — never committed) calling the service-role client directly, mirroring the same technique validated in Addendum 1.
+
+1. `inviteUserByEmail` → a fake `@example.com` address: `AuthRetryableFetchError: Error sending invite email (500)`. Ambiguous — GoTrue doesn't surface the underlying SMTP provider's rejection reason.
+2. `resetPasswordForEmail` → the user's own `fachril21@gmail.com`: same generic `500`. Still ambiguous — this ruled out "fake recipient domain" as the cause but not "sandbox-sender restriction," since `fachril21@gmail.com` turned out not to be the email the user's Resend account is registered under.
+3. **User checked Resend's own dashboard logs** (this session couldn't — no Resend API access) and found the actual rejection: *"The resend.dev domain is for testing and can only send to your own email address. To send to other recipients, verify a domain and update the from address to use it."* This is expected, documented Resend sandbox behavior, not a config defect — confirms `[auth.email.smtp]` is correctly wired and Supabase is correctly relaying to Resend; Resend itself is the one rejecting on sandbox-recipient grounds.
+4. `inviteUserByEmail` → `fachril@cakrawala.ac.id` (the Resend account's own registered address): `AuthApiError: email_exists` — expected, that address already has a real Beacon account from earlier sessions, so `inviteUserByEmail` short-circuits before ever attempting SMTP.
+5. `resetPasswordForEmail` → `fachril@cakrawala.ac.id` (same address, but via the fallback path since the account already exists): **`error: null`.** User confirmed the email actually arrived in that inbox — real, end-to-end proof that Supabase Auth → Resend → real inbox delivery now works, for the same code path `forgot-password` and the Addendum 3 fallback both already use.
+
+### Known gap — recovery link showed "expired" on click
+
+The user reported the link in the round-5 email showed as expired when clicked. Not root-caused this session; three candidate causes were surfaced but not individually isolated:
+1. `auth.email.otp_expiry` is `3600`s (1 hour) — the diagnostic rounds above spanned enough real conversation time that the token plausibly outlived its window before being clicked.
+2. Institutional (`.ac.id`) inboxes commonly run a mail-security gateway (Microsoft Safe Links, Google Workspace link scanning) that auto-visits every link in an email before the human ever clicks it — since recovery links are single-use, this silently burns the token first. Very common with magic-link/recovery email generally, unrelated to Resend.
+3. The diagnostic script's `redirectTo: "http://localhost:3000/reset-password"` doesn't exactly match `config.toml`'s `additional_redirect_urls` (`https://127.0.0.1:3000`, different host and scheme) — a mismatch here can also produce a Supabase error page, though typically with different wording than "expired."
+- **This is explicitly unresolved**, separate from this session's actual scope (email not sending, now proven fixed). Recorded here rather than silently dropped so it isn't mistaken for closed.
+
+## Coverage and Known Gaps (Addendum 4)
+
+- No new automated tests — this addendum's scope was infrastructure config (`supabase/config.toml`) plus live verification, not new application logic. `npx vitest run` re-run as a regression check only: 262/262 passing, unchanged from Addendum 3.
+- `npx tsc --noEmit --pretty false` → clean.
+- **Known gaps**, stated explicitly:
+  1. Sandbox sender (`onboarding@resend.dev`) still only delivers to the Resend account's own registered address (`fachril@cakrawala.ac.id`) — real invited/recovering users at other addresses will not receive mail until a domain is verified in Resend and `admin_email` in `supabase/config.toml` (plus the Dashboard SMTP sender) is updated to an address on that domain.
+  2. The "link expired" symptom from Task 11 round 5 is unresolved (see above) — the three candidate causes are ranked by plausibility but not individually confirmed.
+  3. `supabase config push` remains blocked for this CLI session (wrong authenticated account) — `supabase/config.toml` is the versioned source of truth, but the live project's actual SMTP settings were applied by hand via the Dashboard, not synced from the repo. If the two ever drift, the Dashboard is currently the one actually in effect.
