@@ -110,7 +110,14 @@ select public.accept_organization_invite(:'invite_token') ->> 'status' as expect
 select role as expect_member_role_f from public.organization_memberships
 where organization_id = 'e0000000-0000-0000-0000-00000000000e' and user_id = 'f0000000-0000-0000-0000-00000000000f';
 
+-- organization_invitations is owner/admin-only under RLS (mirrors
+-- permissions_select_admin_or_self) — F, a plain member, correctly cannot
+-- see this row themselves, so check as postgres (bypasses RLS) instead.
+reset role;
 select status as expect_invitation_accepted from public.organization_invitations where token = :'invite_token';
+
+select set_config('request.jwt.claims', json_build_object('sub', 'f0000000-0000-0000-0000-00000000000f', 'role', 'authenticated')::text, true);
+set local role authenticated;
 
 -- accepting the same (already-ACCEPTED) token again is idempotent, not an error
 select public.accept_organization_invite(:'invite_token') ->> 'status' as expect_idempotent_accepted;
