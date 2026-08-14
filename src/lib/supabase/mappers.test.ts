@@ -5,7 +5,8 @@ import {
   mapProfileRow,
   mapSpaceRow,
   mapPermissionRow,
-  mapPendingInviteRow,
+  mapOrganizationMembershipRow,
+  mapOrganizationInvitationRow,
   mapPageRow,
   mapScreenshotBlockRow,
   mapVersionRow,
@@ -42,7 +43,6 @@ describe("mapProfileRow", () => {
       name: "Ada",
       avatar_url: null,
       organization_id: "org-1",
-      organization_role: "owner",
       created_at: "2026-01-01T00:00:00Z",
     };
     expect(mapProfileRow(row)).toEqual({
@@ -51,7 +51,6 @@ describe("mapProfileRow", () => {
       name: "Ada",
       avatarUrl: null,
       organizationId: "org-1",
-      organizationRole: "owner",
       createdAt: "2026-01-01T00:00:00Z",
     });
   });
@@ -87,22 +86,43 @@ describe("mapPermissionRow", () => {
   });
 });
 
-describe("mapPendingInviteRow", () => {
-  it("maps a pending_invites row to the PendingInvite shape", () => {
+describe("mapOrganizationMembershipRow", () => {
+  it("maps an organization_memberships row to the OrganizationMembership shape", () => {
+    const row = { id: "mem-1", organization_id: "org-1", user_id: "user-1", role: "owner", created_at: "2026-01-01T00:00:00Z" };
+    expect(mapOrganizationMembershipRow(row)).toEqual({
+      id: "mem-1",
+      organizationId: "org-1",
+      userId: "user-1",
+      role: "owner",
+      createdAt: "2026-01-01T00:00:00Z",
+    });
+  });
+});
+
+describe("mapOrganizationInvitationRow", () => {
+  it("maps an organization_invitations row to the OrganizationInvitation shape", () => {
     const row = {
       id: "invite-1",
-      space_id: "space-1",
+      organization_id: "org-1",
       email: "b@example.com",
-      role: "viewer",
+      role: "member",
+      token: "tok-abc",
       invited_by_user_id: "user-1",
+      status: "pending",
+      expires_at: "2026-01-08T00:00:00Z",
+      accepted_at: null,
       created_at: "2026-01-01T00:00:00Z",
     };
-    expect(mapPendingInviteRow(row)).toEqual({
+    expect(mapOrganizationInvitationRow(row)).toEqual({
       id: "invite-1",
-      spaceId: "space-1",
+      organizationId: "org-1",
       email: "b@example.com",
-      role: "viewer",
+      role: "member",
+      token: "tok-abc",
       invitedByUserId: "user-1",
+      status: "pending",
+      expiresAt: "2026-01-08T00:00:00Z",
+      acceptedAt: null,
       createdAt: "2026-01-01T00:00:00Z",
     });
   });

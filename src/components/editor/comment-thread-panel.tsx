@@ -26,7 +26,7 @@ export function CommentThreadPanel({ blockId, className }: { blockId: string; cl
   const { user } = useSession();
   const comments = useBlockComments(pageId, blockId);
   const createComment = useCreateComment();
-  const organizationUsers = useUsers(user?.organizationId);
+  const organizationUsers = useUsers(user?.organizationId ?? undefined);
   const [open, setOpen] = useState(false);
   const [body, setBody] = useState("");
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);

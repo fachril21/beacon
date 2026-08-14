@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor, act } from "@testing-library/react";
-import { organizationsStore } from "@/lib/supabase/stores";
+import { organizationsStore, organizationMembershipsStore, organizationInvitationsStore } from "@/lib/supabase/stores";
 
 const mockSupabase = {
   from: vi.fn(),
+  rpc: vi.fn(),
 };
 
 vi.mock("@/lib/supabase/client", () => ({
@@ -14,7 +15,20 @@ vi.mock("./use-session", () => ({
   useSession: () => ({ user: { id: "user-1", organizationId: "org-1" } }),
 }));
 
-const { useOrganizations, useOrganizationDomainActions } = await import("./use-organizations");
+const {
+  useOrganizations,
+  useOrganizationDomainActions,
+  useMyOrganizations,
+  useOrganizationRole,
+  useCreateOrganization,
+  useOrganizationMembers,
+  useOrganizationInvitations,
+  useInviteToOrganization,
+  useRevokeInvitation,
+  useRemoveOrgMember,
+  useTransferOwnership,
+  useAcceptOrganizationInvite,
+} = await import("./use-organizations");
 
 function resetStore() {
   organizationsStore.setState([]);
@@ -177,5 +191,285 @@ describe("useOrganizationDomainActions", () => {
       isDomainVerified: false,
       pendingDnsToken: null,
     });
+  });
+});
+
+function resetOrgStores() {
+  organizationsStore.setState([]);
+  organizationsStore.invalidate("all");
+  organizationMembershipsStore.setState([]);
+  organizationMembershipsStore.invalidate("user:user-1");
+  organizationMembershipsStore.invalidate("org:org-1");
+  organizationInvitationsStore.setState([]);
+  organizationInvitationsStore.invalidate("org:org-1");
+}
+
+describe("useMyOrganizations", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetOrgStores();
+  });
+
+  it("returns only the Organizations the current user has a membership row in", async () => {
+    organizationsStore.setState([
+      { id: "org-1", name: "Org One", slug: "org-one", domain: null, isDomainVerified: false, pendingDnsToken: null, createdAt: "t" },
+      { id: "org-2", name: "Org Two", slug: "org-two", domain: null, isDomainVerified: false, pendingDnsToken: null, createdAt: "t" },
+    ]);
+    mockSupabase.from.mockImplementation((table: string) => {
+      if (table === "organization_memberships") {
+        return { select: () => ({ eq: () => Promise.resolve({ data: [{ id: "mem-1", organization_id: "org-1", user_id: "user-1", role: "owner", created_at: "t" }], error: null }) }) };
+      }
+      throw new Error(`unexpected table ${table}`);
+    });
+
+    const { result } = renderHook(() => useMyOrganizations());
+    await waitFor(() => expect(result.current.map((o) => o.id)).toEqual(["org-1"]));
+  });
+});
+
+describe("useOrganizationRole", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetOrgStores();
+  });
+
+  it("returns the current user's role for a given Organization, or null with no membership", async () => {
+    organizationMembershipsStore.setState([{ id: "mem-1", organizationId: "org-1", userId: "user-1", role: "admin", createdAt: "t" }]);
+
+    const { result: withRole } = renderHook(() => useOrganizationRole("org-1", "user-1"));
+    expect(withRole.current).toBe("admin");
+
+    const { result: withoutRole } = renderHook(() => useOrganizationRole("org-2", "user-1"));
+    expect(withoutRole.current).toBeNull();
+  });
+});
+
+describe("useCreateOrganization", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetOrgStores();
+  });
+
+  it("inserts the Organization row, then bootstraps the creator's own OWNER membership row", async () => {
+    const orgRow = { id: "org-9", name: "New Co", slug: "new-co", domain: null, is_domain_verified: false, pending_dns_token: null, created_at: "t" };
+    const membershipRow = { id: "mem-9", organization_id: "org-9", user_id: "user-1", role: "owner", created_at: "t" };
+
+    const orgsInsert = vi.fn(() => ({ select: () => ({ single: () => Promise.resolve({ data: orgRow, error: null }) }) }));
+    const membershipsInsert = vi.fn(() => ({ select: () => ({ single: () => Promise.resolve({ data: membershipRow, error: null }) }) }));
+    mockSupabase.from.mockImplementation((table: string) => {
+      if (table === "organizations") return { insert: orgsInsert };
+      if (table === "organization_memberships") return { insert: membershipsInsert };
+      throw new Error(`unexpected table ${table}`);
+    });
+
+    const { result } = renderHook(() => useCreateOrganization());
+    let created: unknown;
+    await act(async () => {
+      created = await result.current({ name: "New Co", createdByUserId: "user-1" });
+    });
+
+    expect(orgsInsert).toHaveBeenCalledWith(expect.objectContaining({ name: "New Co" }));
+    expect(membershipsInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ organization_id: "org-9", user_id: "user-1", role: "owner" }),
+    );
+    expect(created).toMatchObject({ id: "org-9", name: "New Co" });
+    expect(organizationsStore.getState()).toEqual([expect.objectContaining({ id: "org-9" })]);
+    expect(organizationMembershipsStore.getState()).toEqual([expect.objectContaining({ organizationId: "org-9", role: "owner" })]);
+  });
+
+  it("deletes the just-created Organization if the bootstrap membership insert fails, instead of leaving an inaccessible orphan", async () => {
+    const orgRow = { id: "org-9", name: "New Co", slug: "new-co", domain: null, is_domain_verified: false, pending_dns_token: null, created_at: "t" };
+    const membershipError = { message: "new row violates row-level security policy" };
+
+    const orgsInsert = vi.fn(() => ({ select: () => ({ single: () => Promise.resolve({ data: orgRow, error: null }) }) }));
+    const membershipsInsert = vi.fn(() => ({ select: () => ({ single: () => Promise.resolve({ data: null, error: membershipError }) }) }));
+    const orgsDeleteEq = vi.fn(() => Promise.resolve({ error: null }));
+    const orgsDelete = vi.fn(() => ({ eq: orgsDeleteEq }));
+
+    mockSupabase.from.mockImplementation((table: string) => {
+      if (table === "organizations") return { insert: orgsInsert, delete: orgsDelete };
+      if (table === "organization_memberships") return { insert: membershipsInsert };
+      throw new Error(`unexpected table ${table}`);
+    });
+
+    const { result } = renderHook(() => useCreateOrganization());
+    await expect(
+      act(async () => {
+        await result.current({ name: "New Co", createdByUserId: "user-1" });
+      }),
+    ).rejects.toEqual(membershipError);
+
+    expect(orgsDeleteEq).toHaveBeenCalledWith("id", "org-9");
+    expect(organizationsStore.getState()).toEqual([]);
+  });
+});
+
+describe("useOrganizationMembers / useOrganizationInvitations", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetOrgStores();
+  });
+
+  it("loads and maps organization_memberships for the given org", async () => {
+    mockSupabase.from.mockImplementation((table: string) => {
+      if (table === "organization_memberships") {
+        return { select: () => ({ eq: () => Promise.resolve({ data: [{ id: "mem-1", organization_id: "org-1", user_id: "user-2", role: "member", created_at: "t" }], error: null }) }) };
+      }
+      throw new Error(`unexpected table ${table}`);
+    });
+
+    const { result } = renderHook(() => useOrganizationMembers("org-1"));
+    await waitFor(() => expect(result.current).toEqual([expect.objectContaining({ userId: "user-2", role: "member" })]));
+  });
+
+  it("loads and maps organization_invitations for the given org", async () => {
+    mockSupabase.from.mockImplementation((table: string) => {
+      if (table === "organization_invitations") {
+        return {
+          select: () => ({
+            eq: () =>
+              Promise.resolve({
+                data: [
+                  {
+                    id: "invite-1",
+                    organization_id: "org-1",
+                    email: "new@example.com",
+                    role: "member",
+                    token: "tok",
+                    invited_by_user_id: "user-1",
+                    status: "pending",
+                    expires_at: "t2",
+                    accepted_at: null,
+                    created_at: "t",
+                  },
+                ],
+                error: null,
+              }),
+          }),
+        };
+      }
+      throw new Error(`unexpected table ${table}`);
+    });
+
+    const { result } = renderHook(() => useOrganizationInvitations("org-1"));
+    await waitFor(() => expect(result.current).toEqual([expect.objectContaining({ email: "new@example.com", status: "pending" })]));
+  });
+});
+
+describe("useInviteToOrganization", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetOrgStores();
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("posts to /api/organizations/{id}/invite and patches organizationInvitationsStore on status=invited", async () => {
+    const inviteRow = { id: "invite-1", organization_id: "org-1", email: "new@example.com", role: "member", token: "tok", invited_by_user_id: "user-1", status: "pending", expires_at: "t2", accepted_at: null, created_at: "t" };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ status: "invited", invite: inviteRow, emailSent: true }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { result } = renderHook(() => useInviteToOrganization());
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await result.current("org-1", "new@example.com", "member");
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/organizations/org-1/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "new@example.com", role: "member" }),
+    });
+    expect(outcome).toEqual({ status: "invited", emailSent: true });
+    expect(organizationInvitationsStore.getState()).toEqual([expect.objectContaining({ id: "invite-1" })]);
+  });
+
+  it("throws a friendly error when the route rejects the request", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, json: () => Promise.resolve({ error: "NOT_AUTHORIZED" }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { result } = renderHook(() => useInviteToOrganization());
+    await expect(result.current("org-1", "x@example.com", "member")).rejects.toThrow("NOT_AUTHORIZED");
+  });
+});
+
+describe("useRevokeInvitation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetOrgStores();
+  });
+
+  it("updates status to revoked and patches the store", async () => {
+    organizationInvitationsStore.setState([
+      { id: "invite-1", organizationId: "org-1", email: "a@example.com", role: "member", token: "t1", invitedByUserId: "user-1", status: "pending", expiresAt: "t2", acceptedAt: null, createdAt: "t" },
+    ]);
+    const eqMock = vi.fn(() => Promise.resolve({ error: null }));
+    mockSupabase.from.mockReturnValue({ update: () => ({ eq: eqMock }) });
+
+    const { result } = renderHook(() => useRevokeInvitation());
+    await act(async () => {
+      await result.current("invite-1");
+    });
+
+    expect(eqMock).toHaveBeenCalledWith("id", "invite-1");
+    expect(organizationInvitationsStore.getState()[0].status).toBe("revoked");
+  });
+});
+
+describe("useRemoveOrgMember / useTransferOwnership / useAcceptOrganizationInvite", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetOrgStores();
+  });
+
+  it("useRemoveOrgMember calls remove_organization_member and drops the row from the store on success", async () => {
+    organizationMembershipsStore.setState([{ id: "mem-1", organizationId: "org-1", userId: "user-2", role: "member", createdAt: "t" }]);
+    mockSupabase.rpc.mockResolvedValue({ data: { status: "removed" }, error: null });
+
+    const { result } = renderHook(() => useRemoveOrgMember());
+    await act(async () => {
+      await result.current("org-1", "user-2");
+    });
+
+    expect(mockSupabase.rpc).toHaveBeenCalledWith("remove_organization_member", { p_organization_id: "org-1", p_user_id: "user-2" });
+    expect(organizationMembershipsStore.getState()).toEqual([]);
+  });
+
+  it("useRemoveOrgMember surfaces CANNOT_REMOVE_OWNER without touching the store", async () => {
+    organizationMembershipsStore.setState([{ id: "mem-1", organizationId: "org-1", userId: "user-2", role: "owner", createdAt: "t" }]);
+    mockSupabase.rpc.mockResolvedValue({ data: null, error: { message: "CANNOT_REMOVE_OWNER: transfer ownership before removing the current owner" } });
+
+    const { result } = renderHook(() => useRemoveOrgMember());
+    await expect(result.current("org-1", "user-2")).rejects.toThrow("CANNOT_REMOVE_OWNER");
+    expect(organizationMembershipsStore.getState()).toHaveLength(1);
+  });
+
+  it("useTransferOwnership calls transfer_organization_ownership and flips both roles in the store", async () => {
+    organizationMembershipsStore.setState([
+      { id: "mem-1", organizationId: "org-1", userId: "user-1", role: "owner", createdAt: "t" },
+      { id: "mem-2", organizationId: "org-1", userId: "user-2", role: "member", createdAt: "t" },
+    ]);
+    mockSupabase.rpc.mockResolvedValue({ data: { status: "transferred", newOwnerId: "user-2" }, error: null });
+
+    const { result } = renderHook(() => useTransferOwnership());
+    await act(async () => {
+      await result.current("org-1", "user-2");
+    });
+
+    expect(mockSupabase.rpc).toHaveBeenCalledWith("transfer_organization_ownership", { p_organization_id: "org-1", p_new_owner_user_id: "user-2" });
+    const roles = Object.fromEntries(organizationMembershipsStore.getState().map((m) => [m.userId, m.role]));
+    expect(roles).toEqual({ "user-1": "admin", "user-2": "owner" });
+  });
+
+  it("useAcceptOrganizationInvite calls accept_organization_invite with the token", async () => {
+    mockSupabase.rpc.mockResolvedValue({ data: { status: "accepted", membership: { id: "mem-1", organization_id: "org-1", user_id: "user-1", role: "member", created_at: "t" } }, error: null });
+
+    const { result } = renderHook(() => useAcceptOrganizationInvite());
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await result.current("some-token");
+    });
+
+    expect(mockSupabase.rpc).toHaveBeenCalledWith("accept_organization_invite", { p_token: "some-token" });
+    expect(outcome).toMatchObject({ status: "accepted" });
   });
 });

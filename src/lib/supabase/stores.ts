@@ -6,10 +6,11 @@
 import { createCollectionStore } from "./collection-store";
 import type {
   Organization,
+  OrganizationMembership,
+  OrganizationInvitation,
   Space,
   Page,
   Permission,
-  PendingInvite,
   Version,
   User,
   ScreenshotBlock,
@@ -19,11 +20,12 @@ import type {
 } from "@/lib/types";
 
 export const organizationsStore = createCollectionStore<Organization>();
+export const organizationMembershipsStore = createCollectionStore<OrganizationMembership>();
+export const organizationInvitationsStore = createCollectionStore<OrganizationInvitation>();
 export const usersStore = createCollectionStore<User>();
 export const spacesStore = createCollectionStore<Space>();
 export const pagesStore = createCollectionStore<Page>();
 export const permissionsStore = createCollectionStore<Permission>();
-export const pendingInvitesStore = createCollectionStore<PendingInvite>();
 export const versionsStore = createCollectionStore<Version>();
 export const screenshotBlocksStore = createCollectionStore<ScreenshotBlock>();
 export const commentsStore = createCollectionStore<Comment>();

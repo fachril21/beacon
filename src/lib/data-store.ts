@@ -5,13 +5,12 @@
  * once hooks call Supabase directly.
  */
 import { createStore } from "@/lib/store";
-import type { Organization, User, Space, Permission, PendingInvite, Page, ScreenshotBlock, Version, Comment, Feedback } from "@/lib/types";
+import type { Organization, User, Space, Permission, Page, ScreenshotBlock, Version, Comment, Feedback } from "@/lib/types";
 import {
   mockOrganizations,
   mockUsers,
   mockSpaces,
   mockPermissions,
-  mockPendingInvites,
   mockPages,
   mockScreenshotBlocks,
   mockVersions,
@@ -23,7 +22,6 @@ export const organizationsStore = createStore<Organization[]>(mockOrganizations)
 export const usersStore = createStore<User[]>(mockUsers);
 export const spacesStore = createStore<Space[]>(mockSpaces);
 export const permissionsStore = createStore<Permission[]>(mockPermissions);
-export const pendingInvitesStore = createStore<PendingInvite[]>(mockPendingInvites);
 export const pagesStore = createStore<Page[]>(mockPages);
 export const screenshotBlocksStore = createStore<Record<string, ScreenshotBlock>>(mockScreenshotBlocks);
 export const versionsStore = createStore<Version[]>(mockVersions);

@@ -34,7 +34,40 @@ export interface Organization {
   createdAt: ISODateString;
 }
 
-export type OrganizationRole = "owner" | "member";
+export type OrganizationRole = "owner" | "admin" | "member";
+
+// ---------------------------------------------------------------------------
+// OrganizationMembership / OrganizationInvitation — the source of truth for
+// User<->Organization access (org-refactor plan,
+// docs/organization-permission-structure.md). A User can belong to more than
+// one Organization; OWNER is unique per Organization at a time.
+// ---------------------------------------------------------------------------
+
+export interface OrganizationMembership {
+  id: ID;
+  organizationId: ID;
+  userId: ID;
+  role: OrganizationRole;
+  createdAt: ISODateString;
+}
+
+export type InvitationStatus = "pending" | "accepted" | "expired" | "revoked";
+
+/** role is deliberately narrower than OrganizationRole — 'owner' is never granted directly via invite. */
+export type InvitableOrganizationRole = "admin" | "member";
+
+export interface OrganizationInvitation {
+  id: ID;
+  organizationId: ID;
+  email: string;
+  role: InvitableOrganizationRole;
+  token: string;
+  invitedByUserId: ID;
+  status: InvitationStatus;
+  expiresAt: ISODateString;
+  acceptedAt: ISODateString | null;
+  createdAt: ISODateString;
+}
 
 // ---------------------------------------------------------------------------
 // User — backed by auth.users (Stage 2) + profiles fields
@@ -45,8 +78,8 @@ export interface User {
   email: string;
   name: string;
   avatarUrl: string | null;
-  organizationId: ID;
-  organizationRole: OrganizationRole;
+  /** Convenience "last active Organization" pointer for the UI only — NOT authoritative for access. See OrganizationMembership. */
+  organizationId: ID | null;
   createdAt: ISODateString;
 }
 
@@ -77,15 +110,6 @@ export interface Permission {
   spaceId: ID;
   userId: ID;
   role: SpaceRole;
-}
-
-export interface PendingInvite {
-  id: ID;
-  spaceId: ID;
-  email: string;
-  role: SpaceRole;
-  invitedByUserId: ID;
-  createdAt: ISODateString;
 }
 
 // ---------------------------------------------------------------------------

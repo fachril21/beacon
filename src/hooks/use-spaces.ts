@@ -1,16 +1,9 @@
 "use client";
 
 import { useSyncExternalStore, useCallback, useEffect } from "react";
-import { spacesStore, permissionsStore, pendingInvitesStore, pagesStore } from "@/lib/supabase/stores";
+import { spacesStore, permissionsStore, pagesStore } from "@/lib/supabase/stores";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import {
-  mapSpaceRow,
-  mapPermissionRow,
-  mapPendingInviteRow,
-  type SpaceRow,
-  type PermissionRow,
-  type PendingInviteRow,
-} from "@/lib/supabase/mappers";
+import { mapSpaceRow, mapPermissionRow, type SpaceRow, type PermissionRow } from "@/lib/supabase/mappers";
 import type { Space, SpaceRole } from "@/lib/types";
 
 export function useSpaces(organizationId?: string) {
@@ -125,10 +118,10 @@ export function useCreateSpace() {
 
 /**
  * Deletes a Space. Postgres cascades the delete to every Page in it (and, in
- * turn, each Page's screenshot_blocks/versions/comments/feedback), plus the
- * Space's own permissions/pending_invites rows — but the local stores have
- * no way to know that happened server-side, so this drops the same rows from
- * pagesStore/permissionsStore/pendingInvitesStore too.
+ * turn, each Page's screenshot_blocks/versions/comments/feedback) plus the
+ * Space's own permissions rows — but the local stores have no way to know
+ * that happened server-side, so this drops the same rows from
+ * pagesStore/permissionsStore too.
  */
 export function useDeleteSpace() {
   return useCallback(async (id: string) => {
@@ -139,7 +132,6 @@ export function useDeleteSpace() {
     spacesStore.setState((prev) => prev.filter((s) => s.id !== id));
     pagesStore.setState((prev) => prev.filter((p) => p.spaceId !== id));
     permissionsStore.setState((prev) => prev.filter((p) => p.spaceId !== id));
-    pendingInvitesStore.setState((prev) => prev.filter((i) => i.spaceId !== id));
   }, []);
 }
 
@@ -182,73 +174,31 @@ export function useUpdateSpaceRole() {
   }, []);
 }
 
-export function useSpacePendingInvites(spaceId: string | undefined) {
-  const invites = useSyncExternalStore(pendingInvitesStore.subscribe, pendingInvitesStore.getState, pendingInvitesStore.getState);
-
-  useEffect(() => {
-    if (!spaceId) return;
-    pendingInvitesStore.ensureLoaded(`space:${spaceId}`, async () => {
-      const supabase = getSupabaseBrowserClient();
-      const { data, error } = await supabase.from("pending_invites").select("*").eq("space_id", spaceId);
-      if (error) throw error;
-      return ((data ?? []) as PendingInviteRow[]).map(mapPendingInviteRow);
-    });
-  }, [spaceId]);
-
-  return spaceId ? invites.filter((i) => i.spaceId === spaceId) : [];
-}
-
-export type InviteToSpaceResult = { status: "added" } | { status: "invited"; emailSent: boolean };
-
 /**
- * Posts to /api/spaces/{id}/invite (route.ts) rather than calling the
- * invite_to_space RPC directly, because the "no Account yet" branch needs to
- * send a real notification email via auth.admin.inviteUserByEmail — a
- * service-role-only operation that must run server-side, never with the
- * anon key in the browser. That route still authorizes via the caller's own
- * session (invite_to_space's own space_role_at_least guard), it just also
- * has the privilege to send mail when the RPC alone can't.
+ * Grants an existing Organization member access to a Space. Space-level
+ * access is no longer its own independent invite path — bringing a brand
+ * new person into Beacon at all goes exclusively through an Organization
+ * invite first (useInviteToOrganization, use-organizations.ts); this just
+ * inserts a Permission row for someone already picked from the org roster.
+ * RLS (permissions_insert_admin_or_bootstrap + permissions_require_org_membership_trigger)
+ * enforces both "caller is a Space admin" and "target is an org member".
  */
-export function useInviteToSpace() {
-  return useCallback(async (spaceId: string, email: string, role: SpaceRole): Promise<InviteToSpaceResult> => {
-    const res = await fetch(`/api/spaces/${spaceId}/invite`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, role }),
-    });
-    const body = (await res.json()) as
-      | { status: "added"; permission: PermissionRow }
-      | { status: "invited"; invite: PendingInviteRow; emailSent: boolean }
-      | { error: string };
-    if (!res.ok || "error" in body) {
-      throw new Error("error" in body ? body.error : "Gagal mengirim undangan.");
-    }
-
-    if (body.status === "added") {
-      const permission = mapPermissionRow(body.permission);
-      permissionsStore.setState((prev) => {
-        const exists = prev.some((p) => p.spaceId === permission.spaceId && p.userId === permission.userId);
-        return exists ? prev.map((p) => (p.id === permission.id ? permission : p)) : [...prev, permission];
-      });
-      return { status: "added" };
-    }
-
-    pendingInvitesStore.setState((prev) => {
-      const invite = mapPendingInviteRow(body.invite);
-      const exists = prev.some((i) => i.id === invite.id);
-      return exists ? prev.map((i) => (i.id === invite.id ? invite : i)) : [...prev, invite];
-    });
-    return { status: "invited", emailSent: body.emailSent };
-  }, []);
-}
-
-export function useCancelInvite() {
-  return useCallback(async (inviteId: string) => {
+export function useAddOrgMemberToSpace() {
+  return useCallback(async (spaceId: string, userId: string, role: SpaceRole) => {
     const supabase = getSupabaseBrowserClient();
-    const { error } = await supabase.from("pending_invites").delete().eq("id", inviteId);
+    const { data, error } = await supabase
+      .from("permissions")
+      .insert({ space_id: spaceId, user_id: userId, role })
+      .select()
+      .single();
     if (error) throw error;
 
-    pendingInvitesStore.setState((prev) => prev.filter((i) => i.id !== inviteId));
+    const permission = mapPermissionRow(data as PermissionRow);
+    permissionsStore.setState((prev) => {
+      const exists = prev.some((p) => p.spaceId === permission.spaceId && p.userId === permission.userId);
+      return exists ? prev.map((p) => (p.id === permission.id ? permission : p)) : [...prev, permission];
+    });
+    return permission;
   }, []);
 }
 

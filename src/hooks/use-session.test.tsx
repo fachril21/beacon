@@ -64,7 +64,6 @@ describe("useSession", () => {
       name: "Ada",
       avatar_url: null,
       organization_id: "org-1",
-      organization_role: "member",
       created_at: "2026-01-01T00:00:00Z",
     });
 
@@ -77,7 +76,6 @@ describe("useSession", () => {
       name: "Ada",
       avatarUrl: null,
       organizationId: "org-1",
-      organizationRole: "member",
       createdAt: "2026-01-01T00:00:00Z",
     });
     expect(result.current.isAuthenticated).toBe(true);

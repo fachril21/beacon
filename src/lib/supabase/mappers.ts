@@ -6,10 +6,11 @@
  */
 import type {
   Organization,
+  OrganizationMembership,
+  OrganizationInvitation,
   User,
   Space,
   Permission,
-  PendingInvite,
   Page,
   PageContent,
   ScreenshotBlock,
@@ -47,8 +48,7 @@ export interface ProfileRow {
   email: string;
   name: string;
   avatar_url: string | null;
-  organization_id: string;
-  organization_role: string;
+  organization_id: string | null;
   created_at: string;
 }
 
@@ -59,7 +59,52 @@ export function mapProfileRow(row: ProfileRow): User {
     name: row.name,
     avatarUrl: row.avatar_url,
     organizationId: row.organization_id,
-    organizationRole: row.organization_role as User["organizationRole"],
+    createdAt: row.created_at,
+  };
+}
+
+export interface OrganizationMembershipRow {
+  id: string;
+  organization_id: string;
+  user_id: string;
+  role: string;
+  created_at: string;
+}
+
+export function mapOrganizationMembershipRow(row: OrganizationMembershipRow): OrganizationMembership {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    userId: row.user_id,
+    role: row.role as OrganizationMembership["role"],
+    createdAt: row.created_at,
+  };
+}
+
+export interface OrganizationInvitationRow {
+  id: string;
+  organization_id: string;
+  email: string;
+  role: string;
+  token: string;
+  invited_by_user_id: string;
+  status: string;
+  expires_at: string;
+  accepted_at: string | null;
+  created_at: string;
+}
+
+export function mapOrganizationInvitationRow(row: OrganizationInvitationRow): OrganizationInvitation {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    email: row.email,
+    role: row.role as OrganizationInvitation["role"],
+    token: row.token,
+    invitedByUserId: row.invited_by_user_id,
+    status: row.status as OrganizationInvitation["status"],
+    expiresAt: row.expires_at,
+    acceptedAt: row.accepted_at,
     createdAt: row.created_at,
   };
 }
@@ -99,26 +144,6 @@ export function mapPermissionRow(row: PermissionRow): Permission {
     spaceId: row.space_id,
     userId: row.user_id,
     role: row.role as Permission["role"],
-  };
-}
-
-export interface PendingInviteRow {
-  id: string;
-  space_id: string;
-  email: string;
-  role: string;
-  invited_by_user_id: string;
-  created_at: string;
-}
-
-export function mapPendingInviteRow(row: PendingInviteRow): PendingInvite {
-  return {
-    id: row.id,
-    spaceId: row.space_id,
-    email: row.email,
-    role: row.role as PendingInvite["role"],
-    invitedByUserId: row.invited_by_user_id,
-    createdAt: row.created_at,
   };
 }
 

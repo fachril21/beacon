@@ -20,7 +20,7 @@ export function NewSpaceDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   const [isCreating, setIsCreating] = useState(false);
 
   async function handleCreate() {
-    if (!user || !name.trim()) return;
+    if (!user || !user.organizationId || !name.trim()) return;
     setIsCreating(true);
     try {
       const space = await createSpace({

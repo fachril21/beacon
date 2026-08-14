@@ -1,4 +1,4 @@
-import type { Space, Permission, PendingInvite } from "@/lib/types";
+import type { Space, Permission } from "@/lib/types";
 
 export const mockSpaces: Space[] = [
   {
@@ -48,15 +48,4 @@ export const mockPermissions: Permission[] = [
   { id: "perm-6", spaceId: "space-onboarding", userId: "user-fachril", role: "admin" },
   { id: "perm-7", spaceId: "space-lms", userId: "user-maya", role: "admin" },
   { id: "perm-8", spaceId: "space-lms", userId: "user-andi", role: "editor" },
-];
-
-export const mockPendingInvites: PendingInvite[] = [
-  {
-    id: "invite-1",
-    spaceId: "space-mobile-app",
-    email: "dedi@dibimbing.id",
-    role: "editor",
-    invitedByUserId: "user-fachril",
-    createdAt: "2026-08-01T03:00:00.000Z",
-  },
 ];

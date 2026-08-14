@@ -1,19 +1,18 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { spacesStore, permissionsStore, pendingInvitesStore, pagesStore } from "@/lib/supabase/stores";
+import { spacesStore, permissionsStore, pagesStore } from "@/lib/supabase/stores";
 import { emptyDoc } from "@/lib/mock/blocknote-content";
 
 const mockSupabase = { from: vi.fn() };
 vi.mock("@/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => mockSupabase }));
 
-const { useCreateSpace, useUpdateSpaceRole, useInviteToSpace, useCancelInvite, useDeleteSpace } = await import("./use-spaces");
+const { useCreateSpace, useUpdateSpaceRole, useAddOrgMemberToSpace, useDeleteSpace } = await import("./use-spaces");
 
 function resetStores() {
   spacesStore.setState([]);
   spacesStore.invalidate("all");
   permissionsStore.setState([]);
   permissionsStore.invalidate("all");
-  pendingInvitesStore.setState([]);
   pagesStore.setState([]);
 }
 
@@ -130,134 +129,40 @@ describe("useUpdateSpaceRole", () => {
   });
 });
 
-describe("useInviteToSpace", () => {
+describe("useAddOrgMemberToSpace", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetStores();
   });
 
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it("calls the server route (not the RPC directly), since sending the invite email needs the service-role key", async () => {
+  it("grants an existing Organization member Space access via a plain permissions insert (no email path)", async () => {
     const permissionRow = { id: "perm-9", space_id: "space-1", user_id: "user-9", role: "editor" };
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ status: "added", permission: permissionRow }),
-    });
-    vi.stubGlobal("fetch", fetchMock);
+    const insert = vi.fn(() => ({ select: () => ({ single: () => Promise.resolve({ data: permissionRow, error: null }) }) }));
+    mockSupabase.from.mockReturnValue({ insert });
 
-    const { result } = renderHook(() => useInviteToSpace());
+    const { result } = renderHook(() => useAddOrgMemberToSpace());
     let outcome: unknown;
     await act(async () => {
-      outcome = await result.current("space-1", "existing@dibimbing.id", "editor");
+      outcome = await result.current("space-1", "user-9", "editor");
     });
 
-    expect(fetchMock).toHaveBeenCalledWith("/api/spaces/space-1/invite", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: "existing@dibimbing.id", role: "editor" }),
-    });
-    expect(outcome).toEqual({ status: "added" });
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({ space_id: "space-1", user_id: "user-9", role: "editor" }),
+    );
+    expect(outcome).toMatchObject({ id: "perm-9", spaceId: "space-1", userId: "user-9", role: "editor" });
     expect(permissionsStore.getState()).toEqual([
       expect.objectContaining({ id: "perm-9", spaceId: "space-1", userId: "user-9", role: "editor" }),
     ]);
-    expect(pendingInvitesStore.getState()).toEqual([]);
   });
 
-  it("creates a pending_invites row and reports whether the invite email actually sent (status: invited)", async () => {
-    const inviteRow = {
-      id: "invite-1",
-      space_id: "space-1",
-      email: "new@dibimbing.id",
-      role: "viewer",
-      invited_by_user_id: "user-1",
-      created_at: "2026-01-01T00:00:00Z",
-    };
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ status: "invited", invite: inviteRow, emailSent: true }),
-    });
-    vi.stubGlobal("fetch", fetchMock);
+  it("throws the DB's NOT_ORGANIZATION_MEMBER error without touching the store when the target isn't an org member", async () => {
+    const dbError = { message: "NOT_ORGANIZATION_MEMBER: user is not a member of this Space's Organization" };
+    const insert = vi.fn(() => ({ select: () => ({ single: () => Promise.resolve({ data: null, error: dbError }) }) }));
+    mockSupabase.from.mockReturnValue({ insert });
 
-    const { result } = renderHook(() => useInviteToSpace());
-    let outcome: unknown;
-    await act(async () => {
-      outcome = await result.current("space-1", "new@dibimbing.id", "viewer");
-    });
-
-    expect(outcome).toEqual({ status: "invited", emailSent: true });
-    expect(pendingInvitesStore.getState()).toEqual([
-      expect.objectContaining({ id: "invite-1", email: "new@dibimbing.id", role: "viewer" }),
-    ]);
+    const { result } = renderHook(() => useAddOrgMemberToSpace());
+    await expect(result.current("space-1", "user-9", "editor")).rejects.toEqual(dbError);
     expect(permissionsStore.getState()).toEqual([]);
-  });
-
-  it("still patches the store when the invite was recorded but the notification email failed to send", async () => {
-    const inviteRow = {
-      id: "invite-2",
-      space_id: "space-1",
-      email: "unreachable@dibimbing.id",
-      role: "viewer",
-      invited_by_user_id: "user-1",
-      created_at: "2026-01-01T00:00:00Z",
-    };
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ status: "invited", invite: inviteRow, emailSent: false }),
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const { result } = renderHook(() => useInviteToSpace());
-    let outcome: unknown;
-    await act(async () => {
-      outcome = await result.current("space-1", "unreachable@dibimbing.id", "viewer");
-    });
-
-    expect(outcome).toEqual({ status: "invited", emailSent: false });
-    expect(pendingInvitesStore.getState()).toEqual([expect.objectContaining({ id: "invite-2" })]);
-  });
-
-  it("throws without touching either store when the invited email belongs to a different Organization", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: false,
-      json: () => Promise.resolve({ error: "EMAIL_BELONGS_TO_ANOTHER_ORGANIZATION" }),
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const { result } = renderHook(() => useInviteToSpace());
-    await expect(result.current("space-1", "other-org@cakrawala.ac.id", "viewer")).rejects.toThrow(
-      "EMAIL_BELONGS_TO_ANOTHER_ORGANIZATION",
-    );
-
-    expect(permissionsStore.getState()).toEqual([]);
-    expect(pendingInvitesStore.getState()).toEqual([]);
-  });
-});
-
-describe("useCancelInvite", () => {
-  const mockDeleteEq = vi.fn();
-  beforeEach(() => {
-    vi.clearAllMocks();
-    resetStores();
-    mockDeleteEq.mockResolvedValue({ error: null });
-    mockSupabase.from.mockReturnValue({ delete: () => ({ eq: mockDeleteEq }) });
-  });
-
-  it("deletes the pending_invites row and removes it from the local store", async () => {
-    pendingInvitesStore.setState([
-      { id: "invite-1", spaceId: "space-1", email: "a@dibimbing.id", role: "viewer", invitedByUserId: "user-1", createdAt: "t" },
-      { id: "invite-2", spaceId: "space-1", email: "b@dibimbing.id", role: "viewer", invitedByUserId: "user-1", createdAt: "t" },
-    ]);
-
-    const { result } = renderHook(() => useCancelInvite());
-    await act(async () => {
-      await result.current("invite-1");
-    });
-
-    expect(mockDeleteEq).toHaveBeenCalledWith("id", "invite-1");
-    expect(pendingInvitesStore.getState().map((i) => i.id)).toEqual(["invite-2"]);
   });
 });
 
@@ -316,10 +221,6 @@ describe("useDeleteSpace", () => {
       { id: "perm-1", spaceId: "space-1", userId: "user-1", role: "admin" },
       { id: "perm-2", spaceId: "space-2", userId: "user-1", role: "admin" },
     ]);
-    pendingInvitesStore.setState([
-      { id: "invite-1", spaceId: "space-1", email: "a@dibimbing.id", role: "viewer", invitedByUserId: "user-1", createdAt: "t" },
-      { id: "invite-2", spaceId: "space-2", email: "b@dibimbing.id", role: "viewer", invitedByUserId: "user-1", createdAt: "t" },
-    ]);
 
     const eqMock = vi.fn(() => Promise.resolve({ error: null }));
     const deleteMock = vi.fn(() => ({ eq: eqMock }));
@@ -335,7 +236,6 @@ describe("useDeleteSpace", () => {
     expect(spacesStore.getState().map((s) => s.id)).toEqual(["space-2"]);
     expect(pagesStore.getState().map((p) => p.id)).toEqual(["page-2"]);
     expect(permissionsStore.getState().map((p) => p.id)).toEqual(["perm-2"]);
-    expect(pendingInvitesStore.getState().map((i) => i.id)).toEqual(["invite-2"]);
   });
 
   it("throws when Supabase returns an error, without touching the local store", async () => {
