@@ -198,16 +198,51 @@ export function useSpacePendingInvites(spaceId: string | undefined) {
   return spaceId ? invites.filter((i) => i.spaceId === spaceId) : [];
 }
 
+export type InviteToSpaceResult = { status: "added" } | { status: "invited" };
+
+/**
+ * A single RPC (invite_to_space, 20260814000000_invite_to_space_rpc.sql)
+ * branches server-side: an email that already has a same-Organization
+ * Account is granted the Permission immediately (status: "added"); an
+ * unknown email falls back to a pending_invites row, resolved later by
+ * handle_new_user on signup (status: "invited"); a different-Organization
+ * Account is rejected — it could never resolve, since profiles.organization_id
+ * is permanent. invitedByUserId is no longer a parameter: the RPC reads
+ * auth.uid() itself, since it runs SECURITY DEFINER precisely so it can see
+ * profiles across every Organization (needed to detect the cross-org case).
+ */
 export function useInviteToSpace() {
-  return useCallback(async (spaceId: string, email: string, role: SpaceRole, invitedByUserId: string) => {
+  return useCallback(async (spaceId: string, email: string, role: SpaceRole): Promise<InviteToSpaceResult> => {
     const supabase = getSupabaseBrowserClient();
-    const { data, error } = await supabase
-      .from("pending_invites")
-      .insert({ space_id: spaceId, email, role, invited_by_user_id: invitedByUserId })
-      .select()
-      .single();
+    const { data, error } = await supabase.rpc("invite_to_space", { p_space_id: spaceId, p_email: email, p_role: role });
     if (error) throw error;
 
-    pendingInvitesStore.setState((prev) => [...prev, mapPendingInviteRow(data as PendingInviteRow)]);
+    const result = data as { status: "added"; permission: PermissionRow } | { status: "invited"; invite: PendingInviteRow };
+
+    if (result.status === "added") {
+      const permission = mapPermissionRow(result.permission);
+      permissionsStore.setState((prev) => {
+        const exists = prev.some((p) => p.spaceId === permission.spaceId && p.userId === permission.userId);
+        return exists ? prev.map((p) => (p.id === permission.id ? permission : p)) : [...prev, permission];
+      });
+      return { status: "added" };
+    }
+
+    pendingInvitesStore.setState((prev) => {
+      const invite = mapPendingInviteRow(result.invite);
+      const exists = prev.some((i) => i.id === invite.id);
+      return exists ? prev.map((i) => (i.id === invite.id ? invite : i)) : [...prev, invite];
+    });
+    return { status: "invited" };
+  }, []);
+}
+
+export function useCancelInvite() {
+  return useCallback(async (inviteId: string) => {
+    const supabase = getSupabaseBrowserClient();
+    const { error } = await supabase.from("pending_invites").delete().eq("id", inviteId);
+    if (error) throw error;
+
+    pendingInvitesStore.setState((prev) => prev.filter((i) => i.id !== inviteId));
   }, []);
 }

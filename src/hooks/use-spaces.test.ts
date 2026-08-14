@@ -145,7 +145,7 @@ describe("useInviteToSpace", () => {
     const { result } = renderHook(() => useInviteToSpace());
     let outcome: unknown;
     await act(async () => {
-      outcome = await result.current("space-1", "existing@dibimbing.id", "editor", "user-1");
+      outcome = await result.current("space-1", "existing@dibimbing.id", "editor");
     });
 
     expect(mockRpc).toHaveBeenCalledWith("invite_to_space", {
@@ -174,7 +174,7 @@ describe("useInviteToSpace", () => {
     const { result } = renderHook(() => useInviteToSpace());
     let outcome: unknown;
     await act(async () => {
-      outcome = await result.current("space-1", "new@dibimbing.id", "viewer", "user-1");
+      outcome = await result.current("space-1", "new@dibimbing.id", "viewer");
     });
 
     expect(outcome).toEqual({ status: "invited" });
@@ -191,7 +191,7 @@ describe("useInviteToSpace", () => {
     });
 
     const { result } = renderHook(() => useInviteToSpace());
-    await expect(result.current("space-1", "other-org@cakrawala.ac.id", "viewer", "user-1")).rejects.toThrow(
+    await expect(result.current("space-1", "other-org@cakrawala.ac.id", "viewer")).rejects.toThrow(
       "EMAIL_BELONGS_TO_ANOTHER_ORGANIZATION",
     );
 
