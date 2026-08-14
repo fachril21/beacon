@@ -27,9 +27,13 @@ insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-000000000001', 'owner@dibimbing.test'),
   ('00000000-0000-0000-0000-000000000002', 'viewer@dibimbing.test');
 
-insert into public.profiles (id, email, name, organization_id, organization_role) values
-  ('00000000-0000-0000-0000-000000000001', 'owner@dibimbing.test', 'Org Owner', '00000000-0000-0000-0000-00000000000a', 'owner'),
-  ('00000000-0000-0000-0000-000000000002', 'viewer@dibimbing.test', 'Space Viewer', '00000000-0000-0000-0000-00000000000a', 'member');
+insert into public.profiles (id, email, name, organization_id) values
+  ('00000000-0000-0000-0000-000000000001', 'owner@dibimbing.test', 'Org Owner', '00000000-0000-0000-0000-00000000000a'),
+  ('00000000-0000-0000-0000-000000000002', 'viewer@dibimbing.test', 'Space Viewer', '00000000-0000-0000-0000-00000000000a');
+
+insert into public.organization_memberships (organization_id, user_id, role) values
+  ('00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-000000000001', 'owner'),
+  ('00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-000000000002', 'member');
 
 insert into public.spaces (id, organization_id, name, is_publishable, created_by_user_id) values
   ('00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-00000000000a', 'Mobile App', false, '00000000-0000-0000-0000-000000000001');

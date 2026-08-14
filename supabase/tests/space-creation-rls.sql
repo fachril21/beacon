@@ -29,7 +29,15 @@ begin;
 
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token, email_change_token_new, email_change)
 values ('a0000000-0000-0000-0000-00000000000a','00000000-0000-0000-0000-000000000000','authenticated','authenticated','creator-a@example.com', crypt('x', gen_salt('bf')), now(), '{}', '{}', now(), now(), '', '', '', '');
-select organization_id as org_id from public.profiles where id = 'a0000000-0000-0000-0000-00000000000a' \gset
+
+-- Signup no longer auto-assigns an Organization (org membership is
+-- deliberate, via accept_organization_invite or self-serve creation — see
+-- 20260815000100_organization_membership_gate.sql's handle_new_user
+-- rewrite) — set up creator A's own Organization + membership explicitly,
+-- the same as the real useCreateOrganization flow would.
+insert into public.organizations (id, name) values ('90000000-0000-0000-0000-000000000009', 'Creator A Org') returning id as org_id \gset
+insert into public.organization_memberships (organization_id, user_id, role)
+values (:'org_id', 'a0000000-0000-0000-0000-00000000000a', 'owner');
 
 select set_config('request.jwt.claims', json_build_object('sub', 'a0000000-0000-0000-0000-00000000000a', 'role', 'authenticated')::text, true);
 set local role authenticated;
@@ -89,7 +97,10 @@ begin;
 
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token, email_change_token_new, email_change)
 values ('a0000000-0000-0000-0000-00000000000a','00000000-0000-0000-0000-000000000000','authenticated','authenticated','creator-a2@example.com', crypt('x', gen_salt('bf')), now(), '{}', '{}', now(), now(), '', '', '', '');
-select organization_id as org_id from public.profiles where id = 'a0000000-0000-0000-0000-00000000000a' \gset
+
+insert into public.organizations (id, name) values ('90000000-0000-0000-0000-000000000009', 'Creator A2 Org') returning id as org_id \gset
+insert into public.organization_memberships (organization_id, user_id, role)
+values (:'org_id', 'a0000000-0000-0000-0000-00000000000a', 'owner');
 
 select set_config('request.jwt.claims', json_build_object('sub', 'a0000000-0000-0000-0000-00000000000a', 'role', 'authenticated')::text, true);
 set local role authenticated;

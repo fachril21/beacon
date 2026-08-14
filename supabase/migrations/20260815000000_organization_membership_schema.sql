@@ -76,10 +76,25 @@ comment on table public.organization_invitations is
   'Org-level email invitations (PENDING/ACCEPTED/EXPIRED/REVOKED). Supersedes Space-level pending_invites.';
 
 -- ---------------------------------------------------------------------------
+-- Backfill — every existing profiles row becomes an organization_memberships
+-- row for its (former) single Organization, preserving 'owner'/'member' as
+-- the initial per-org role. Must run in THIS migration, before the
+-- organization_role column below is dropped — there is no later point at
+-- which this data could still be read.
+-- ---------------------------------------------------------------------------
+
+insert into public.organization_memberships (organization_id, user_id, role)
+select organization_id, id, organization_role
+from public.profiles
+where organization_id is not null
+on conflict (organization_id, user_id) do nothing;
+
+-- ---------------------------------------------------------------------------
 -- profiles — organization_id/organization_role are no longer 1:1-authoritative.
 -- Dropping NOT NULL lets a brand-new signup exist with zero Organizations
 -- until they create or join one; organization_role is dropped outright since
--- role is now per-membership, not a single global value.
+-- role is now per-membership, not a single global value (the backfill above
+-- is its last reader).
 -- ---------------------------------------------------------------------------
 
 alter table public.profiles alter column organization_id drop not null;
