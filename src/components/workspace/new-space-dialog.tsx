@@ -10,21 +10,23 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useSession } from "@/hooks/use-session";
 import { useCreateSpace } from "@/hooks/use-spaces";
+import { useCurrentOrganization } from "@/hooks/use-organizations";
 
 export function NewSpaceDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const router = useRouter();
   const { user } = useSession();
+  const currentOrganization = useCurrentOrganization();
   const createSpace = useCreateSpace();
   const [name, setName] = useState("");
   const [isPublishable, setIsPublishable] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
   async function handleCreate() {
-    if (!user || !user.organizationId || !name.trim()) return;
+    if (!user || !currentOrganization || !name.trim()) return;
     setIsCreating(true);
     try {
       const space = await createSpace({
-        organizationId: user.organizationId,
+        organizationId: currentOrganization.id,
         name: name.trim(),
         isPublishable,
         createdByUserId: user.id,

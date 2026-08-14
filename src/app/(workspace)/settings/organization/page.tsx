@@ -12,9 +12,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { NotFoundState } from "@/components/beacon/not-found-state";
 import { DeleteConfirmDialog } from "@/components/workspace/delete-confirm-dialog";
+import { useRouter } from "next/navigation";
 import { useSession } from "@/hooks/use-session";
 import {
   useCurrentOrganization,
+  useMyOrganizations,
   useOrganizationDomainActions,
   useOrganizationRole,
   useOrganizationMembers,
@@ -23,7 +25,10 @@ import {
   useRevokeInvitation,
   useRemoveOrgMember,
   useTransferOwnership,
+  useUpdateOrganizationName,
+  useDeleteOrganization,
 } from "@/hooks/use-organizations";
+import { useSpaces } from "@/hooks/use-spaces";
 import { useUsers } from "@/hooks/use-users";
 import type { InvitableOrganizationRole, OrganizationRole } from "@/lib/types";
 
@@ -49,12 +54,16 @@ export default function OrganizationSettingsPage() {
           <TabsList>
             <TabsTrigger value="members">Members</TabsTrigger>
             <TabsTrigger value="domain">Domain</TabsTrigger>
+            <TabsTrigger value="general">General</TabsTrigger>
           </TabsList>
           <TabsContent value="members" className="mt-6">
             <MembersTab organizationId={organization.id} currentUserId={user.id} currentUserRole={role} />
           </TabsContent>
           <TabsContent value="domain" className="mt-6">
             <DomainTab organizationId={organization.id} isOwner={role === "owner"} />
+          </TabsContent>
+          <TabsContent value="general" className="mt-6">
+            <GeneralTab organizationId={organization.id} organizationName={organization.name} isOwner={role === "owner"} />
           </TabsContent>
         </Tabs>
       </div>
@@ -242,6 +251,107 @@ function MembersTab({
         confirmLabel="Hapus Anggota"
         isDeleting={isRemoving}
         onConfirm={() => void handleRemoveMember()}
+      />
+    </div>
+  );
+}
+
+function GeneralTab({
+  organizationId,
+  organizationName,
+  isOwner,
+}: {
+  organizationId: string;
+  organizationName: string;
+  isOwner: boolean;
+}) {
+  const router = useRouter();
+  const myOrganizations = useMyOrganizations();
+  const members = useOrganizationMembers(organizationId);
+  const spaces = useSpaces(organizationId);
+  const updateOrganizationName = useUpdateOrganizationName();
+  const deleteOrganization = useDeleteOrganization();
+  const [nameInput, setNameInput] = useState(organizationName);
+  const [isSavingName, setIsSavingName] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  async function handleSaveName() {
+    if (!nameInput.trim() || nameInput.trim() === organizationName) return;
+    setIsSavingName(true);
+    try {
+      await updateOrganizationName(organizationId, nameInput.trim());
+      toast.success("Nama Organisasi diperbarui.");
+    } catch {
+      toast.error("Tidak dapat memperbarui nama, silakan coba lagi.");
+      setNameInput(organizationName);
+    } finally {
+      setIsSavingName(false);
+    }
+  }
+
+  async function handleDelete() {
+    setIsDeleting(true);
+    try {
+      await deleteOrganization(organizationId);
+      toast("Organisasi telah dihapus.");
+      setIsDeleteOpen(false);
+      router.push("/");
+    } catch {
+      toast.error("Tidak dapat menghapus Organisasi, silakan coba lagi.");
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <Card className="p-6">
+        <Label htmlFor="org-name-input">Nama Organisasi</Label>
+        <div className="mt-2 flex gap-2">
+          <Input
+            id="org-name-input"
+            value={nameInput}
+            onChange={(e) => setNameInput(e.target.value)}
+            disabled={!isOwner}
+          />
+          {isOwner && (
+            <Button
+              onClick={() => void handleSaveName()}
+              disabled={isSavingName || !nameInput.trim() || nameInput.trim() === organizationName}
+            >
+              {isSavingName ? "Menyimpan…" : "Simpan"}
+            </Button>
+          )}
+        </div>
+        {!isOwner && <p className="mt-2 text-caption text-muted-foreground">Hanya Owner yang dapat mengubah nama Organisasi.</p>}
+      </Card>
+
+      {isOwner && (
+        <Card className="border-destructive/40 p-6">
+          <p className="text-body-sm font-medium text-foreground">Zona Berbahaya</p>
+          <p className="mt-1 text-caption text-muted-foreground">
+            Menghapus Organisasi ini akan menghapus permanen {spaces.length} Space dan mencabut akses{" "}
+            {members.length} anggota. Tindakan ini tidak dapat dibatalkan.
+          </p>
+          <Button variant="destructive" className="mt-4" onClick={() => setIsDeleteOpen(true)}>
+            Hapus Organisasi
+          </Button>
+        </Card>
+      )}
+
+      <DeleteConfirmDialog
+        open={isDeleteOpen}
+        onOpenChange={setIsDeleteOpen}
+        title={`Hapus "${organizationName}"?`}
+        description={`${spaces.length} Space dan akses ${members.length} anggota akan dihapus permanen. ${
+          myOrganizations.length > 1
+            ? "Anda akan dialihkan ke Organisasi lain."
+            : "Anda akan diminta membuat Organisasi baru setelah ini."
+        }`}
+        confirmLabel="Hapus Organisasi"
+        isDeleting={isDeleting}
+        onConfirm={() => void handleDelete()}
       />
     </div>
   );

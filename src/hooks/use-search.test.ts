@@ -53,6 +53,32 @@ describe("useInternalSearch", () => {
     });
     expect(result.current[0].snippet).toContain("Google");
   });
+
+  it("scopes results to the given Organization when one is passed, excluding Pages from other Organizations the caller also belongs to", async () => {
+    const rows = [
+      { ...pageRow({ id: "page-1" }), spaces: { name: "Mobile App", organization_id: "org-1" } },
+      { ...pageRow({ id: "page-2", space_id: "space-2" }), spaces: { name: "Other Org Space", organization_id: "org-2" } },
+    ];
+    const textSearch = vi.fn(() => Promise.resolve({ data: rows, error: null }));
+    mockSupabase.from.mockReturnValue({ select: () => ({ textSearch }) });
+
+    const { result } = renderHook(() => useInternalSearch("google", "user-1", "org-1"));
+    await waitFor(() => expect(result.current).toHaveLength(1));
+
+    expect(result.current[0].pageId).toBe("page-1");
+  });
+
+  it("returns every accessible result when no Organization is passed (backward compatible)", async () => {
+    const rows = [
+      { ...pageRow({ id: "page-1" }), spaces: { name: "Mobile App", organization_id: "org-1" } },
+      { ...pageRow({ id: "page-2", space_id: "space-2" }), spaces: { name: "Other Org Space", organization_id: "org-2" } },
+    ];
+    const textSearch = vi.fn(() => Promise.resolve({ data: rows, error: null }));
+    mockSupabase.from.mockReturnValue({ select: () => ({ textSearch }) });
+
+    const { result } = renderHook(() => useInternalSearch("google", "user-1"));
+    await waitFor(() => expect(result.current).toHaveLength(2));
+  });
 });
 
 describe("usePublicSearch", () => {

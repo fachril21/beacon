@@ -59,6 +59,22 @@ export function useUserSpaces(userId: string | undefined) {
   return spaces.filter((s) => accessibleIds.has(s.id));
 }
 
+/**
+ * useUserSpaces narrowed to one Organization — the single place every
+ * Space-listing surface (sidebar, workspace home, ...) should read from,
+ * instead of each one re-deriving its own `.filter((s) => s.organizationId
+ * === activeOrgId)` inline. A user's Permission rows span every
+ * Organization they belong to (Space access no longer implies "current"
+ * Organization); this is what actually scopes a list down to what the
+ * workspace switcher currently has active. organizationId is typically
+ * `useCurrentOrganization()?.id`; omit it to see every accessible Space
+ * across every Organization (backward compatible with useUserSpaces alone).
+ */
+export function useOrganizationSpaces(userId: string | undefined, organizationId: string | undefined) {
+  const spaces = useUserSpaces(userId);
+  return organizationId ? spaces.filter((s) => s.organizationId === organizationId) : spaces;
+}
+
 export interface CreateSpaceInput {
   organizationId: string;
   name: string;

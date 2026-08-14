@@ -28,6 +28,10 @@ const {
   useRemoveOrgMember,
   useTransferOwnership,
   useAcceptOrganizationInvite,
+  useUpdateOrganizationName,
+  useDeleteOrganization,
+  useActiveOrganizationId,
+  useSetActiveOrganization,
 } = await import("./use-organizations");
 
 function resetStore() {
@@ -471,5 +475,107 @@ describe("useRemoveOrgMember / useTransferOwnership / useAcceptOrganizationInvit
 
     expect(mockSupabase.rpc).toHaveBeenCalledWith("accept_organization_invite", { p_token: "some-token" });
     expect(outcome).toMatchObject({ status: "accepted" });
+  });
+});
+
+describe("useUpdateOrganizationName", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetOrgStores();
+  });
+
+  it("updates the row and patches the store on success", async () => {
+    organizationsStore.setState([
+      { id: "org-1", name: "Old Name", slug: "old-name", domain: null, isDomainVerified: false, pendingDnsToken: null, createdAt: "t" },
+    ]);
+    const eqMock = vi.fn(() => Promise.resolve({ error: null }));
+    mockSupabase.from.mockReturnValue({ update: () => ({ eq: eqMock }) });
+
+    const { result } = renderHook(() => useUpdateOrganizationName());
+    await act(async () => {
+      await result.current("org-1", "New Name");
+    });
+
+    expect(eqMock).toHaveBeenCalledWith("id", "org-1");
+    expect(organizationsStore.getState()[0].name).toBe("New Name");
+  });
+
+  it("throws without touching the store when Supabase returns an error", async () => {
+    organizationsStore.setState([
+      { id: "org-1", name: "Old Name", slug: "old-name", domain: null, isDomainVerified: false, pendingDnsToken: null, createdAt: "t" },
+    ]);
+    mockSupabase.from.mockReturnValue({ update: () => ({ eq: () => Promise.resolve({ error: { message: "permission denied" } }) }) });
+
+    const { result } = renderHook(() => useUpdateOrganizationName());
+    await expect(result.current("org-1", "New Name")).rejects.toEqual({ message: "permission denied" });
+    expect(organizationsStore.getState()[0].name).toBe("Old Name");
+  });
+});
+
+describe("useDeleteOrganization", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetOrgStores();
+  });
+
+  it("deletes the row and drops every cascaded row from local stores", async () => {
+    organizationsStore.setState([
+      { id: "org-1", name: "Org", slug: "org", domain: null, isDomainVerified: false, pendingDnsToken: null, createdAt: "t" },
+    ]);
+    organizationMembershipsStore.setState([{ id: "mem-1", organizationId: "org-1", userId: "user-1", role: "owner", createdAt: "t" }]);
+    organizationInvitationsStore.setState([
+      { id: "invite-1", organizationId: "org-1", email: "a@example.com", role: "member", token: "t1", invitedByUserId: "user-1", status: "pending", expiresAt: "t2", acceptedAt: null, createdAt: "t" },
+    ]);
+
+    const eqMock = vi.fn(() => Promise.resolve({ error: null }));
+    mockSupabase.from.mockReturnValue({ delete: () => ({ eq: eqMock }) });
+
+    const { result } = renderHook(() => useDeleteOrganization());
+    await act(async () => {
+      await result.current("org-1");
+    });
+
+    expect(eqMock).toHaveBeenCalledWith("id", "org-1");
+    expect(organizationsStore.getState()).toEqual([]);
+    expect(organizationMembershipsStore.getState()).toEqual([]);
+    expect(organizationInvitationsStore.getState()).toEqual([]);
+  });
+
+  it("throws without touching the store when Supabase returns an error", async () => {
+    organizationsStore.setState([
+      { id: "org-1", name: "Org", slug: "org", domain: null, isDomainVerified: false, pendingDnsToken: null, createdAt: "t" },
+    ]);
+    mockSupabase.from.mockReturnValue({ delete: () => ({ eq: () => Promise.resolve({ error: { message: "permission denied" } }) }) });
+
+    const { result } = renderHook(() => useDeleteOrganization());
+    await expect(result.current("org-1")).rejects.toEqual({ message: "permission denied" });
+    expect(organizationsStore.getState()).toEqual([expect.objectContaining({ id: "org-1" })]);
+  });
+});
+
+describe("useActiveOrganizationId / useSetActiveOrganization", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetOrgStores();
+    localStorage.clear();
+  });
+
+  it("returns null when nothing has been set for this user", () => {
+    const { result } = renderHook(() => useActiveOrganizationId("user-1"));
+    expect(result.current).toBeNull();
+  });
+
+  it("useSetActiveOrganization persists per-user and useActiveOrganizationId reads it back", () => {
+    const { result: setter } = renderHook(() => useSetActiveOrganization());
+    act(() => {
+      setter.current("user-1", "org-2");
+    });
+
+    const { result: getterForUser1 } = renderHook(() => useActiveOrganizationId("user-1"));
+    expect(getterForUser1.current).toBe("org-2");
+
+    // Scoped per user — a different user id on the same browser sees nothing.
+    const { result: getterForUser2 } = renderHook(() => useActiveOrganizationId("user-2"));
+    expect(getterForUser2.current).toBeNull();
   });
 });

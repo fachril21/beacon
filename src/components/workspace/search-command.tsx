@@ -5,14 +5,16 @@ import { useRouter } from "next/navigation";
 import { CommandDialog, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { SearchX } from "lucide-react";
 import { useSession } from "@/hooks/use-session";
+import { useCurrentOrganization } from "@/hooks/use-organizations";
 import { useInternalSearch } from "@/hooks/use-search";
 import { SearchResultRow } from "@/components/beacon/search-result-row";
 
 export function SearchCommand({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const router = useRouter();
   const { user } = useSession();
+  const currentOrganization = useCurrentOrganization();
   const [query, setQuery] = useState("");
-  const results = useInternalSearch(query, user?.id);
+  const results = useInternalSearch(query, user?.id, currentOrganization?.id);
 
   function handleOpenChange(next: boolean) {
     if (!next) setQuery("");

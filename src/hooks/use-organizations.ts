@@ -1,7 +1,14 @@
 "use client";
 
 import { useSyncExternalStore, useCallback, useEffect } from "react";
-import { organizationsStore, organizationMembershipsStore, organizationInvitationsStore } from "@/lib/supabase/stores";
+import {
+  organizationsStore,
+  organizationMembershipsStore,
+  organizationInvitationsStore,
+  spacesStore,
+  pagesStore,
+  permissionsStore,
+} from "@/lib/supabase/stores";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   mapOrganizationRow,
@@ -75,8 +82,9 @@ export function useMyOrganizations() {
 export function useCurrentOrganization() {
   const { user } = useSession();
   const myOrgs = useMyOrganizations();
+  const activeOrgId = useActiveOrganizationId(user?.id);
   if (!user) return undefined;
-  return myOrgs.find((o) => o.id === user.organizationId) ?? myOrgs[0];
+  return myOrgs.find((o) => o.id === activeOrgId) ?? myOrgs.find((o) => o.id === user.organizationId) ?? myOrgs[0];
 }
 
 /** The current user's role in a given Organization, or null with no membership row. */
@@ -346,4 +354,84 @@ export function useOrganizationDomainActions(organizationId: string) {
   }, [organizationId]);
 
   return { addDomain, verifyDomain, removeDomain };
+}
+
+/** Renames an Organization (OWNER-only — organizations_update_owner_only). */
+export function useUpdateOrganizationName() {
+  return useCallback(async (organizationId: string, name: string) => {
+    const supabase = getSupabaseBrowserClient();
+    const { error } = await supabase.from("organizations").update({ name }).eq("id", organizationId);
+    if (error) throw error;
+
+    organizationsStore.setState((prev) => prev.map((o) => (o.id === organizationId ? { ...o, name } : o)));
+  }, []);
+}
+
+/**
+ * Deletes an Organization (OWNER-only — organizations_delete_owner_only).
+ * Postgres cascades the delete to every Space/Page/Permission/Membership/
+ * Invitation inside it (20260816000000_organization_update_delete.sql), but
+ * the local stores have no way to know that happened server-side — mirrors
+ * useDeleteSpace's same local-cleanup shape.
+ */
+export function useDeleteOrganization() {
+  return useCallback(async (organizationId: string) => {
+    const supabase = getSupabaseBrowserClient();
+    const { error } = await supabase.from("organizations").delete().eq("id", organizationId);
+    if (error) throw error;
+
+    organizationsStore.setState((prev) => prev.filter((o) => o.id !== organizationId));
+    organizationMembershipsStore.setState((prev) => prev.filter((m) => m.organizationId !== organizationId));
+    organizationInvitationsStore.setState((prev) => prev.filter((i) => i.organizationId !== organizationId));
+    spacesStore.setState((prev) => prev.filter((s) => s.organizationId !== organizationId));
+    pagesStore.setState((prev) => prev.filter((p) => !deletedSpaceIds(organizationId).has(p.spaceId)));
+    permissionsStore.setState((prev) => prev.filter((p) => !deletedSpaceIds(organizationId).has(p.spaceId)));
+  }, []);
+}
+
+/**
+ * Snapshot of a Space's org right before spacesStore is pruned in
+ * useDeleteOrganization — spaces/pages/permissions stores are all keyed by
+ * spaceId, not organizationId, so pages/permissions cleanup needs to know
+ * which spaceIds just left, which spacesStore itself no longer remembers
+ * once filtered. Reads the pre-filter snapshot synchronously within the
+ * same tick, before any of the three setState calls above have applied.
+ */
+function deletedSpaceIds(organizationId: string): Set<string> {
+  return new Set(spacesStore.getState().filter((s) => s.organizationId === organizationId).map((s) => s.id));
+}
+
+const ACTIVE_ORG_STORAGE_PREFIX = "beacon.activeOrganizationId.";
+
+function activeOrgStorageKey(userId: string): string {
+  return `${ACTIVE_ORG_STORAGE_PREFIX}${userId}`;
+}
+
+function subscribeToStorage(listener: () => void) {
+  window.addEventListener("storage", listener);
+  return () => window.removeEventListener("storage", listener);
+}
+
+/**
+ * Which Organization the workspace UI is scoped to, for a given user —
+ * client-side only (localStorage), same precedence-free shape as the
+ * existing public-site dev switcher (use-public-org.ts). Deliberately
+ * decoupled from profiles.organization_id (a DB-side, best-effort,
+ * cross-device convenience pointer only) rather than round-tripping
+ * through it on every switch.
+ */
+export function useActiveOrganizationId(userId: string | undefined): string | null {
+  const stored = useSyncExternalStore(
+    subscribeToStorage,
+    () => (userId ? window.localStorage.getItem(activeOrgStorageKey(userId)) : null),
+    () => null,
+  );
+  return stored;
+}
+
+export function useSetActiveOrganization() {
+  return useCallback((userId: string, organizationId: string) => {
+    window.localStorage.setItem(activeOrgStorageKey(userId), organizationId);
+    window.dispatchEvent(new StorageEvent("storage"));
+  }, []);
 }

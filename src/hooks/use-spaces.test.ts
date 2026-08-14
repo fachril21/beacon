@@ -1,18 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
 import { spacesStore, permissionsStore, pagesStore } from "@/lib/supabase/stores";
 import { emptyDoc } from "@/lib/mock/blocknote-content";
 
 const mockSupabase = { from: vi.fn() };
 vi.mock("@/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => mockSupabase }));
 
-const { useCreateSpace, useUpdateSpaceRole, useAddOrgMemberToSpace, useDeleteSpace } = await import("./use-spaces");
+const { useCreateSpace, useUpdateSpaceRole, useAddOrgMemberToSpace, useDeleteSpace, useOrganizationSpaces } = await import("./use-spaces");
 
 function resetStores() {
   spacesStore.setState([]);
   spacesStore.invalidate("all");
   permissionsStore.setState([]);
   permissionsStore.invalidate("all");
+  // useUserSpaces/useOrganizationSpaces key their permissions fetch per user
+  // ("user:<id>"), not "all" — invalidate the fixture ids this file actually
+  // uses so a second test in the same describe block re-fetches instead of
+  // silently reusing the first test's already-settled (now-cleared) cache.
+  permissionsStore.invalidate("user:user-1");
+  permissionsStore.invalidate("user:user-2");
   pagesStore.setState([]);
 }
 
@@ -248,5 +254,50 @@ describe("useDeleteSpace", () => {
     const { result } = renderHook(() => useDeleteSpace());
     await expect(result.current("space-1")).rejects.toEqual({ message: "permission denied" });
     expect(spacesStore.getState().map((s) => s.id)).toEqual(["space-1"]);
+  });
+});
+
+describe("useOrganizationSpaces", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetStores();
+  });
+
+  it("returns only the Spaces belonging to the given Organization, even when the caller has access to Spaces in other Organizations too", async () => {
+    const spaceRows: import("@/lib/supabase/mappers").SpaceRow[] = [
+      { id: "space-1", organization_id: "org-1", name: "Org 1 Space", category: null, is_publishable: false, created_by_user_id: "user-1", created_at: "t" },
+      { id: "space-2", organization_id: "org-2", name: "Org 2 Space", category: null, is_publishable: false, created_by_user_id: "user-1", created_at: "t" },
+    ];
+    const permissionRows = [
+      { id: "perm-1", space_id: "space-1", user_id: "user-1", role: "admin" },
+      { id: "perm-2", space_id: "space-2", user_id: "user-1", role: "admin" },
+    ];
+    mockSupabase.from.mockImplementation((table: string) => {
+      if (table === "spaces") return { select: () => Promise.resolve({ data: spaceRows, error: null }) };
+      if (table === "permissions") return { select: () => ({ eq: () => Promise.resolve({ data: permissionRows, error: null }) }) };
+      throw new Error(`unexpected table ${table}`);
+    });
+
+    const { result } = renderHook(() => useOrganizationSpaces("user-1", "org-1"));
+    await waitFor(() => expect(result.current.map((s) => s.id)).toEqual(["space-1"]));
+  });
+
+  it("returns every accessible Space when organizationId is undefined (backward compatible)", async () => {
+    const spaceRows: import("@/lib/supabase/mappers").SpaceRow[] = [
+      { id: "space-1", organization_id: "org-1", name: "Org 1 Space", category: null, is_publishable: false, created_by_user_id: "user-1", created_at: "t" },
+      { id: "space-2", organization_id: "org-2", name: "Org 2 Space", category: null, is_publishable: false, created_by_user_id: "user-1", created_at: "t" },
+    ];
+    const permissionRows = [
+      { id: "perm-1", space_id: "space-1", user_id: "user-1", role: "admin" },
+      { id: "perm-2", space_id: "space-2", user_id: "user-1", role: "admin" },
+    ];
+    mockSupabase.from.mockImplementation((table: string) => {
+      if (table === "spaces") return { select: () => Promise.resolve({ data: spaceRows, error: null }) };
+      if (table === "permissions") return { select: () => ({ eq: () => Promise.resolve({ data: permissionRows, error: null }) }) };
+      throw new Error(`unexpected table ${table}`);
+    });
+
+    const { result } = renderHook(() => useOrganizationSpaces("user-1", undefined));
+    await waitFor(() => expect(result.current).toHaveLength(2));
   });
 });

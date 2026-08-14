@@ -8,11 +8,13 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { ChevronRight, LogOut, Plus, Search, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSession } from "@/hooks/use-session";
-import { useUserSpaces } from "@/hooks/use-spaces";
+import { useOrganizationSpaces } from "@/hooks/use-spaces";
+import { useCurrentOrganization } from "@/hooks/use-organizations";
 import { useChildPages, usePages, useReorderPages } from "@/hooks/use-pages";
 import { PageTreeItem } from "./page-tree-item";
 import { NewSpaceDialog } from "./new-space-dialog";
 import { NotificationBell } from "./notification-bell";
+import { OrganizationSwitcher } from "./organization-switcher";
 import { sidebarNavIconClass, sidebarNavRowClass } from "./sidebar-row";
 
 function SidebarSectionLabel({ children }: { children: React.ReactNode }) {
@@ -63,7 +65,8 @@ function SpaceSection({ spaceId, name }: { spaceId: string; name: string }) {
 
 export function WorkspaceSidebar({ onOpenSearch }: { onOpenSearch: () => void }) {
   const { user, signOut } = useSession();
-  const spaces = useUserSpaces(user?.id);
+  const currentOrganization = useCurrentOrganization();
+  const spaces = useOrganizationSpaces(user?.id, currentOrganization?.id);
   const allPages = usePages();
   const reorderPages = useReorderPages();
   const [isNewSpaceOpen, setIsNewSpaceOpen] = useState(false);
@@ -91,19 +94,9 @@ export function WorkspaceSidebar({ onOpenSearch }: { onOpenSearch: () => void })
 
   return (
     <aside className="flex h-full w-sidebar shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
-      {/* Compact workspace switcher, pinned at the top */}
+      {/* Organization switcher, pinned at the top */}
       <div className="px-2 pt-3">
-        <Link
-          href="/"
-          className="flex items-center gap-2.5 rounded-md px-1.5 py-2 hover:bg-sidebar-accent"
-        >
-          <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <svg viewBox="0 0 24 24" fill="none" className="size-4" aria-hidden>
-              <path d="M12 2 4 6v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V6l-8-4Z" fill="currentColor" />
-            </svg>
-          </div>
-          <span className="min-w-0 flex-1 truncate text-body-sm font-semibold text-sidebar-accent-foreground">Beacon</span>
-        </Link>
+        <OrganizationSwitcher />
       </div>
 
       <div className="px-2 pt-2 pb-1">

@@ -3,14 +3,16 @@
 import { useState } from "react";
 import { FolderPlus } from "lucide-react";
 import { useSession } from "@/hooks/use-session";
-import { useUserSpaces } from "@/hooks/use-spaces";
+import { useOrganizationSpaces } from "@/hooks/use-spaces";
+import { useCurrentOrganization } from "@/hooks/use-organizations";
 import { SpaceCard } from "@/components/workspace/space-card";
 import { EmptyState } from "@/components/beacon/empty-state";
 import { NewSpaceDialog } from "@/components/workspace/new-space-dialog";
 
 export default function WorkspaceHomePage() {
   const { user } = useSession();
-  const spaces = useUserSpaces(user?.id);
+  const currentOrganization = useCurrentOrganization();
+  const spaces = useOrganizationSpaces(user?.id, currentOrganization?.id);
   const [isNewSpaceOpen, setIsNewSpaceOpen] = useState(false);
 
   return (

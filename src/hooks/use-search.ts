@@ -30,9 +30,15 @@ function useDebounced(value: string, delayMs: number): string {
 /**
  * Internal search — RLS ("authenticated" role) naturally scopes results to
  * Spaces the caller has a Permission row in, plus anything already public,
- * mirroring PRD.md §5.5's "internal + published" and Flow 6.
+ * mirroring PRD.md §5.5's "internal + published" and Flow 6. RLS alone
+ * covers *security* (never returning a Page the caller can't access at
+ * all), but a caller who belongs to more than one Organization can have
+ * legitimate access to Pages in several — organizationId narrows results
+ * to the one currently active in the workspace switcher, same client-side
+ * filtering shape usePublicSearch already uses. Omit it to search across
+ * every Organization the caller belongs to (backward compatible).
  */
-export function useInternalSearch(query: string, userId: string | undefined): SearchResult[] {
+export function useInternalSearch(query: string, userId: string | undefined, organizationId?: string): SearchResult[] {
   const debouncedQuery = useDebounced(query, SEARCH_DEBOUNCE_MS);
   const [results, setResults] = useState<SearchResult[]>([]);
 
@@ -45,7 +51,7 @@ export function useInternalSearch(query: string, userId: string | undefined): Se
       const supabase = getSupabaseBrowserClient();
       const { data, error } = await supabase
         .from("pages")
-        .select("id, space_id, title, slug, is_published, published_content_snapshot, search_text, spaces(name)")
+        .select("id, space_id, title, slug, is_published, published_content_snapshot, search_text, spaces(name, organization_id)")
         .textSearch("search_vector", trimmed, { type: "websearch", config: "simple" });
       if (error) {
         console.error("[beacon] internal search failed:", error);
@@ -53,7 +59,7 @@ export function useInternalSearch(query: string, userId: string | undefined): Se
       }
       const rows = (data ?? []) as unknown as PageSearchRow[];
       const mapped: SearchResult[] = rows
-        .filter((row) => row.spaces)
+        .filter((row) => row.spaces && (!organizationId || row.spaces.organization_id === organizationId))
         .map((row) => ({
           pageId: row.id,
           pageSlug: row.slug,
@@ -68,7 +74,7 @@ export function useInternalSearch(query: string, userId: string | undefined): Se
     return () => {
       cancelled = true;
     };
-  }, [debouncedQuery, userId]);
+  }, [debouncedQuery, userId, organizationId]);
 
   return debouncedQuery.trim() && userId ? results : [];
 }
