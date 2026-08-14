@@ -2,12 +2,13 @@
 
 import { use, useState } from "react";
 import { toast } from "sonner";
-import { UserPlus, X } from "lucide-react";
+import { UserPlus, X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { NotFoundState } from "@/components/beacon/not-found-state";
+import { DeleteConfirmDialog } from "@/components/workspace/delete-confirm-dialog";
 import { useSession } from "@/hooks/use-session";
 import {
   useSpace,
@@ -17,6 +18,7 @@ import {
   useSpacePendingInvites,
   useInviteToSpace,
   useCancelInvite,
+  useRemoveMember,
 } from "@/hooks/use-spaces";
 import { useUsers } from "@/hooks/use-users";
 import type { SpaceRole } from "@/lib/types";
@@ -33,9 +35,12 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
   const pendingInvites = useSpacePendingInvites(spaceId);
   const inviteToSpace = useInviteToSpace();
   const cancelInvite = useCancelInvite();
+  const removeMember = useRemoveMember();
   const allUsers = useUsers(space?.organizationId);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<SpaceRole>("viewer");
+  const [removeTarget, setRemoveTarget] = useState<{ permissionId: string; name: string } | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
 
   if (!user || role !== "admin") {
     return <NotFoundState />;
@@ -84,6 +89,20 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
     }
   }
 
+  async function handleRemoveMember() {
+    if (!removeTarget) return;
+    setIsRemoving(true);
+    try {
+      await removeMember(removeTarget.permissionId);
+      toast("Anggota telah dihapus.");
+      setRemoveTarget(null);
+    } catch {
+      toast.error("Tidak dapat menghapus anggota, silakan coba lagi.");
+    } finally {
+      setIsRemoving(false);
+    }
+  }
+
   return (
     <main className="flex-1 overflow-y-auto">
       <div className="mx-auto max-w-[42rem] px-8 py-10">
@@ -129,16 +148,26 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
                     <p className="text-caption text-muted-foreground">{member.email}</p>
                   </div>
                 </div>
-                <Select value={perm.role} onValueChange={(v) => v && void handleRoleChange(perm.userId, v as SpaceRole)}>
-                  <SelectTrigger className="w-28">
-                    <SelectValue>{ROLE_LABELS[perm.role]}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="viewer">Viewer</SelectItem>
-                    <SelectItem value="editor">Editor</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center gap-2">
+                  <Select value={perm.role} onValueChange={(v) => v && void handleRoleChange(perm.userId, v as SpaceRole)}>
+                    <SelectTrigger className="w-28">
+                      <SelectValue>{ROLE_LABELS[perm.role]}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="viewer">Viewer</SelectItem>
+                      <SelectItem value="editor">Editor</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Hapus anggota"
+                    onClick={() => setRemoveTarget({ permissionId: perm.id, name: member.name })}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </div>
               </div>
             );
           })}
@@ -170,6 +199,16 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
           </div>
         )}
       </div>
+
+      <DeleteConfirmDialog
+        open={!!removeTarget}
+        onOpenChange={(open) => !open && setRemoveTarget(null)}
+        title={`Hapus ${removeTarget?.name ?? "anggota"} dari Space ini?`}
+        description="Mereka akan langsung kehilangan akses ke Space ini. Anda dapat mengundang mereka kembali kapan saja."
+        confirmLabel="Hapus Anggota"
+        isDeleting={isRemoving}
+        onConfirm={() => void handleRemoveMember()}
+      />
     </main>
   );
 }

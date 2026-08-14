@@ -51,7 +51,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ spa
 
   const admin = getSupabaseAdminClient();
   const siteUrl = new URL(request.url).origin;
-  const { error: emailError } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo: `${siteUrl}/sign-in` });
+  const { error: emailError } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo: `${siteUrl}/complete-invite` });
 
   // inviteUserByEmail creates the auth.users row immediately (before the
   // invited person does anything), which fires handle_new_user and may

@@ -72,7 +72,12 @@ export default function SignInPage() {
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="password">Kata sandi</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Kata sandi</Label>
+              <Link href="/forgot-password" className="text-caption text-primary-muted-foreground underline underline-offset-4 hover:text-primary-hover">
+                Lupa kata sandi?
+              </Link>
+            </div>
             <Input
               id="password"
               type="password"
