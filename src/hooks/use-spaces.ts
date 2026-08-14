@@ -251,3 +251,14 @@ export function useCancelInvite() {
     pendingInvitesStore.setState((prev) => prev.filter((i) => i.id !== inviteId));
   }, []);
 }
+
+/** Removes a Member from a Space (RLS: permissions_delete_admin_only — Space admins only). */
+export function useRemoveMember() {
+  return useCallback(async (permissionId: string) => {
+    const supabase = getSupabaseBrowserClient();
+    const { error } = await supabase.from("permissions").delete().eq("id", permissionId);
+    if (error) throw error;
+
+    permissionsStore.setState((prev) => prev.filter((p) => p.id !== permissionId));
+  }, []);
+}

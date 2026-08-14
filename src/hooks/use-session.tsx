@@ -30,6 +30,8 @@ interface SessionContextValue {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (input: SignUpInput) => Promise<void>;
   signOut: () => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<void>;
+  updatePassword: (password: string) => Promise<void>;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -117,9 +119,41 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   }, [supabase]);
 
+  /**
+   * Sends a real recovery email via whatever SMTP is configured in the
+   * project's Auth settings (same delivery path as signup-confirmation and
+   * invite emails). Supabase's own response never reveals whether the email
+   * actually has an account — the anti-enumeration behavior is already
+   * built into the API, so no extra handling is needed here.
+   */
+  const requestPasswordReset = useCallback(
+    async (email: string) => {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+    },
+    [supabase],
+  );
+
+  /**
+   * Requires an active session — valid either because the recovery/invite
+   * email's link just established one (Supabase's client auto-detects the
+   * URL's token on load), or because a signed-in User is changing their own
+   * password. Both SetPasswordForm (invite/recovery) and a future
+   * account-settings change-password screen can share this one method.
+   */
+  const updatePassword = useCallback(
+    async (password: string) => {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+    },
+    [supabase],
+  );
+
   const value = useMemo(
-    () => ({ user, isAuthenticated: !!user, isLoading, signIn, signUp, signOut }),
-    [user, isLoading, signIn, signUp, signOut],
+    () => ({ user, isAuthenticated: !!user, isLoading, signIn, signUp, signOut, requestPasswordReset, updatePassword }),
+    [user, isLoading, signIn, signUp, signOut, requestPasswordReset, updatePassword],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

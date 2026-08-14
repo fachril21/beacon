@@ -43,7 +43,7 @@ describe("SetPasswordForm", () => {
   it("shows an invalid-link state when there is no session once loading finishes", () => {
     setSession({ isLoading: false, isAuthenticated: false });
     render(<SetPasswordForm mode="recovery" />);
-    expect(screen.getByText(/tidak valid|kedaluwarsa/i)).toBeInTheDocument();
+    expect(screen.getByText("Tautan tidak valid")).toBeInTheDocument();
   });
 
   it("shows an inline error when the password and confirmation don't match", async () => {
