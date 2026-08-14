@@ -13,6 +13,8 @@ const mockSupabase = {
     signInWithPassword: vi.fn(),
     signUp: vi.fn(),
     signOut: vi.fn(),
+    resetPasswordForEmail: vi.fn(),
+    updateUser: vi.fn(),
   },
   from: vi.fn(),
 };
@@ -126,5 +128,47 @@ describe("useSession", () => {
       await result.current.signOut();
     });
     expect(mockSupabase.auth.signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it("requestPasswordReset calls resetPasswordForEmail with a redirect back to /reset-password", async () => {
+    mockSupabase.auth.resetPasswordForEmail.mockResolvedValue({ error: null });
+    const { result } = renderUseSession();
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => {
+      await result.current.requestPasswordReset("a@example.com");
+    });
+
+    expect(mockSupabase.auth.resetPasswordForEmail).toHaveBeenCalledWith("a@example.com", {
+      redirectTo: expect.stringContaining("/reset-password"),
+    });
+  });
+
+  it("requestPasswordReset throws when Supabase returns an error", async () => {
+    mockSupabase.auth.resetPasswordForEmail.mockResolvedValue({ error: { message: "rate limited" } });
+    const { result } = renderUseSession();
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await expect(result.current.requestPasswordReset("a@example.com")).rejects.toBeTruthy();
+  });
+
+  it("updatePassword calls supabase.auth.updateUser with the new password", async () => {
+    mockSupabase.auth.updateUser.mockResolvedValue({ error: null });
+    const { result } = renderUseSession();
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => {
+      await result.current.updatePassword("newSecurePassword123");
+    });
+
+    expect(mockSupabase.auth.updateUser).toHaveBeenCalledWith({ password: "newSecurePassword123" });
+  });
+
+  it("updatePassword throws when Supabase returns an error", async () => {
+    mockSupabase.auth.updateUser.mockResolvedValue({ error: { message: "session expired" } });
+    const { result } = renderUseSession();
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await expect(result.current.updatePassword("newSecurePassword123")).rejects.toBeTruthy();
   });
 });

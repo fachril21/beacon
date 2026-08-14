@@ -261,6 +261,42 @@ describe("useCancelInvite", () => {
   });
 });
 
+describe("useRemoveMember", () => {
+  const mockDeleteEq = vi.fn();
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetStores();
+    mockDeleteEq.mockResolvedValue({ error: null });
+    mockSupabase.from.mockReturnValue({ delete: () => ({ eq: mockDeleteEq }) });
+  });
+
+  it("deletes the permissions row and removes it from the local store", async () => {
+    permissionsStore.setState([
+      { id: "perm-1", spaceId: "space-1", userId: "user-1", role: "admin" },
+      { id: "perm-2", spaceId: "space-1", userId: "user-2", role: "viewer" },
+    ]);
+
+    const { useRemoveMember } = await import("./use-spaces");
+    const { result } = renderHook(() => useRemoveMember());
+    await act(async () => {
+      await result.current("perm-2");
+    });
+
+    expect(mockDeleteEq).toHaveBeenCalledWith("id", "perm-2");
+    expect(permissionsStore.getState().map((p) => p.id)).toEqual(["perm-1"]);
+  });
+
+  it("throws when Supabase returns an error, without touching the local store", async () => {
+    permissionsStore.setState([{ id: "perm-1", spaceId: "space-1", userId: "user-1", role: "admin" }]);
+    mockDeleteEq.mockResolvedValue({ error: { message: "permission denied" } });
+
+    const { useRemoveMember } = await import("./use-spaces");
+    const { result } = renderHook(() => useRemoveMember());
+    await expect(result.current("perm-1")).rejects.toEqual({ message: "permission denied" });
+    expect(permissionsStore.getState().map((p) => p.id)).toEqual(["perm-1"]);
+  });
+});
+
 describe("useDeleteSpace", () => {
   beforeEach(() => {
     vi.clearAllMocks();
