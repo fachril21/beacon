@@ -2,24 +2,14 @@
 
 import { use, useState } from "react";
 import { toast } from "sonner";
-import { UserPlus, X, Trash2 } from "lucide-react";
+import { UserPlus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { NotFoundState } from "@/components/beacon/not-found-state";
 import { DeleteConfirmDialog } from "@/components/workspace/delete-confirm-dialog";
 import { useSession } from "@/hooks/use-session";
-import {
-  useSpace,
-  useSpaceRole,
-  useSpacePermissions,
-  useUpdateSpaceRole,
-  useSpacePendingInvites,
-  useInviteToSpace,
-  useCancelInvite,
-  useRemoveMember,
-} from "@/hooks/use-spaces";
+import { useSpace, useSpaceRole, useSpacePermissions, useUpdateSpaceRole, useAddOrgMemberToSpace, useRemoveMember } from "@/hooks/use-spaces";
+import { useOrganizationMembers } from "@/hooks/use-organizations";
 import { useUsers } from "@/hooks/use-users";
 import type { SpaceRole } from "@/lib/types";
 
@@ -32,13 +22,12 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
   const role = useSpaceRole(spaceId, user?.id);
   const permissions = useSpacePermissions(spaceId);
   const updateRole = useUpdateSpaceRole();
-  const pendingInvites = useSpacePendingInvites(spaceId);
-  const inviteToSpace = useInviteToSpace();
-  const cancelInvite = useCancelInvite();
+  const organizationMembers = useOrganizationMembers(space?.organizationId);
+  const addOrgMemberToSpace = useAddOrgMemberToSpace();
   const removeMember = useRemoveMember();
-  const allUsers = useUsers(space?.organizationId);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<SpaceRole>("viewer");
+  const allUsers = useUsers();
+  const [pickedUserId, setPickedUserId] = useState("");
+  const [addRole, setAddRole] = useState<SpaceRole>("viewer");
   const [removeTarget, setRemoveTarget] = useState<{ permissionId: string; name: string } | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
 
@@ -46,6 +35,15 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
     return <NotFoundState />;
   }
   if (!space) return null;
+
+  // Bringing a brand new person into Beacon at all now goes exclusively
+  // through an Organization invite (Organization Settings > Members) — this
+  // roster only ever grants existing Organization members access to this
+  // Space, never a second independent email path.
+  const addableMembers = organizationMembers
+    .filter((m) => !permissions.some((p) => p.userId === m.userId))
+    .map((m) => allUsers.find((u) => u.id === m.userId))
+    .filter((u): u is NonNullable<typeof u> => !!u);
 
   async function handleRoleChange(userId: string, newRole: SpaceRole) {
     try {
@@ -56,36 +54,14 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
     }
   }
 
-  async function handleInvite() {
-    if (!inviteEmail.trim()) return;
+  async function handleAddMember() {
+    if (!pickedUserId) return;
     try {
-      const result = await inviteToSpace(spaceId, inviteEmail.trim(), inviteRole);
-      setInviteEmail("");
-      if (result.status === "added") {
-        toast.success("Anggota langsung ditambahkan.");
-      } else if (result.emailSent) {
-        toast.success("Undangan terkirim.");
-      } else {
-        toast("Undangan dicatat, tapi email gagal dikirim.", {
-          description: "Beri tahu orang tersebut secara langsung untuk mendaftar.",
-        });
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      if (message.includes("EMAIL_BELONGS_TO_ANOTHER_ORGANIZATION")) {
-        toast.error("Email ini terdaftar di Organisasi lain.");
-      } else {
-        toast.error("Tidak dapat mengirim undangan, silakan coba lagi.");
-      }
-    }
-  }
-
-  async function handleCancelInvite(inviteId: string) {
-    try {
-      await cancelInvite(inviteId);
-      toast("Undangan dibatalkan.");
+      await addOrgMemberToSpace(spaceId, pickedUserId, addRole);
+      setPickedUserId("");
+      toast.success("Anggota ditambahkan ke Space.");
     } catch {
-      toast.error("Tidak dapat membatalkan undangan, silakan coba lagi.");
+      toast.error("Tidak dapat menambahkan anggota, silakan coba lagi.");
     }
   }
 
@@ -110,16 +86,28 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
         <p className="mt-1.5 text-body text-muted-foreground">{space.name}</p>
 
         <div className="mt-8 flex gap-2">
-          <Input
-            value={inviteEmail}
-            onChange={(e) => setInviteEmail(e.target.value)}
-            placeholder="Undang lewat email…"
-            type="email"
-            className="flex-1"
-          />
-          <Select value={inviteRole} onValueChange={(v) => v && setInviteRole(v as SpaceRole)}>
+          <Select value={pickedUserId} onValueChange={(v) => v && setPickedUserId(v)}>
+            <SelectTrigger className="flex-1">
+              <SelectValue placeholder="Pilih anggota Organisasi…">
+                {addableMembers.find((u) => u.id === pickedUserId)?.name}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {addableMembers.length === 0 && (
+                <div className="px-2 py-1.5 text-caption text-muted-foreground">
+                  Semua anggota Organisasi sudah memiliki akses.
+                </div>
+              )}
+              {addableMembers.map((member) => (
+                <SelectItem key={member.id} value={member.id}>
+                  {member.name} — {member.email}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={addRole} onValueChange={(v) => v && setAddRole(v as SpaceRole)}>
             <SelectTrigger className="w-32">
-              <SelectValue>{ROLE_LABELS[inviteRole]}</SelectValue>
+              <SelectValue>{ROLE_LABELS[addRole]}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="viewer">Viewer</SelectItem>
@@ -127,9 +115,9 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
               <SelectItem value="admin">Admin</SelectItem>
             </SelectContent>
           </Select>
-          <Button onClick={() => void handleInvite()} disabled={!inviteEmail.trim()}>
+          <Button onClick={() => void handleAddMember()} disabled={!pickedUserId}>
             <UserPlus className="size-3.5" />
-            Undang
+            Tambah
           </Button>
         </div>
 
@@ -172,39 +160,13 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
             );
           })}
         </div>
-
-        {pendingInvites.length > 0 && (
-          <div className="mt-8">
-            <p className="mb-2 text-caption font-semibold tracking-[0.04em] text-muted-foreground uppercase">
-              Undangan tertunda
-            </p>
-            <div className="flex flex-col gap-1">
-              {pendingInvites.map((invite) => (
-                <div key={invite.id} className="flex items-center justify-between gap-3 rounded-md px-3 py-3">
-                  <span className="text-body-sm text-muted-foreground">{invite.email}</span>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="pending">Menunggu</Badge>
-                    <Button
-                      size="icon-sm"
-                      variant="ghost"
-                      aria-label="Batalkan undangan"
-                      onClick={() => void handleCancelInvite(invite.id)}
-                    >
-                      <X className="size-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       <DeleteConfirmDialog
         open={!!removeTarget}
         onOpenChange={(open) => !open && setRemoveTarget(null)}
         title={`Hapus ${removeTarget?.name ?? "anggota"} dari Space ini?`}
-        description="Mereka akan langsung kehilangan akses ke Space ini. Anda dapat mengundang mereka kembali kapan saja."
+        description="Mereka akan langsung kehilangan akses ke Space ini. Anda dapat menambahkan mereka kembali kapan saja."
         confirmLabel="Hapus Anggota"
         isDeleting={isRemoving}
         onConfirm={() => void handleRemoveMember()}
