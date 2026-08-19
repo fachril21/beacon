@@ -5,13 +5,21 @@ import Image from "next/image";
 import { Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { createReactBlockSpec, type ReactCustomBlockRenderProps } from "@blocknote/react";
-import { useScreenshotBlock, useUploadScreenshot, useUpdateScreenshotAnnotation, useUpdateScreenshotDescription } from "@/hooks/use-screenshot-blocks";
+import {
+  useScreenshotBlock,
+  useUploadScreenshot,
+  useUpdateScreenshotDescription,
+  useUpdateScreenshotAnnotations,
+  usePatchScreenshotAnnotationsLocal,
+} from "@/hooks/use-screenshot-blocks";
 import { resolveScreenshotUrl } from "@/lib/s3/screenshot-url";
 import { createStore } from "@/lib/store";
+import { useActiveAnnotationTool } from "@/lib/annotation-tool-store";
+import type { Annotation } from "@/lib/types";
 import { usePageId } from "./page-id-context";
 import { ScreenshotUploadPrompt } from "./screenshot-upload-prompt";
-import { AnnotationCanvas } from "./annotation-canvas";
 import { AnnotationOverlay } from "./annotation-overlay";
+import { AnnotationEditorOverlay } from "./annotation-editor-overlay";
 import { CommentThreadPanel } from "./comment-thread-panel";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -27,13 +35,10 @@ type ScreenshotBlockRenderProps = ReactCustomBlockRenderProps<typeof screenshotB
 
 /**
  * Whether the annotator is open, keyed by the block's own stable ProseMirror
- * id (not the local React component instance). BlockNote/Turbopack's dev
- * server recreates this block's NodeView roughly once a second in dev mode
- * only (confirmed absent from a production build) for reasons that survived
- * removing every piece of this file's own logic down to a static div — so
- * local `useState` here gets wiped mid-interaction. Reading this from a
- * store outside the component tree means the open/closed flag survives
- * whatever remounts the node view, in dev and in prod alike.
+ * id — not React state. BlockNote recreates this block's NodeView
+ * repeatedly in dev mode (docs/testing/annotation-remount-resilience.tdd.md);
+ * local `useState` here would get wiped mid-interaction the same way the
+ * previous annotation implementation's open/closed flag did.
  */
 const annotatingBlockIds = createStore<ReadonlySet<string>>(new Set());
 
@@ -57,16 +62,20 @@ function ScreenshotBlockRender({ block, editor }: ScreenshotBlockRenderProps) {
   const pageId = usePageId();
   const screenshotBlock = useScreenshotBlock(blockId || undefined, pageId);
   const uploadScreenshot = useUploadScreenshot();
-  const updateAnnotation = useUpdateScreenshotAnnotation();
   const updateDescription = useUpdateScreenshotDescription();
+  const updateAnnotations = useUpdateScreenshotAnnotations();
+  const patchAnnotationsLocal = usePatchScreenshotAnnotationsLocal();
   const isAnnotating = useIsAnnotating(block.id);
+  const [activeTool, setActiveTool] = useActiveAnnotationTool(block.id);
   const [isUploading, setIsUploading] = useState(false);
   const [description, setDescription] = useState(screenshotBlock?.description ?? "");
   const descriptionSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const annotationsSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     return () => {
       if (descriptionSaveRef.current) clearTimeout(descriptionSaveRef.current);
+      if (annotationsSaveRef.current) clearTimeout(annotationsSaveRef.current);
     };
   }, []);
 
@@ -88,12 +97,24 @@ function ScreenshotBlockRender({ block, editor }: ScreenshotBlockRenderProps) {
     try {
       const newBlock = await uploadScreenshot({ pageId, order: 0, file, width, height });
       assignBlockId(newBlock.id);
-      setAnnotating(block.id, true);
     } catch {
       toast.error("Gagal mengunggah gambar, silakan coba lagi.");
     } finally {
       setIsUploading(false);
     }
+  }
+
+  function handleAnnotationsChange(next: Annotation[]) {
+    if (!screenshotBlock) return;
+    // Immediate, remount-safe: the same store already backing the image and
+    // description, which never flickered — see
+    // docs/testing/annotation-box-shape-dot-fix.tdd.md for what happens when
+    // an in-progress shape's position only lives in local component state.
+    patchAnnotationsLocal(screenshotBlock.id, next);
+    if (annotationsSaveRef.current) clearTimeout(annotationsSaveRef.current);
+    annotationsSaveRef.current = setTimeout(() => {
+      updateAnnotations(screenshotBlock.id, next).catch(() => toast.error("Gagal menyimpan anotasi, silakan coba lagi."));
+    }, 500);
   }
 
   if (!blockId || !screenshotBlock) {
@@ -112,7 +133,7 @@ function ScreenshotBlockRender({ block, editor }: ScreenshotBlockRenderProps) {
             className="h-auto w-full"
             unoptimized
           />
-          <AnnotationOverlay annotation={screenshotBlock.annotationJson} imageWidth={screenshotBlock.imageWidth} imageHeight={screenshotBlock.imageHeight} />
+          <AnnotationOverlay annotations={screenshotBlock.annotations} imageWidth={screenshotBlock.imageWidth} imageHeight={screenshotBlock.imageHeight} />
         </div>
         {screenshotBlock.description && <p className="mt-2 text-body-sm text-muted-foreground">{screenshotBlock.description}</p>}
       </div>
@@ -121,18 +142,34 @@ function ScreenshotBlockRender({ block, editor }: ScreenshotBlockRenderProps) {
 
   if (isAnnotating) {
     return (
-      <AnnotationCanvas
-        blockId={block.id}
-        imageUrl={resolveScreenshotUrl(screenshotBlock.imageUrl)}
-        imageWidth={screenshotBlock.imageWidth}
-        imageHeight={screenshotBlock.imageHeight}
-        initialAnnotation={screenshotBlock.annotationJson}
-        onDone={(annotation) => {
-          updateAnnotation(screenshotBlock.id, annotation).catch(() => toast.error("Gagal menyimpan anotasi, silakan coba lagi."));
-          setAnnotating(block.id, false);
-        }}
-        onCancel={() => setAnnotating(block.id, false)}
-      />
+      <div className="my-4 w-full max-w-screenshot-breakout">
+        <AnnotationEditorOverlay
+          annotations={screenshotBlock.annotations}
+          imageWidth={screenshotBlock.imageWidth}
+          imageHeight={screenshotBlock.imageHeight}
+          activeTool={activeTool}
+          onActiveToolChange={setActiveTool}
+          onAnnotationsChange={handleAnnotationsChange}
+        >
+          <Image
+            src={resolveScreenshotUrl(screenshotBlock.imageUrl)}
+            alt={screenshotBlock.altText ?? ""}
+            width={screenshotBlock.imageWidth}
+            height={screenshotBlock.imageHeight}
+            className="h-auto w-full"
+            unoptimized
+          />
+        </AnnotationEditorOverlay>
+        <div className="mt-2 flex justify-end">
+          <button
+            type="button"
+            onClick={() => setAnnotating(block.id, false)}
+            className="rounded-md bg-primary px-3 py-1.5 text-body-sm text-primary-foreground"
+          >
+            Selesai memberi anotasi
+          </button>
+        </div>
+      </div>
     );
   }
 
@@ -143,17 +180,15 @@ function ScreenshotBlockRender({ block, editor }: ScreenshotBlockRenderProps) {
         onClick={() => setAnnotating(block.id, true)}
         className="relative block w-full overflow-hidden rounded-lg border border-card bg-background text-left"
       >
-        <div className="relative">
-          <Image
-            src={resolveScreenshotUrl(screenshotBlock.imageUrl)}
-            alt={screenshotBlock.altText ?? ""}
-            width={screenshotBlock.imageWidth}
-            height={screenshotBlock.imageHeight}
-            className="h-auto w-full"
-            unoptimized
-          />
-          <AnnotationOverlay annotation={screenshotBlock.annotationJson} imageWidth={screenshotBlock.imageWidth} imageHeight={screenshotBlock.imageHeight} />
-        </div>
+        <Image
+          src={resolveScreenshotUrl(screenshotBlock.imageUrl)}
+          alt={screenshotBlock.altText ?? ""}
+          width={screenshotBlock.imageWidth}
+          height={screenshotBlock.imageHeight}
+          className="h-auto w-full"
+          unoptimized
+        />
+        <AnnotationOverlay annotations={screenshotBlock.annotations} imageWidth={screenshotBlock.imageWidth} imageHeight={screenshotBlock.imageHeight} />
         <div className="absolute inset-0 hidden items-center justify-center bg-background/60 group-hover:flex">
           <span className="flex items-center gap-1.5 rounded-md bg-popover px-3 py-1.5 text-body-sm text-popover-foreground shadow-[0_8px_24px_-8px_oklch(0.06_0.02_250_/_0.6)]">
             <Pencil className="size-3.5" />
