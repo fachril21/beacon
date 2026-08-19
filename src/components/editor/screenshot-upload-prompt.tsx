@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { ImagePlus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { requestImageFile } from "@/lib/file-select-singleton";
 
 function readImageDimensions(url: string): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
@@ -21,7 +22,6 @@ export function ScreenshotUploadPrompt({
   /** True while a parent-driven S3 upload + DB insert is in flight (Flow 3 step 4's progress indicator). */
   isUploading?: boolean;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const busy = isProcessing || isUploading;
@@ -78,23 +78,12 @@ export function ScreenshotUploadPrompt({
       </div>
       <button
         type="button"
-        onClick={() => inputRef.current?.click()}
+        onClick={() => requestImageFile((file) => void handleFile(file))}
         disabled={busy}
         className="rounded-md border border-border bg-secondary px-3 py-1.5 text-body-sm font-medium text-secondary-foreground hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
       >
         Pilih berkas
       </button>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        disabled={busy}
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) void handleFile(file);
-        }}
-      />
     </div>
   );
 }
