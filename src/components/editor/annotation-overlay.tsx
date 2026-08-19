@@ -1,137 +1,93 @@
-import { getAnnotationCanvasSize } from "@/lib/annotation-canvas-size";
-import type { AnnotationJson } from "@/lib/types";
-
-interface FabricObjectJson {
-  type?: string;
-  left?: number;
-  top?: number;
-  width?: number;
-  height?: number;
-  radius?: number;
-  fill?: string;
-  stroke?: string;
-  strokeWidth?: number;
-  x1?: number;
-  y1?: number;
-  x2?: number;
-  y2?: number;
-  text?: string;
-  fontSize?: number;
-  angle?: number;
-  originX?: string;
-  originY?: string;
-  objects?: FabricObjectJson[];
-}
+import type { Annotation } from "@/lib/types";
 
 /**
- * Static, non-interactive read of Fabric.js's serialized annotation objects,
- * rendered as SVG on top of the locked screenshot thumbnail (Fabric itself
- * only mounts while actively annotating — PRD.md Flow 3 step 6: "renders
- * identically for the author and readers, with edit affordances hidden").
- *
- * Fabric v7 serializes `type` in PascalCase ("Rect", "Group", "Image", …).
+ * Static, non-interactive read of the Annotation array, rendered as plain
+ * SVG on top of the locked screenshot thumbnail — renders identically for
+ * the author and readers, with edit affordances hidden. The viewBox matches
+ * the image's own native pixel size and every coordinate is stored as a
+ * fraction (0..1) of it, so shapes stay correctly aligned at any rendered
+ * display size without a separate canvas-size calculation.
  */
 export function AnnotationOverlay({
-  annotation,
+  annotations,
   imageWidth,
   imageHeight,
 }: {
-  annotation: AnnotationJson | null;
+  annotations: Annotation[];
   imageWidth: number;
   imageHeight: number;
 }) {
-  if (!annotation?.objects?.length) return null;
+  if (!annotations.length) return null;
 
-  // Objects were drawn on (and their coordinates serialized from) the Fabric
-  // editing canvas's scaled-down size, not the image's native pixel size —
-  // the viewBox must match that same scaled coordinate space for shapes to
-  // land exactly where they were drawn, at any rendered display size.
-  const { width, height } = getAnnotationCanvasSize(imageWidth, imageHeight);
+  const strokeWidth = annotationStrokeWidth(imageWidth);
 
   return (
-    <svg
-      viewBox={`0 0 ${width} ${height}`}
-      className="pointer-events-none absolute inset-0 h-full w-full"
-      aria-hidden
-    >
-      {(annotation.objects as FabricObjectJson[]).map((obj, i) => renderObject(obj, i))}
+    <svg viewBox={`0 0 ${imageWidth} ${imageHeight}`} className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden>
+      <defs>
+        {annotations
+          .filter((a) => a.type === "arrow")
+          .map((a) => (
+            <marker key={a.id} id={`arrowhead-${a.id}`} markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+              <path d="M0,0 L8,4 L0,8 Z" fill={a.color} />
+            </marker>
+          ))}
+      </defs>
+      {annotations.map((a) => (
+        <AnnotationShape key={a.id} annotation={a} imageWidth={imageWidth} imageHeight={imageHeight} strokeWidth={strokeWidth} />
+      ))}
     </svg>
   );
 }
 
-function renderObject(obj: FabricObjectJson, key: number) {
-  switch (obj.type) {
-    case "Rect": {
-      const isCentered = obj.originX === "center";
-      const x = isCentered ? (obj.left ?? 0) - (obj.width ?? 0) / 2 : (obj.left ?? 0);
-      const y = isCentered ? (obj.top ?? 0) - (obj.height ?? 0) / 2 : (obj.top ?? 0);
+/** Roughly proportional to the image's own resolution, matching how the shape looked when it was drawn. */
+export function annotationStrokeWidth(imageWidth: number): number {
+  return Math.max(2, imageWidth * 0.0035);
+}
+
+export function AnnotationShape({
+  annotation,
+  imageWidth,
+  imageHeight,
+  strokeWidth,
+}: {
+  annotation: Annotation;
+  imageWidth: number;
+  imageHeight: number;
+  strokeWidth: number;
+}) {
+  const x = annotation.x * imageWidth;
+  const y = annotation.y * imageHeight;
+
+  switch (annotation.type) {
+    case "box": {
+      const width = (annotation.width ?? 0) * imageWidth;
+      const height = (annotation.height ?? 0) * imageHeight;
+      return <rect x={x} y={y} width={width} height={height} fill="none" stroke={annotation.color} strokeWidth={strokeWidth} rx={4} />;
+    }
+    case "arrow": {
+      const x2 = (annotation.x2 ?? annotation.x) * imageWidth;
+      const y2 = (annotation.y2 ?? annotation.y) * imageHeight;
       return (
-        <rect
-          key={key}
-          x={x}
-          y={y}
-          width={obj.width}
-          height={obj.height}
-          fill={obj.fill && obj.fill !== "transparent" ? obj.fill : "none"}
-          stroke={obj.stroke && obj.stroke !== "transparent" ? obj.stroke : "none"}
-          strokeWidth={obj.strokeWidth ?? 0}
-          rx={4}
-        />
+        <line x1={x} y1={y} x2={x2} y2={y2} stroke={annotation.color} strokeWidth={strokeWidth} markerEnd={`url(#arrowhead-${annotation.id})`} />
       );
     }
-    case "Line":
-      return <line key={key} x1={obj.x1} y1={obj.y1} x2={obj.x2} y2={obj.y2} stroke={obj.stroke} strokeWidth={obj.strokeWidth ?? 3} />;
-    case "IText":
-    case "Textbox":
-    case "Text": {
-      // The label tool anchors text top-left (the default), but the
-      // numbered-marker tool anchors its number center/center on the
-      // circle's own center — SVG has no "center" origin for <text>, so a
-      // center-anchored object needs text-anchor + dominant-baseline
-      // instead of the top-left baseline-offset math below.
-      const isCenteredX = obj.originX === "center";
-      const isCenteredY = obj.originY === "center";
-      const x = obj.left ?? 0;
-      const y = isCenteredY ? (obj.top ?? 0) : (obj.top ?? 0) + (obj.fontSize ?? 16);
+    case "marker": {
+      const radius = strokeWidth * 4.5;
       return (
-        <text
-          key={key}
-          x={x}
-          y={y}
-          fill={obj.fill}
-          fontSize={obj.fontSize ?? 16}
-          fontWeight={600}
-          textAnchor={isCenteredX ? "middle" : "start"}
-          dominantBaseline={isCenteredY ? "central" : "auto"}
-        >
-          {obj.text}
+        <g>
+          <circle cx={x} cy={y} r={radius} fill={annotation.color} />
+          <text x={x} y={y} fill="#ffffff" fontSize={radius} fontWeight={700} textAnchor="middle" dominantBaseline="central">
+            {annotation.order}
+          </text>
+        </g>
+      );
+    }
+    case "label":
+      return (
+        <text x={x} y={y} fill={annotation.color} fontSize={Math.max(12, imageWidth * 0.02)} fontWeight={600} dominantBaseline="hanging">
+          {annotation.text}
         </text>
       );
-    }
-    case "Group": {
-      // Fabric stores group children relative to the group's own center.
-      const cx = (obj.left ?? 0) + (obj.width ?? 0) / 2;
-      const cy = (obj.top ?? 0) + (obj.height ?? 0) / 2;
-      return (
-        <g key={key} transform={`translate(${cx}, ${cy})`}>
-          {obj.objects?.map((child, i) => renderObject(child, i))}
-        </g>
-      );
-    }
-    case "Circle":
-      return <circle key={key} cx={obj.left ?? 0} cy={obj.top ?? 0} r={obj.radius} fill={obj.fill} />;
-    case "Triangle": {
-      const w = obj.width ?? 14;
-      const h = obj.height ?? 16;
-      const cx = obj.left ?? 0;
-      const cy = obj.top ?? 0;
-      const angle = obj.angle ?? 0;
-      return (
-        <g key={key} transform={`translate(${cx}, ${cy}) rotate(${angle})`}>
-          <polygon points={`0,${-h / 2} ${w / 2},${h / 2} ${-w / 2},${h / 2}`} fill={obj.fill} />
-        </g>
-      );
-    }
     default:
       return null;
   }
