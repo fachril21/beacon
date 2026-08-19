@@ -5,9 +5,8 @@ import { screenshotBlocksStore } from "@/lib/supabase/stores";
 const mockSupabase = { from: vi.fn() };
 vi.mock("@/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => mockSupabase }));
 
-const { useScreenshotBlock, useCreateScreenshotBlock, useUpdateScreenshotAnnotation, useUploadScreenshot } = await import(
-  "./use-screenshot-blocks"
-);
+const { useScreenshotBlock, useCreateScreenshotBlock, useUploadScreenshot, useUpdateScreenshotAnnotations, usePatchScreenshotAnnotationsLocal } =
+  await import("./use-screenshot-blocks");
 
 function resetStore() {
   screenshotBlocksStore.setState([]);
@@ -28,7 +27,6 @@ describe("useScreenshotBlock", () => {
       image_object_key: "screenshots/page-1/abc.png",
       image_width: 800,
       image_height: 600,
-      annotation_json: null,
       description: "",
       alt_text: null,
       created_at: "t",
@@ -66,7 +64,6 @@ describe("useCreateScreenshotBlock", () => {
       image_object_key: "screenshots/page-1/abc.png",
       image_width: 800,
       image_height: 600,
-      annotation_json: null,
       description: "",
       alt_text: null,
       created_at: "t",
@@ -90,43 +87,6 @@ describe("useCreateScreenshotBlock", () => {
 
     expect(created).toMatchObject({ id: "shot-1", imageUrl: "screenshots/page-1/abc.png" });
     expect(screenshotBlocksStore.getState()).toEqual([expect.objectContaining({ id: "shot-1" })]);
-  });
-});
-
-describe("useUpdateScreenshotAnnotation", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    resetStore();
-    screenshotBlocksStore.setState([
-      {
-        id: "shot-1",
-        pageId: "page-1",
-        type: "screenshot",
-        order: 0,
-        imageUrl: "screenshots/page-1/abc.png",
-        imageWidth: 800,
-        imageHeight: 600,
-        annotationJson: null,
-        description: "",
-        altText: null,
-        createdAt: "t",
-        updatedAt: "t",
-      },
-    ]);
-  });
-
-  it("updates annotation_json in Supabase and patches the local store", async () => {
-    const update = vi.fn(() => ({ eq: () => Promise.resolve({ error: null }) }));
-    mockSupabase.from.mockReturnValue({ update });
-
-    const annotation = { version: "1", objects: [], nextMarkerNumber: 1 };
-    const { result } = renderHook(() => useUpdateScreenshotAnnotation());
-    await act(async () => {
-      await result.current("shot-1", annotation);
-    });
-
-    expect(update).toHaveBeenCalledWith(expect.objectContaining({ annotation_json: annotation }));
-    expect(screenshotBlocksStore.getState()[0].annotationJson).toEqual(annotation);
   });
 });
 
@@ -161,7 +121,6 @@ describe("useUploadScreenshot", () => {
       image_object_key: "screenshots/page-1/abc.png",
       image_width: 800,
       image_height: 600,
-      annotation_json: null,
       description: "",
       alt_text: null,
       created_at: "t",
@@ -213,5 +172,115 @@ describe("useUploadScreenshot", () => {
       result.current({ pageId: "page-1", order: 0, file, width: 800, height: 600 }),
     ).rejects.toThrow();
     expect(insert).not.toHaveBeenCalled();
+  });
+});
+
+function seedBlock() {
+  screenshotBlocksStore.setState([
+    {
+      id: "shot-1",
+      pageId: "page-1",
+      type: "screenshot",
+      order: 0,
+      imageUrl: "shot.png",
+      imageWidth: 800,
+      imageHeight: 600,
+      annotations: [],
+      description: "",
+      altText: null,
+      createdAt: "t",
+      updatedAt: "t",
+    },
+  ]);
+}
+
+const sampleAnnotations = [{ id: "ann-1", type: "box" as const, order: 1, color: "#ff0000", x: 0.1, y: 0.2, width: 0.3, height: 0.15 }];
+
+describe("useUpdateScreenshotAnnotations", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetStore();
+    seedBlock();
+  });
+
+  it("writes annotation_json to Supabase for the given block id", async () => {
+    const eq = vi.fn(() => Promise.resolve({ error: null }));
+    const update = vi.fn(() => ({ eq }));
+    mockSupabase.from.mockReturnValue({ update });
+
+    const { result } = renderHook(() => useUpdateScreenshotAnnotations());
+    await act(async () => {
+      await result.current("shot-1", sampleAnnotations);
+    });
+
+    expect(mockSupabase.from).toHaveBeenCalledWith("screenshot_blocks");
+    expect(update).toHaveBeenCalledWith({ annotation_json: sampleAnnotations });
+    expect(eq).toHaveBeenCalledWith("id", "shot-1");
+  });
+
+  it("patches the store with the new annotations so every reader sees them immediately", async () => {
+    const eq = vi.fn(() => Promise.resolve({ error: null }));
+    mockSupabase.from.mockReturnValue({ update: () => ({ eq }) });
+
+    const { result } = renderHook(() => useUpdateScreenshotAnnotations());
+    await act(async () => {
+      await result.current("shot-1", sampleAnnotations);
+    });
+
+    expect(screenshotBlocksStore.getState().find((b) => b.id === "shot-1")?.annotations).toEqual(sampleAnnotations);
+  });
+
+  it("throws and leaves the store untouched when the Supabase write fails", async () => {
+    const eq = vi.fn(() => Promise.resolve({ error: new Error("db down") }));
+    mockSupabase.from.mockReturnValue({ update: () => ({ eq }) });
+
+    const { result } = renderHook(() => useUpdateScreenshotAnnotations());
+    await expect(result.current("shot-1", sampleAnnotations)).rejects.toThrow();
+    expect(screenshotBlocksStore.getState().find((b) => b.id === "shot-1")?.annotations).toEqual([]);
+  });
+});
+
+describe("usePatchScreenshotAnnotationsLocal", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetStore();
+    seedBlock();
+  });
+
+  it("updates the store's annotations for a block without calling Supabase", () => {
+    const { result } = renderHook(() => usePatchScreenshotAnnotationsLocal());
+    act(() => {
+      result.current("shot-1", sampleAnnotations);
+    });
+
+    expect(screenshotBlocksStore.getState().find((b) => b.id === "shot-1")?.annotations).toEqual(sampleAnnotations);
+    expect(mockSupabase.from).not.toHaveBeenCalled();
+  });
+
+  it("leaves other blocks in the store untouched", () => {
+    screenshotBlocksStore.setState((prev) => [
+      ...prev,
+      {
+        id: "shot-2",
+        pageId: "page-1",
+        type: "screenshot" as const,
+        order: 1,
+        imageUrl: "other.png",
+        imageWidth: 800,
+        imageHeight: 600,
+        annotations: [],
+        description: "",
+        altText: null,
+        createdAt: "t",
+        updatedAt: "t",
+      },
+    ]);
+
+    const { result } = renderHook(() => usePatchScreenshotAnnotationsLocal());
+    act(() => {
+      result.current("shot-1", sampleAnnotations);
+    });
+
+    expect(screenshotBlocksStore.getState().find((b) => b.id === "shot-2")?.annotations).toEqual([]);
   });
 });
