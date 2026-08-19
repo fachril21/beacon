@@ -188,12 +188,52 @@ describe("mapScreenshotBlockRow", () => {
       imageUrl: "org-1/space-1/page-1/shot-1.png",
       imageWidth: 800,
       imageHeight: 600,
-      annotationJson: null,
+      annotations: [],
       description: "",
       altText: null,
       createdAt: "2026-01-01T00:00:00Z",
       updatedAt: "2026-01-01T00:00:00Z",
     });
+  });
+
+  it("maps a null annotation_json column to an empty annotations array, not null", () => {
+    const row = {
+      id: "shot-1",
+      page_id: "page-1",
+      order: 0,
+      image_object_key: "k.png",
+      image_width: 800,
+      image_height: 600,
+      annotation_json: null,
+      description: "",
+      alt_text: null,
+      created_at: "t",
+      updated_at: "t",
+    };
+    expect(mapScreenshotBlockRow(row).annotations).toEqual([]);
+  });
+
+  it("maps a populated annotation_json column to structured Annotation objects, unchanged", () => {
+    const row = {
+      id: "shot-1",
+      page_id: "page-1",
+      order: 0,
+      image_object_key: "k.png",
+      image_width: 800,
+      image_height: 600,
+      annotation_json: [
+        { id: "ann-1", type: "box", order: 1, color: "#ff0000", x: 0.1, y: 0.2, width: 0.3, height: 0.15 },
+        { id: "ann-2", type: "marker", order: 2, color: "#00ff00", x: 0.5, y: 0.5 },
+      ],
+      description: "",
+      alt_text: null,
+      created_at: "t",
+      updated_at: "t",
+    };
+    expect(mapScreenshotBlockRow(row).annotations).toEqual([
+      { id: "ann-1", type: "box", order: 1, color: "#ff0000", x: 0.1, y: 0.2, width: 0.3, height: 0.15 },
+      { id: "ann-2", type: "marker", order: 2, color: "#00ff00", x: 0.5, y: 0.5 },
+    ]);
   });
 });
 
