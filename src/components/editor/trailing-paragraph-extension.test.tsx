@@ -11,8 +11,9 @@ import { screenshotBlock, divider, paragraph } from "@/lib/mock/blocknote-conten
 vi.mock("@/hooks/use-screenshot-blocks", () => ({
   useScreenshotBlock: () => undefined,
   useUploadScreenshot: () => vi.fn(),
-  useUpdateScreenshotAnnotation: () => vi.fn(),
   useUpdateScreenshotDescription: () => vi.fn(),
+  useUpdateScreenshotAnnotations: () => vi.fn(),
+  usePatchScreenshotAnnotationsLocal: () => vi.fn(),
 }));
 
 type EditorInitialContent = PartialBlock<

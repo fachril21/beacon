@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { editorSchema } from "./schema";
@@ -13,6 +13,8 @@ vi.mock("@/hooks/use-screenshot-blocks", () => ({
   useScreenshotBlock: (id?: string) => mockUseScreenshotBlock(id),
   useUploadScreenshot: () => vi.fn(),
   useUpdateScreenshotDescription: () => vi.fn(),
+  useUpdateScreenshotAnnotations: () => vi.fn(),
+  usePatchScreenshotAnnotationsLocal: () => vi.fn(),
 }));
 
 const mockBlock: ScreenshotBlock = {
@@ -59,5 +61,29 @@ describe("screenshot block render", () => {
     mockUseScreenshotBlock.mockReturnValue(mockBlock);
     render(<TestEditor editable={false} screenshotBlockId="shot-1" />);
     expect(screen.getByRole("img")).toBeInTheDocument();
+  });
+
+  it("renders existing annotations on top of the image in read-only mode", () => {
+    mockUseScreenshotBlock.mockReturnValue({
+      ...mockBlock,
+      annotations: [{ id: "a1", type: "marker", order: 1, color: "#fff", x: 0.1, y: 0.1 }],
+    });
+    render(<TestEditor editable={false} screenshotBlockId="shot-1" />);
+    expect(document.querySelector("svg circle")).toBeInTheDocument();
+  });
+
+  it("enters annotate mode with the tool palette when the thumbnail is clicked in edit mode", () => {
+    mockUseScreenshotBlock.mockReturnValue(mockBlock);
+    render(<TestEditor editable={true} screenshotBlockId="shot-1" />);
+    fireEvent.click(screen.getByRole("img"));
+    expect(screen.getByRole("button", { name: /Kotak/i })).toBeInTheDocument();
+  });
+
+  it("exits annotate mode back to the plain thumbnail when 'Selesai' is clicked", () => {
+    mockUseScreenshotBlock.mockReturnValue(mockBlock);
+    render(<TestEditor editable={true} screenshotBlockId="shot-1" />);
+    fireEvent.click(screen.getByRole("img"));
+    fireEvent.click(screen.getByRole("button", { name: /Selesai/i }));
+    expect(screen.queryByRole("button", { name: /Kotak/i })).not.toBeInTheDocument();
   });
 });
