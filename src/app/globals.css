@@ -79,7 +79,7 @@
   --radius-sm: 0.375rem; /* 6px — badges, small buttons, checkboxes */
   --radius-md: var(--radius); /* 10px base — buttons, inputs, dropdown items */
   --radius-lg: 0.875rem; /* 14px — cards, popovers */
-  --radius-xl: 1.25rem; /* 20px — dialogs, annotation canvas frame */
+  --radius-xl: 1.25rem; /* 20px — dialogs, inset sidebar frame */
   /* radius-full is Tailwind's native `rounded-full` (avatars, icon buttons, status dots, data chips) */
 
   /* Type scale — DESIGN.md §3.1 */
