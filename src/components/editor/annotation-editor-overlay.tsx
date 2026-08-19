@@ -33,6 +33,8 @@ interface AnnotationEditorOverlayProps {
   activeTool: AnnotationShapeType | null;
   onActiveToolChange: (tool: AnnotationShapeType | null) => void;
   onAnnotationsChange: (next: Annotation[]) => void;
+  /** The image being annotated — rendered by the caller so this component doesn't own image-loading concerns, wrapped here in the same sized/relative container the interactive SVG overlays. */
+  children: React.ReactNode;
 }
 
 /**
@@ -51,6 +53,7 @@ export function AnnotationEditorOverlay({
   activeTool,
   onActiveToolChange,
   onAnnotationsChange,
+  children,
 }: AnnotationEditorOverlayProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -177,7 +180,7 @@ export function AnnotationEditorOverlay({
   }, [selectedId]);
 
   return (
-    <div className="relative">
+    <div>
       <div className="mb-2 flex flex-wrap items-center gap-1.5 rounded-md border border-card bg-popover p-1.5">
         {TOOLS.map(({ type, icon: Icon, label }) => (
           <button
@@ -209,35 +212,38 @@ export function AnnotationEditorOverlay({
           ))}
         </div>
       </div>
-      <svg
-        ref={svgRef}
-        data-testid="annotation-editor-canvas"
-        viewBox={`0 0 ${imageWidth} ${imageHeight}`}
-        className="absolute inset-0 h-full w-full touch-none"
-        onPointerDown={handleBackgroundPointerDown}
-      >
-        <defs>
-          {annotations
-            .filter((a) => a.type === "arrow")
-            .map((a) => (
-              <marker key={a.id} id={`arrowhead-editor-${a.id}`} markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
-                <path d="M0,0 L8,4 L0,8 Z" fill={a.color} />
-              </marker>
-            ))}
-        </defs>
-        {annotations.map((a) => (
-          <EditableAnnotationShape
-            key={a.id}
-            annotation={a}
-            imageWidth={imageWidth}
-            imageHeight={imageHeight}
-            strokeWidth={strokeWidth}
-            selected={selectedId === a.id}
-            onPointerDown={(e) => handleShapePointerDown(e, a)}
-            onTextChange={(text) => updateAnnotation(a.id, { text })}
-          />
-        ))}
-      </svg>
+      <div className="relative overflow-hidden rounded-lg border border-card bg-background">
+        {children}
+        <svg
+          ref={svgRef}
+          data-testid="annotation-editor-canvas"
+          viewBox={`0 0 ${imageWidth} ${imageHeight}`}
+          className="absolute inset-0 h-full w-full touch-none"
+          onPointerDown={handleBackgroundPointerDown}
+        >
+          <defs>
+            {annotations
+              .filter((a) => a.type === "arrow")
+              .map((a) => (
+                <marker key={a.id} id={`arrowhead-editor-${a.id}`} markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                  <path d="M0,0 L8,4 L0,8 Z" fill={a.color} />
+                </marker>
+              ))}
+          </defs>
+          {annotations.map((a) => (
+            <EditableAnnotationShape
+              key={a.id}
+              annotation={a}
+              imageWidth={imageWidth}
+              imageHeight={imageHeight}
+              strokeWidth={strokeWidth}
+              selected={selectedId === a.id}
+              onPointerDown={(e) => handleShapePointerDown(e, a)}
+              onTextChange={(text) => updateAnnotation(a.id, { text })}
+            />
+          ))}
+        </svg>
+      </div>
     </div>
   );
 }

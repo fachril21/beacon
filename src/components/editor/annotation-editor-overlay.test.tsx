@@ -44,7 +44,10 @@ function renderOverlay(overrides: {
           onAnnotationsChange(next);
           setAnnotations(next);
         }}
-      />
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- test stand-in for the real next/image the caller provides */}
+        <img src="shot.png" alt="" />
+      </AnnotationEditorOverlay>
     );
   }
 
