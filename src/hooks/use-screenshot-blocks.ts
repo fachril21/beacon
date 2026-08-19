@@ -4,7 +4,7 @@ import { useSyncExternalStore, useCallback, useEffect } from "react";
 import { screenshotBlocksStore } from "@/lib/supabase/stores";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { mapScreenshotBlockRow, type ScreenshotBlockRow } from "@/lib/supabase/mappers";
-import type { AnnotationJson, ScreenshotBlock } from "@/lib/types";
+import type { Annotation, ScreenshotBlock } from "@/lib/types";
 
 /**
  * The store only ever gets patched in-place by the create/update mutations
@@ -66,18 +66,6 @@ export function useCreateScreenshotBlock() {
   }, []);
 }
 
-export function useUpdateScreenshotAnnotation() {
-  return useCallback(async (id: string, annotationJson: AnnotationJson) => {
-    const supabase = getSupabaseBrowserClient();
-    const { error } = await supabase.from("screenshot_blocks").update({ annotation_json: annotationJson }).eq("id", id);
-    if (error) throw error;
-
-    screenshotBlocksStore.setState((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, annotationJson, updatedAt: new Date().toISOString() } : b)),
-    );
-  }, []);
-}
-
 export function useUpdateScreenshotDescription() {
   return useCallback(async (id: string, description: string) => {
     const supabase = getSupabaseBrowserClient();
@@ -87,6 +75,37 @@ export function useUpdateScreenshotDescription() {
     screenshotBlocksStore.setState((prev) =>
       prev.map((b) => (b.id === id ? { ...b, description, updatedAt: new Date().toISOString() } : b)),
     );
+  }, []);
+}
+
+export function useUpdateScreenshotAnnotations() {
+  return useCallback(async (id: string, annotations: Annotation[]) => {
+    const supabase = getSupabaseBrowserClient();
+    const { error } = await supabase.from("screenshot_blocks").update({ annotation_json: annotations }).eq("id", id);
+    if (error) throw error;
+
+    screenshotBlocksStore.setState((prev) =>
+      prev.map((b) => (b.id === id ? { ...b, annotations, updatedAt: new Date().toISOString() } : b)),
+    );
+  }, []);
+}
+
+/**
+ * Store-only patch, no Supabase round trip — used for every intermediate
+ * frame while a shape is being drawn or dragged. BlockNote's dev-mode
+ * NodeView remount (docs/testing/annotation-remount-resilience.tdd.md,
+ * docs/testing/annotation-box-shape-dot-fix.tdd.md) lands well inside a
+ * normal drag gesture, so the previous Fabric.js implementation's shapes
+ * froze at their creation size or lost in-progress moves. Writing every
+ * frame straight into this remount-safe store (the same one already backing
+ * the image/description, which never flickered) means a remount always
+ * re-renders from the shape's current position — never a stale snapshot.
+ * `useUpdateScreenshotAnnotations` still does the actual (debounced) network
+ * save once a gesture settles.
+ */
+export function usePatchScreenshotAnnotationsLocal() {
+  return useCallback((id: string, annotations: Annotation[]) => {
+    screenshotBlocksStore.setState((prev) => prev.map((b) => (b.id === id ? { ...b, annotations } : b)));
   }, []);
 }
 
