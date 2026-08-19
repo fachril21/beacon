@@ -154,7 +154,7 @@ export interface Page {
 // tree IS their "Block" representation, per PRD.md §5.1's truth-source rule,
 // so no parallel per-paragraph row exists. The one Block subtype that needs
 // to be a first-class, independently addressable entity is ScreenshotBlock
-// (it owns non-text state — image ref + annotation layer + description —
+// (it owns non-text state — image ref + description —
 // that must survive being re-opened without re-uploading, and that
 // Comments/Version History need to reference by a stable id independent of
 // BlockNote's own block ids). BlockType also enumerates every insertable
@@ -181,18 +181,36 @@ export interface Block {
 }
 
 // ---------------------------------------------------------------------------
-// ScreenshotBlock — PROJECT.md §9.4 (the product's signature feature)
+// Annotation — a single markup shape drawn on top of a ScreenshotBlock's
+// image (numbered step markers, arrows, boxes, text labels). Coordinates are
+// fractions (0..1) of the image's own width/height, not raw pixels, so a
+// shape stays correctly positioned regardless of the display size the image
+// is rendered at (see AnnotationOverlay's viewBox).
 // ---------------------------------------------------------------------------
 
-export type AnnotationToolType = "box" | "arrow" | "marker" | "label" | "blur";
+export type AnnotationShapeType = "marker" | "arrow" | "box" | "label";
 
-/** Fabric.js canvas JSON, serialized via canvas.toJSON() — opaque to app code beyond this shape. */
-export interface AnnotationJson {
-  version: string;
-  objects: Record<string, unknown>[];
-  /** Next number to preview on the numbered-marker tool (DESIGN.md §6.3). */
-  nextMarkerNumber: number;
+export interface Annotation {
+  id: ID;
+  type: AnnotationShapeType;
+  /** Placement order — also the number shown for a "marker" annotation. */
+  order: number;
+  color: string;
+  x: number;
+  y: number;
+  /** Arrow endpoint (fraction of image width/height) — only set for type "arrow". */
+  x2?: number;
+  y2?: number;
+  /** Box size (fraction of image width/height) — only set for type "box". */
+  width?: number;
+  height?: number;
+  /** Free text — only set for type "label". */
+  text?: string;
 }
+
+// ---------------------------------------------------------------------------
+// ScreenshotBlock — PROJECT.md §9.4 (the product's signature feature)
+// ---------------------------------------------------------------------------
 
 export interface ScreenshotBlock extends Block {
   type: "screenshot";
@@ -203,7 +221,7 @@ export interface ScreenshotBlock extends Block {
   imageUrl: string;
   imageWidth: number;
   imageHeight: number;
-  annotationJson: AnnotationJson | null;
+  annotations: Annotation[];
   /** Plain text for Stage 1; could become rich text later — not specified by the brief. */
   description: string;
   altText: string | null;

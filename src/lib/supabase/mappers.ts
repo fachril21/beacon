@@ -13,6 +13,7 @@ import type {
   Permission,
   Page,
   PageContent,
+  Annotation,
   ScreenshotBlock,
   Version,
   PublishedContentSnapshot,
@@ -190,7 +191,7 @@ export interface ScreenshotBlockRow {
   image_object_key: string;
   image_width: number;
   image_height: number;
-  annotation_json: ScreenshotBlock["annotationJson"];
+  annotation_json: Annotation[] | null;
   description: string;
   alt_text: string | null;
   created_at: string;
@@ -206,7 +207,7 @@ export function mapScreenshotBlockRow(row: ScreenshotBlockRow): ScreenshotBlock 
     imageUrl: row.image_object_key,
     imageWidth: row.image_width,
     imageHeight: row.image_height,
-    annotationJson: row.annotation_json,
+    annotations: row.annotation_json ?? [],
     description: row.description,
     altText: row.alt_text,
     createdAt: row.created_at,
