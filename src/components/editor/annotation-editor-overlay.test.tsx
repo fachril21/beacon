@@ -70,6 +70,16 @@ describe("AnnotationEditorOverlay toolbar", () => {
     fireEvent.click(screen.getByRole("button", { name: /Kotak/i }));
     expect(onActiveToolChange).toHaveBeenCalledWith("box");
   });
+
+  it("uses the chosen swatch color for the next placed shape", () => {
+    const { canvas, onAnnotationsChange } = renderOverlay({ activeTool: "marker" });
+    fireEvent.click(screen.getByRole("button", { name: /Warna oklch\(0.680 0.190 25\)/i }));
+
+    fireEvent.pointerDown(canvas, { clientX: 80, clientY: 60, pointerId: 1 });
+    fireEvent.pointerUp(window, { clientX: 80, clientY: 60, pointerId: 1 });
+
+    expect(onAnnotationsChange).toHaveBeenCalledWith([expect.objectContaining({ color: "oklch(0.680 0.190 25)" })]);
+  });
 });
 
 describe("AnnotationEditorOverlay — placing shapes", () => {
@@ -147,6 +157,21 @@ describe("AnnotationEditorOverlay — placing shapes", () => {
     expect(onAnnotationsChange).toHaveBeenCalledWith([expect.objectContaining({ id: "a1", text: "Klik di sini" })]);
   });
 
+  it("clicking into a label's inline text input does not start dragging the label itself", () => {
+    const existing: Annotation[] = [{ id: "a1", type: "label", order: 1, color: "#fff", x: 0.1, y: 0.1, text: "" }];
+    const { onAnnotationsChange } = renderOverlay({ annotations: existing });
+
+    fireEvent.pointerDown(screen.getByTestId("annotation-a1"), { clientX: 80, clientY: 60, pointerId: 1 });
+    fireEvent.pointerUp(window, { clientX: 80, clientY: 60, pointerId: 1 });
+    onAnnotationsChange.mockClear();
+
+    fireEvent.pointerDown(screen.getByRole("textbox"), { clientX: 90, clientY: 65, pointerId: 2 });
+    fireEvent.pointerMove(window, { clientX: 200, clientY: 200, pointerId: 2 });
+    fireEvent.pointerUp(window, { clientX: 200, clientY: 200, pointerId: 2 });
+
+    expect(onAnnotationsChange).not.toHaveBeenCalled();
+  });
+
   it("does nothing on a background click when no tool is selected (select mode)", () => {
     const { canvas, onAnnotationsChange } = renderOverlay({ activeTool: null });
     fireEvent.pointerDown(canvas, { clientX: 80, clientY: 60, pointerId: 1 });
@@ -173,6 +198,20 @@ describe("AnnotationEditorOverlay — select, move, delete", () => {
     fireEvent.pointerUp(window, { clientX: 160, clientY: 120, pointerId: 1 });
 
     expect(onAnnotationsChange).toHaveBeenLastCalledWith([expect.objectContaining({ id: "a1", x: 0.2, y: 0.2 })]);
+  });
+
+  it("drags a selected arrow by translating both endpoints, preserving its shaft", () => {
+    const arrow: Annotation = { id: "a2", type: "arrow", order: 1, color: "#fff", x: 0.1, y: 0.1, x2: 0.3, y2: 0.1 };
+    const { onAnnotationsChange } = renderOverlay({ annotations: [arrow] });
+    const shape = screen.getByTestId("annotation-a2");
+
+    fireEvent.pointerDown(shape, { clientX: 80, clientY: 80, pointerId: 1 });
+    fireEvent.pointerMove(window, { clientX: 160, clientY: 80, pointerId: 1 });
+    fireEvent.pointerUp(window, { clientX: 160, clientY: 80, pointerId: 1 });
+
+    expect(onAnnotationsChange).toHaveBeenLastCalledWith([
+      expect.objectContaining({ id: "a2", x: 0.2, y: 0.1, x2: 0.4, y2: 0.1 }),
+    ]);
   });
 
   it("deletes the selected annotation on Delete/Backspace", () => {
