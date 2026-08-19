@@ -9,12 +9,14 @@ import type { ScreenshotBlock } from "@/lib/types";
 vi.mock("./comment-thread-panel", () => ({ CommentThreadPanel: () => null }));
 
 const mockUseScreenshotBlock = vi.fn();
+const mockUpdateAnnotations = vi.fn();
+const mockPatchAnnotationsLocal = vi.fn();
 vi.mock("@/hooks/use-screenshot-blocks", () => ({
   useScreenshotBlock: (id?: string) => mockUseScreenshotBlock(id),
   useUploadScreenshot: () => vi.fn(),
   useUpdateScreenshotDescription: () => vi.fn(),
-  useUpdateScreenshotAnnotations: () => vi.fn(),
-  usePatchScreenshotAnnotationsLocal: () => vi.fn(),
+  useUpdateScreenshotAnnotations: () => mockUpdateAnnotations,
+  usePatchScreenshotAnnotationsLocal: () => mockPatchAnnotationsLocal,
 }));
 
 const mockBlock: ScreenshotBlock = {
@@ -85,5 +87,32 @@ describe("screenshot block render", () => {
     fireEvent.click(screen.getByRole("img"));
     fireEvent.click(screen.getByRole("button", { name: /Selesai/i }));
     expect(screen.queryByRole("button", { name: /Kotak/i })).not.toBeInTheDocument();
+  });
+
+  it("patches annotations locally immediately, then debounce-saves to Supabase after placing a marker", () => {
+    vi.useFakeTimers();
+    Object.defineProperty(SVGSVGElement.prototype, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 0, top: 0, width: 400, height: 300, right: 400, bottom: 300, x: 0, y: 0, toJSON: () => ({}) }),
+    });
+    mockUseScreenshotBlock.mockReturnValue(mockBlock);
+    mockUpdateAnnotations.mockReset().mockResolvedValue(undefined);
+    mockPatchAnnotationsLocal.mockClear();
+
+    render(<TestEditor editable={true} screenshotBlockId="shot-1" />);
+    fireEvent.click(screen.getByRole("img"));
+    fireEvent.click(screen.getByRole("button", { name: /Penanda Bernomor/i }));
+
+    const canvas = document.querySelector('[data-testid="annotation-editor-canvas"]') as SVGSVGElement;
+    fireEvent.pointerDown(canvas, { clientX: 40, clientY: 30, pointerId: 1 });
+    fireEvent.pointerUp(window, { clientX: 40, clientY: 30, pointerId: 1 });
+
+    expect(mockPatchAnnotationsLocal).toHaveBeenCalledWith("shot-1", [expect.objectContaining({ type: "marker" })]);
+    expect(mockUpdateAnnotations).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(500);
+    expect(mockUpdateAnnotations).toHaveBeenCalledWith("shot-1", [expect.objectContaining({ type: "marker" })]);
+
+    vi.useRealTimers();
   });
 });
