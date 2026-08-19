@@ -222,8 +222,8 @@ describe("mapScreenshotBlockRow", () => {
       image_width: 800,
       image_height: 600,
       annotation_json: [
-        { id: "ann-1", type: "box", order: 1, color: "#ff0000", x: 0.1, y: 0.2, width: 0.3, height: 0.15 },
-        { id: "ann-2", type: "marker", order: 2, color: "#00ff00", x: 0.5, y: 0.5 },
+        { id: "ann-1", type: "box" as const, order: 1, color: "#ff0000", x: 0.1, y: 0.2, width: 0.3, height: 0.15 },
+        { id: "ann-2", type: "marker" as const, order: 2, color: "#00ff00", x: 0.5, y: 0.5 },
       ],
       description: "",
       alt_text: null,
