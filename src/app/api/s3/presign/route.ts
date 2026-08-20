@@ -12,9 +12,9 @@ interface PresignRequestBody {
 }
 
 /**
- * Issues a presigned S3/MinIO POST for a screenshot upload (PRD.md §5.2,
- * Flow 3 step 4). Never touches file bytes or long-lived credentials — the
- * browser uploads directly to S3/MinIO with the fields returned here.
+ * Issues a presigned S3-compatible PUT URL for a screenshot upload (PRD.md
+ * §5.2, Flow 3 step 4). Never touches file bytes or long-lived credentials —
+ * the browser PUTs the file directly to the URL returned here.
  */
 export async function POST(request: Request) {
   const supabase = await getSupabaseServerClient();
@@ -49,7 +49,6 @@ export async function POST(request: Request) {
     bucket: getS3Bucket(),
     key,
     contentType,
-    maxUploadBytes,
   });
 
   return NextResponse.json(upload);

@@ -1,6 +1,6 @@
 import "server-only";
-import type { S3Client } from "@aws-sdk/client-s3";
-import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
+import { PutObjectCommand, type S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 /**
  * `screenshots/<pageId>/<random>.<ext>` — namespaced by Page so cleanup and
@@ -16,7 +16,6 @@ export function buildScreenshotObjectKey(pageId: string, fileName: string): stri
 
 export interface PresignedUpload {
   url: string;
-  fields: Record<string, string>;
   objectKey: string;
 }
 
@@ -25,27 +24,22 @@ export interface CreatePresignedUploadInput {
   bucket: string;
   key: string;
   contentType: string;
-  maxUploadBytes: number;
 }
 
 /**
- * A presigned POST (not a presigned PUT) so the size cap is enforced by S3
- * itself via a `content-length-range` policy condition, not merely trusted
- * client-side — a PUT presigned URL alone cannot reject an oversized body.
+ * A presigned PUT, not a presigned POST — Backblaze B2's S3-compatible API
+ * does not support browser-based POST uploads. The upload size cap is
+ * therefore only checked pre-flight in the presign route, not enforced by
+ * the storage layer itself (a POST policy's content-length-range condition
+ * has no PUT equivalent).
  */
 export async function createPresignedUpload(input: CreatePresignedUploadInput): Promise<PresignedUpload> {
-  const { url, fields } = await createPresignedPost(input.client, {
+  const command = new PutObjectCommand({
     Bucket: input.bucket,
     Key: input.key,
-    Conditions: [
-      ["content-length-range", 0, input.maxUploadBytes],
-      ["eq", "$Content-Type", input.contentType],
-    ],
-    Fields: {
-      "Content-Type": input.contentType,
-    },
-    Expires: 60,
+    ContentType: input.contentType,
   });
+  const url = await getSignedUrl(input.client, command, { expiresIn: 60 });
 
-  return { url, fields, objectKey: input.key };
+  return { url, objectKey: input.key };
 }

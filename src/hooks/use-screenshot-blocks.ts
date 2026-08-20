@@ -119,16 +119,16 @@ export interface UploadScreenshotInput {
 
 interface PresignResponse {
   url: string;
-  fields: Record<string, string>;
   objectKey: string;
 }
 
 /**
- * Flow 3 step 4: request a presigned upload, PUT/POST the file directly to
- * S3/MinIO (never through our own server), then persist the resulting
- * object key. Throws (without creating a DB row) if either network step
- * fails, so the caller can show a retry affordance instead of a phantom
- * ScreenshotBlock pointing at a file that was never actually uploaded.
+ * Flow 3 step 4: request a presigned upload, PUT the file directly to
+ * S3-compatible storage (never through our own server), then persist the
+ * resulting object key. Throws (without creating a DB row) if either
+ * network step fails, so the caller can show a retry affordance instead of
+ * a phantom ScreenshotBlock pointing at a file that was never actually
+ * uploaded.
  */
 export function useUploadScreenshot() {
   const createBlock = useCreateScreenshotBlock();
@@ -148,13 +148,13 @@ export function useUploadScreenshot() {
       if (!presignRes.ok) {
         throw new Error("Failed to get an upload URL");
       }
-      const { url, fields, objectKey } = (await presignRes.json()) as PresignResponse;
+      const { url, objectKey } = (await presignRes.json()) as PresignResponse;
 
-      const formData = new FormData();
-      for (const [key, value] of Object.entries(fields)) formData.append(key, value);
-      formData.append("file", input.file);
-
-      const uploadRes = await fetch(url, { method: "POST", body: formData });
+      const uploadRes = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": input.file.type },
+        body: input.file,
+      });
       if (!uploadRes.ok) {
         throw new Error("Failed to upload the image");
       }
