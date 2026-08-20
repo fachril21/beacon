@@ -101,13 +101,12 @@ describe("useUploadScreenshot", () => {
           return {
             ok: true,
             json: async () => ({
-              url: "https://s3.example.com/bucket",
-              fields: { key: "screenshots/page-1/abc.png", policy: "p" },
+              url: "https://s3.example.com/bucket/screenshots/page-1/abc.png?X-Amz-Signature=fake",
               objectKey: "screenshots/page-1/abc.png",
             }),
           };
         }
-        // The direct-to-S3 POST.
+        // The direct-to-S3 PUT (Backblaze B2's S3-compatible API doesn't support presigned POST).
         return { ok: true };
       }),
     );
@@ -145,7 +144,10 @@ describe("useUploadScreenshot", () => {
         body: JSON.stringify({ pageId: "page-1", fileName: "shot.png", contentType: "image/png", fileSize: file.size }),
       }),
     );
-    expect(fetch).toHaveBeenCalledWith("https://s3.example.com/bucket", expect.objectContaining({ method: "POST" }));
+    expect(fetch).toHaveBeenCalledWith(
+      "https://s3.example.com/bucket/screenshots/page-1/abc.png?X-Amz-Signature=fake",
+      expect.objectContaining({ method: "PUT", headers: { "Content-Type": "image/png" }, body: file }),
+    );
     expect(created).toMatchObject({ id: "shot-1", imageUrl: "screenshots/page-1/abc.png" });
   });
 
@@ -156,7 +158,7 @@ describe("useUploadScreenshot", () => {
         if (url === "/api/s3/presign") {
           return {
             ok: true,
-            json: async () => ({ url: "https://s3.example.com/bucket", fields: {}, objectKey: "k" }),
+            json: async () => ({ url: "https://s3.example.com/bucket/k", objectKey: "k" }),
           };
         }
         return { ok: false, status: 403 };

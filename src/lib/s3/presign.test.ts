@@ -25,41 +25,43 @@ describe("buildScreenshotObjectKey", () => {
   });
 });
 
-vi.mock("@aws-sdk/s3-presigned-post", () => ({
-  createPresignedPost: vi.fn(async () => ({
-    url: "https://s3.example.com/bucket",
-    fields: { key: "screenshots/page-1/abc.png", policy: "fake-policy", "x-amz-signature": "fake-sig" },
-  })),
+vi.mock("@aws-sdk/s3-request-presigner", () => ({
+  getSignedUrl: vi.fn(async () => "https://s3.example.com/bucket/screenshots/page-1/abc.png?X-Amz-Signature=fake"),
 }));
+vi.mock("@aws-sdk/client-s3", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@aws-sdk/client-s3")>();
+  return { ...actual };
+});
 
 const { createPresignedUpload } = await import("./presign");
-const { createPresignedPost } = await import("@aws-sdk/s3-presigned-post");
+const { getSignedUrl } = await import("@aws-sdk/s3-request-presigner");
+const { PutObjectCommand } = await import("@aws-sdk/client-s3");
 
 describe("createPresignedUpload", () => {
-  it("requests a presigned POST scoped to the bucket/key/content-type with a size-cap condition", async () => {
+  it("requests a presigned PUT scoped to the bucket/key/content-type — Backblaze B2's S3-compatible API does not support presigned POST", async () => {
     const fakeClient = {} as never;
     const result = await createPresignedUpload({
       client: fakeClient,
       bucket: "beacon-screenshots",
       key: "screenshots/page-1/abc.png",
       contentType: "image/png",
-      maxUploadBytes: 10_485_760,
     });
 
-    expect(createPresignedPost).toHaveBeenCalledWith(
+    expect(getSignedUrl).toHaveBeenCalledWith(
       fakeClient,
+      expect.any(PutObjectCommand),
+      expect.objectContaining({ expiresIn: 60 }),
+    );
+    const [, command] = vi.mocked(getSignedUrl).mock.calls[0];
+    expect(command.input).toEqual(
       expect.objectContaining({
         Bucket: "beacon-screenshots",
         Key: "screenshots/page-1/abc.png",
-        Conditions: expect.arrayContaining([
-          ["content-length-range", 0, 10_485_760],
-          ["eq", "$Content-Type", "image/png"],
-        ]),
+        ContentType: "image/png",
       }),
     );
     expect(result).toEqual({
-      url: "https://s3.example.com/bucket",
-      fields: { key: "screenshots/page-1/abc.png", policy: "fake-policy", "x-amz-signature": "fake-sig" },
+      url: "https://s3.example.com/bucket/screenshots/page-1/abc.png?X-Amz-Signature=fake",
       objectKey: "screenshots/page-1/abc.png",
     });
   });
