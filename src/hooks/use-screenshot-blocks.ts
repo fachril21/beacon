@@ -37,7 +37,7 @@ export function useScreenshotBlock(id: string | undefined, pageId: string | unde
 export interface CreateScreenshotBlockInput {
   pageId: string;
   order: number;
-  /** An S3/MinIO object key (see useUploadScreenshot) — not a browser-fetchable URL. */
+  /** An S3-compatible object key (see useUploadScreenshot) — not a browser-fetchable URL. */
   imageUrl: string;
   imageWidth: number;
   imageHeight: number;

@@ -216,7 +216,7 @@ export interface ScreenshotBlock extends Block {
   type: "screenshot";
   /**
    * Stage 1: a local object URL (`URL.createObjectURL`) or a path under /public
-   * for seeded fixtures. Stage 2: an S3/MinIO object key (PRD.md §5.2).
+   * for seeded fixtures. Stage 2: an S3-compatible object key (PRD.md §5.2).
    */
   imageUrl: string;
   imageWidth: number;

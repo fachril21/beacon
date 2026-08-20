@@ -1,4 +1,4 @@
-/** S3-compatible object storage env vars — same code path for MinIO (dev) and AWS S3 (prod), per PRD.md NFR "Dev environment parity". */
+/** S3-compatible object storage env vars — same code path for any provider (Backblaze B2, AWS S3, ...), per PRD.md NFR "Dev environment parity". */
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -8,7 +8,7 @@ function requireEnv(name: string): string {
   return value;
 }
 
-/** Unset for AWS S3 (uses the SDK's regional default endpoint); set to the MinIO URL in dev. */
+/** Unset for AWS S3 (uses the SDK's regional default endpoint); set to the provider's endpoint otherwise (e.g. Backblaze B2). */
 export function getS3Endpoint(): string | undefined {
   return process.env.S3_ENDPOINT || undefined;
 }
@@ -29,7 +29,7 @@ export function getS3SecretAccessKey(): string {
   return requireEnv("S3_SECRET_ACCESS_KEY");
 }
 
-/** Required for MinIO's path-style buckets; AWS S3 should leave this unset. */
+/** Required for providers using path-style buckets (e.g. MinIO); AWS S3 and Backblaze B2 should leave this unset. */
 export function getS3ForcePathStyle(): boolean {
   return process.env.S3_FORCE_PATH_STYLE === "true";
 }
