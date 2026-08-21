@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { mapSpaceRow, mapPageRow, type SpaceRow, type PageRow } from "@/lib/supabase/mappers";
+import { buildPageTree, type PageTreeNode } from "@/lib/build-page-tree";
 import type { Page, Space } from "@/lib/types";
 
 /**
@@ -13,7 +14,7 @@ import type { Page, Space } from "@/lib/types";
  * currently prevents cross-Organization leakage in the public site).
  */
 export function usePublicToc(organizationId: string | undefined) {
-  const [entries, setEntries] = useState<{ space: Space; pages: Page[] }[]>([]);
+  const [entries, setEntries] = useState<{ space: Space; pages: PageTreeNode[] }[]>([]);
 
   useEffect(() => {
     if (!organizationId) return;
@@ -53,7 +54,7 @@ export function usePublicToc(organizationId: string | undefined) {
       const result = spaces
         .map((space) => ({
           space,
-          pages: pages.filter((p) => p.spaceId === space.id).sort((a, b) => a.order - b.order),
+          pages: buildPageTree(pages.filter((p) => p.spaceId === space.id)),
         }))
         .filter((entry) => entry.pages.length > 0);
 
