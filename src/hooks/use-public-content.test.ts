@@ -53,13 +53,71 @@ describe("usePublicToc", () => {
     expect(spacesEq1).toHaveBeenCalledWith("organization_id", "org-1");
     expect(spacesEq2).toHaveBeenCalledWith("is_publishable", true);
     expect(pagesIn).toHaveBeenCalledWith("space_id", ["space-1"]);
-    expect(result.current[0]).toMatchObject({ space: { id: "space-1" }, pages: [{ id: "page-1" }] });
+    expect(result.current[0]).toMatchObject({
+      space: { id: "space-1" },
+      pages: [{ page: { id: "page-1" }, children: [] }],
+    });
   });
 
   it("returns an empty array without querying when organizationId is undefined", () => {
     const { result } = renderHook(() => usePublicToc(undefined));
     expect(result.current).toEqual([]);
     expect(mockSupabase.from).not.toHaveBeenCalled();
+  });
+
+  it("nests a published child page under its published parent instead of listing it flat", async () => {
+    const spaceRow = {
+      id: "space-1",
+      organization_id: "org-1",
+      name: "Mobile App",
+      category: null,
+      is_publishable: true,
+      created_by_user_id: "user-1",
+      created_at: "t",
+    };
+    const parentRow = {
+      id: "parent",
+      space_id: "space-1",
+      parent_page_id: null,
+      title: "Parent",
+      order: 0,
+      content: emptyDoc(),
+      visibility: "publishable",
+      is_published: true,
+      published_content_snapshot: { title: "Parent", content: emptyDoc(), screenshotBlocks: {}, publishedAt: "t" },
+      published_at: "t",
+      created_by_user_id: "user-1",
+      created_at: "t",
+      updated_at: "t",
+    };
+    const childRow = {
+      ...parentRow,
+      id: "child",
+      parent_page_id: "parent",
+      title: "Child",
+      order: 0,
+      published_content_snapshot: { title: "Child", content: emptyDoc(), screenshotBlocks: {}, publishedAt: "t" },
+    };
+
+    const spacesEq2 = vi.fn(() => Promise.resolve({ data: [spaceRow], error: null }));
+    const spacesEq1 = vi.fn(() => ({ eq: spacesEq2 }));
+    const pagesEq = vi.fn(() => Promise.resolve({ data: [childRow, parentRow], error: null }));
+    const pagesIn = vi.fn(() => ({ eq: pagesEq }));
+
+    mockSupabase.from.mockImplementation((table: string) => {
+      if (table === "spaces") return { select: () => ({ eq: spacesEq1 }) };
+      if (table === "pages") return { select: () => ({ in: pagesIn }) };
+      throw new Error(`unexpected table ${table}`);
+    });
+
+    const { result } = renderHook(() => usePublicToc("org-1"));
+    await waitFor(() => expect(result.current).toHaveLength(1));
+
+    const { pages } = result.current[0];
+    expect(pages).toHaveLength(1);
+    expect(pages[0].page.id).toBe("parent");
+    expect(pages[0].children).toHaveLength(1);
+    expect(pages[0].children[0].page.id).toBe("child");
   });
 });
 
