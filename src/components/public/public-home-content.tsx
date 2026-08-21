@@ -5,6 +5,33 @@ import { BookOpen } from "lucide-react";
 import { usePublicOrgContext } from "@/hooks/use-public-org";
 import { usePublicToc } from "@/hooks/use-public-content";
 import { EmptyState } from "@/components/beacon/empty-state";
+import type { PageTreeNode } from "@/lib/build-page-tree";
+
+/**
+ * Read-only, always-expanded rendering of a Space's published page tree —
+ * mirrors PublicToc's nesting so the home page and sidebar never disagree
+ * about a Space's structure.
+ */
+function HomePageNode({ node, depth, basePath }: { node: PageTreeNode; depth: number; basePath: string }) {
+  const { page, children } = node;
+  if (!page.slug) return null;
+
+  return (
+    <>
+      <Link
+        href={`${basePath}/pages/${page.slug}`}
+        data-depth={depth}
+        style={{ paddingLeft: `${12 + depth * 16}px` }}
+        className="rounded-md py-2 pr-3 text-body text-foreground hover:bg-accent"
+      >
+        {page.title || "Halaman tanpa judul"}
+      </Link>
+      {children.map((child) => (
+        <HomePageNode key={child.page.id} node={child} depth={depth + 1} basePath={basePath} />
+      ))}
+    </>
+  );
+}
 
 /**
  * Shared body for both the custom-domain (/public) and platform-domain
@@ -35,17 +62,9 @@ export function PublicHomeContent() {
               <div key={space.id}>
                 <h2 className="text-h3 font-semibold text-foreground">{space.name}</h2>
                 <div className="mt-3 flex flex-col gap-1">
-                  {pages
-                    .filter((page) => page.slug)
-                    .map((page) => (
-                      <Link
-                        key={page.id}
-                        href={`${basePath}/pages/${page.slug}`}
-                        className="rounded-md px-3 py-2 text-body text-foreground hover:bg-accent"
-                      >
-                        {page.title || "Halaman tanpa judul"}
-                      </Link>
-                    ))}
+                  {pages.map((node) => (
+                    <HomePageNode key={node.page.id} node={node} depth={0} basePath={basePath} />
+                  ))}
                 </div>
               </div>
             ))}
