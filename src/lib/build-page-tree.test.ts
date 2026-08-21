@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildPageTree } from "./build-page-tree";
+import { buildPageTree, flattenPageTree } from "./build-page-tree";
 import type { Page } from "@/lib/types";
 
 function makePage(overrides: Partial<Page> & Pick<Page, "id">): Page {
@@ -86,5 +86,34 @@ describe("buildPageTree", () => {
     const tree = buildPageTree([child, grandchild]);
 
     expect(tree).toEqual([]);
+  });
+});
+
+describe("flattenPageTree", () => {
+  it("returns an empty array for an empty tree", () => {
+    expect(flattenPageTree([])).toEqual([]);
+  });
+
+  it("annotates each page with its depth, in tree (parent-before-child) order", () => {
+    const root = makePage({ id: "root", parentPageId: null, order: 0 });
+    const child = makePage({ id: "child", parentPageId: "root", order: 0 });
+    const grandchild = makePage({ id: "grandchild", parentPageId: "child", order: 0 });
+    const tree = buildPageTree([grandchild, child, root]);
+
+    expect(flattenPageTree(tree)).toEqual([
+      { page: root, depth: 0 },
+      { page: child, depth: 1 },
+      { page: grandchild, depth: 2 },
+    ]);
+  });
+
+  it("keeps sibling subtrees in order without interleaving them", () => {
+    const root = makePage({ id: "root", parentPageId: null, order: 0 });
+    const childA = makePage({ id: "child-a", parentPageId: "root", order: 0 });
+    const childB = makePage({ id: "child-b", parentPageId: "root", order: 1 });
+    const grandchildOfA = makePage({ id: "grandchild-of-a", parentPageId: "child-a", order: 0 });
+    const tree = buildPageTree([root, childB, childA, grandchildOfA]);
+
+    expect(flattenPageTree(tree).map((entry) => entry.page.id)).toEqual(["root", "child-a", "grandchild-of-a", "child-b"]);
   });
 });
