@@ -37,3 +37,18 @@ export function buildPageTree(pages: Page[]): PageTreeNode[] {
   const roots = pages.filter((page) => page.parentPageId === null);
   return [...roots].sort((a, b) => a.order - b.order).map((page) => ({ page, children: buildChildren(page.id) }));
 }
+
+export interface FlatPageTreeEntry {
+  page: Page;
+  depth: number;
+}
+
+/**
+ * Flattens a PageTreeNode[] into a depth-annotated, parent-before-child list
+ * — the shape both PublicToc and PublicHomeContent render from, so the
+ * recursive tree-walk lives in exactly one place instead of being
+ * duplicated across two near-identical presentational components.
+ */
+export function flattenPageTree(nodes: PageTreeNode[], depth = 0): FlatPageTreeEntry[] {
+  return nodes.flatMap((node) => [{ page: node.page, depth }, ...flattenPageTree(node.children, depth + 1)]);
+}
