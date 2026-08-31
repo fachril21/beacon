@@ -4,7 +4,7 @@ import { use, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { FileText, Plus, Settings, Trash2 } from "lucide-react";
+import { FileText, Plus, Settings, Trash2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/beacon/empty-state";
@@ -76,9 +76,15 @@ export default function SpacePage({ params }: { params: Promise<{ spaceId: strin
           <div className="flex shrink-0 gap-2">
             {role === "admin" && (
               <>
-                <Link href={`/spaces/${spaceId}/members`}>
+                <Link href={`/spaces/${spaceId}/settings`}>
                   <Button variant="secondary" size="sm">
                     <Settings className="size-3.5" />
+                    Pengaturan
+                  </Button>
+                </Link>
+                <Link href={`/spaces/${spaceId}/members`}>
+                  <Button variant="secondary" size="sm">
+                    <Users className="size-3.5" />
                     Anggota
                   </Button>
                 </Link>

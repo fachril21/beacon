@@ -6,7 +6,7 @@ import { emptyDoc } from "@/lib/mock/blocknote-content";
 const mockSupabase = { from: vi.fn() };
 vi.mock("@/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => mockSupabase }));
 
-const { useCreateSpace, useUpdateSpaceRole, useAddOrgMemberToSpace, useDeleteSpace, useOrganizationSpaces } = await import("./use-spaces");
+const { useCreateSpace, useUpdateSpace, useUpdateSpaceRole, useAddOrgMemberToSpace, useDeleteSpace, useOrganizationSpaces } = await import("./use-spaces");
 
 function resetStores() {
   spacesStore.setState([]);
@@ -110,6 +110,61 @@ describe("useCreateSpace", () => {
     expect(spacesDeleteEq).toHaveBeenCalledWith("id", "space-1");
     expect(spacesStore.getState()).toEqual([]);
     expect(permissionsStore.getState()).toEqual([]);
+  });
+});
+
+describe("useUpdateSpace", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetStores();
+  });
+
+  it("updates is_publishable on the row and syncs the local store", async () => {
+    spacesStore.setState([
+      { id: "space-1", organizationId: "org-1", name: "Mobile App", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
+    ]);
+    const eqMock = vi.fn(() => Promise.resolve({ error: null }));
+    const updateMock = vi.fn(() => ({ eq: eqMock }));
+    mockSupabase.from.mockReturnValue({ update: updateMock });
+
+    const { result } = renderHook(() => useUpdateSpace());
+    await act(async () => {
+      await result.current("space-1", { isPublishable: true });
+    });
+
+    expect(updateMock).toHaveBeenCalledWith({ is_publishable: true });
+    expect(eqMock).toHaveBeenCalledWith("id", "space-1");
+    expect(spacesStore.getState()).toEqual([expect.objectContaining({ id: "space-1", isPublishable: true })]);
+  });
+
+  it("updates name on the row and syncs the local store", async () => {
+    spacesStore.setState([
+      { id: "space-1", organizationId: "org-1", name: "Mobile App", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
+    ]);
+    const eqMock = vi.fn(() => Promise.resolve({ error: null }));
+    const updateMock = vi.fn(() => ({ eq: eqMock }));
+    mockSupabase.from.mockReturnValue({ update: updateMock });
+
+    const { result } = renderHook(() => useUpdateSpace());
+    await act(async () => {
+      await result.current("space-1", { name: "Mobile App v2" });
+    });
+
+    expect(updateMock).toHaveBeenCalledWith({ name: "Mobile App v2" });
+    expect(eqMock).toHaveBeenCalledWith("id", "space-1");
+    expect(spacesStore.getState()).toEqual([expect.objectContaining({ id: "space-1", name: "Mobile App v2" })]);
+  });
+
+  it("throws when Supabase returns an error, without touching the local store", async () => {
+    spacesStore.setState([
+      { id: "space-1", organizationId: "org-1", name: "Mobile App", category: null, isPublishable: true, createdByUserId: "user-1", createdAt: "t" },
+    ]);
+    const eqMock = vi.fn(() => Promise.resolve({ error: { message: "permission denied" } }));
+    mockSupabase.from.mockReturnValue({ update: () => ({ eq: eqMock }) });
+
+    const { result } = renderHook(() => useUpdateSpace());
+    await expect(result.current("space-1", { isPublishable: false })).rejects.toEqual({ message: "permission denied" });
+    expect(spacesStore.getState()).toEqual([expect.objectContaining({ id: "space-1", isPublishable: true })]);
   });
 });
 
