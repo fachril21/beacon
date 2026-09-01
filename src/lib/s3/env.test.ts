@@ -1,5 +1,13 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { getS3Endpoint, getS3Region, getS3Bucket, getS3ForcePathStyle, getS3MaxUploadBytes } from "./env";
+import {
+  getS3Endpoint,
+  getS3Region,
+  getS3Bucket,
+  getS3AccessKeyId,
+  getS3SecretAccessKey,
+  getS3ForcePathStyle,
+  getS3MaxUploadBytes,
+} from "./env";
 
 /**
  * The screenshot upload targets real AWS S3 (virtual-hosted-style URLs), so
@@ -36,6 +44,20 @@ describe("s3 env helpers", () => {
     it("throws a named error when S3_BUCKET is missing", () => {
       delete process.env.S3_BUCKET;
       expect(() => getS3Bucket()).toThrow(/S3_BUCKET/);
+    });
+  });
+
+  describe("credentials", () => {
+    it("returns the configured access key id and secret, and throws by name when either is missing", () => {
+      process.env.S3_ACCESS_KEY_ID = "AKIAEXAMPLE";
+      process.env.S3_SECRET_ACCESS_KEY = "secret-value";
+      expect(getS3AccessKeyId()).toBe("AKIAEXAMPLE");
+      expect(getS3SecretAccessKey()).toBe("secret-value");
+
+      delete process.env.S3_ACCESS_KEY_ID;
+      delete process.env.S3_SECRET_ACCESS_KEY;
+      expect(() => getS3AccessKeyId()).toThrow(/S3_ACCESS_KEY_ID/);
+      expect(() => getS3SecretAccessKey()).toThrow(/S3_SECRET_ACCESS_KEY/);
     });
   });
 

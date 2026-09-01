@@ -106,7 +106,7 @@ describe("useUploadScreenshot", () => {
             }),
           };
         }
-        // The direct-to-S3 PUT (Backblaze B2's S3-compatible API doesn't support presigned POST).
+        // The direct-to-S3 PUT.
         return { ok: true };
       }),
     );
@@ -170,6 +170,34 @@ describe("useUploadScreenshot", () => {
     await expect(
       result.current({ pageId: "page-1", order: 0, file, width: 800, height: 600 }),
     ).rejects.toThrow("FILE_TOO_LARGE");
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it("falls back to PRESIGN_FAILED when the presign route errors with an unparseable body", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/api/s3/presign") {
+          return {
+            ok: false,
+            status: 500,
+            json: async () => {
+              throw new Error("not json");
+            },
+          };
+        }
+        return { ok: true };
+      }),
+    );
+    const insert = vi.fn();
+    mockSupabase.from.mockReturnValue({ insert });
+
+    const file = new File(["fake-bytes"], "shot.png", { type: "image/png" });
+    const { result } = renderHook(() => useUploadScreenshot());
+
+    await expect(
+      result.current({ pageId: "page-1", order: 0, file, width: 800, height: 600 }),
+    ).rejects.toThrow("PRESIGN_FAILED");
     expect(insert).not.toHaveBeenCalled();
   });
 
