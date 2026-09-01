@@ -1,7 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-import { getSupabaseAnonKey, getSupabaseUrl } from "./env";
+import { getSupabaseAnonKey, getSupabaseSchema, getSupabaseUrl } from "./env";
 
 /**
  * Supabase client for Server Components / Route Handlers — carries the
@@ -11,6 +11,7 @@ import { getSupabaseAnonKey, getSupabaseUrl } from "./env";
 export async function getSupabaseServerClient() {
   const cookieStore = await cookies();
   return createServerClient(getSupabaseUrl(), getSupabaseAnonKey(), {
+    db: { schema: getSupabaseSchema() },
     cookies: {
       getAll() {
         return cookieStore.getAll();

@@ -10,11 +10,11 @@
 -- and for a Space, its permissions/pending_invites too.
 
 create policy spaces_delete_admin_only
-  on public.spaces for delete
+  on beacon.spaces for delete
   to authenticated
-  using (public.space_role_at_least(id, 'admin'));
+  using (beacon.space_role_at_least(id, 'admin'));
 
 create policy pages_delete_editor
-  on public.pages for delete
+  on beacon.pages for delete
   to authenticated
-  using (public.space_role_at_least(space_id, 'editor'));
+  using (beacon.space_role_at_least(space_id, 'editor'));

@@ -10,11 +10,11 @@
 -- sync (src/lib/extract-text.ts's extractPlainText, already used client-side
 -- for Stage 1's mock search) whenever it writes page content.
 
-alter table public.pages add column search_text text not null default '';
+alter table beacon.pages add column search_text text not null default '';
 
-alter table public.pages add column search_vector tsvector
+alter table beacon.pages add column search_vector tsvector
   generated always as (
     to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(search_text, ''))
   ) stored;
 
-create index pages_search_vector_idx on public.pages using gin (search_vector);
+create index pages_search_vector_idx on beacon.pages using gin (search_vector);

@@ -21,7 +21,7 @@
 -- ---------------------------------------------------------------------------
 
 create unique index pending_invites_space_id_email_unique
-  on public.pending_invites (space_id, lower(email));
+  on beacon.pending_invites (space_id, lower(email));
 
 -- ---------------------------------------------------------------------------
 -- invite_to_space — SECURITY DEFINER because the existing-Account lookup
@@ -34,35 +34,35 @@ create unique index pending_invites_space_id_email_unique
 -- enforced in plpgsql instead of a policy.
 -- ---------------------------------------------------------------------------
 
-create function public.invite_to_space(p_space_id uuid, p_email text, p_role text)
+create function beacon.invite_to_space(p_space_id uuid, p_email text, p_role text)
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = beacon, extensions
 as $$
 declare
   v_email text := lower(trim(p_email));
   v_space_org_id uuid;
   v_profile_id uuid;
   v_profile_org_id uuid;
-  v_permission public.permissions%rowtype;
-  v_invite public.pending_invites%rowtype;
+  v_permission beacon.permissions%rowtype;
+  v_invite beacon.pending_invites%rowtype;
 begin
-  if not public.space_role_at_least(p_space_id, 'admin') then
+  if not beacon.space_role_at_least(p_space_id, 'admin') then
     raise exception 'NOT_AUTHORIZED: only a Space admin can invite members' using errcode = '42501';
   end if;
 
-  select organization_id into v_space_org_id from public.spaces where id = p_space_id;
+  select organization_id into v_space_org_id from beacon.spaces where id = p_space_id;
 
   select id, organization_id into v_profile_id, v_profile_org_id
-  from public.profiles where lower(email) = v_email;
+  from beacon.profiles where lower(email) = v_email;
 
   if v_profile_id is not null then
     if v_profile_org_id <> v_space_org_id then
       raise exception 'EMAIL_BELONGS_TO_ANOTHER_ORGANIZATION: % is registered under a different Organization', p_email;
     end if;
 
-    insert into public.permissions (space_id, user_id, role)
+    insert into beacon.permissions (space_id, user_id, role)
     values (p_space_id, v_profile_id, p_role)
     on conflict (space_id, user_id) do update set role = excluded.role
     returning * into v_permission;
@@ -70,7 +70,7 @@ begin
     return jsonb_build_object('status', 'added', 'permission', to_jsonb(v_permission));
   end if;
 
-  insert into public.pending_invites (space_id, email, role, invited_by_user_id)
+  insert into beacon.pending_invites (space_id, email, role, invited_by_user_id)
   values (p_space_id, v_email, p_role, auth.uid())
   on conflict (space_id, lower(email))
   do update set role = excluded.role, invited_by_user_id = excluded.invited_by_user_id, created_at = now()

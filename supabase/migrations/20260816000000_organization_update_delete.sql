@@ -11,9 +11,9 @@
 -- ---------------------------------------------------------------------------
 
 create policy organizations_delete_owner_only
-  on public.organizations for delete
+  on beacon.organizations for delete
   to authenticated
-  using (public.organization_role_for(id) = 'owner');
+  using (beacon.organization_role_for(id) = 'owner');
 
 -- ---------------------------------------------------------------------------
 -- pages.organization_id — was previously a plain FK with no ON DELETE
@@ -25,7 +25,7 @@ create policy organizations_delete_owner_only
 -- reading just this constraint in isolation — made explicit here instead.
 -- ---------------------------------------------------------------------------
 
-alter table public.pages drop constraint pages_organization_id_fkey;
-alter table public.pages
+alter table beacon.pages drop constraint pages_organization_id_fkey;
+alter table beacon.pages
   add constraint pages_organization_id_fkey
-  foreign key (organization_id) references public.organizations (id) on delete cascade;
+  foreign key (organization_id) references beacon.organizations (id) on delete cascade;

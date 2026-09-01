@@ -9,12 +9,12 @@
 -- escalation, just atomicity. A non-editor's call affects zero rows, same
 -- as a direct UPDATE would.
 
-create function public.build_published_snapshot(p_page_id uuid, p_published_at timestamptz)
+create function beacon.build_published_snapshot(p_page_id uuid, p_published_at timestamptz)
 returns jsonb
 language sql
 stable
 security invoker
-set search_path = public
+set search_path = beacon, extensions
 as $$
   select jsonb_build_object(
     'title', p.title,
@@ -39,30 +39,30 @@ as $$
             'updatedAt', sb.updated_at
           )
         )
-        from public.screenshot_blocks sb
+        from beacon.screenshot_blocks sb
         where sb.page_id = p_page_id
       ),
       '{}'::jsonb
     )
   )
-  from public.pages p
+  from beacon.pages p
   where p.id = p_page_id;
 $$;
 
-create function public.publish_page(p_page_id uuid)
-returns public.pages
+create function beacon.publish_page(p_page_id uuid)
+returns beacon.pages
 language plpgsql
 security invoker
-set search_path = public
+set search_path = beacon, extensions
 as $$
 declare
   v_published_at timestamptz := now();
-  v_page public.pages;
+  v_page beacon.pages;
 begin
-  update public.pages
+  update beacon.pages
   set is_published = true,
       published_at = v_published_at,
-      published_content_snapshot = public.build_published_snapshot(p_page_id, v_published_at)
+      published_content_snapshot = beacon.build_published_snapshot(p_page_id, v_published_at)
   where id = p_page_id
   returning * into v_page;
 
@@ -70,19 +70,19 @@ begin
 end;
 $$;
 
-create function public.update_published_page(p_page_id uuid)
-returns public.pages
+create function beacon.update_published_page(p_page_id uuid)
+returns beacon.pages
 language plpgsql
 security invoker
-set search_path = public
+set search_path = beacon, extensions
 as $$
 declare
   v_published_at timestamptz := now();
-  v_page public.pages;
+  v_page beacon.pages;
 begin
-  update public.pages
+  update beacon.pages
   set published_at = v_published_at,
-      published_content_snapshot = public.build_published_snapshot(p_page_id, v_published_at)
+      published_content_snapshot = beacon.build_published_snapshot(p_page_id, v_published_at)
   where id = p_page_id and is_published = true
   returning * into v_page;
 
@@ -90,16 +90,16 @@ begin
 end;
 $$;
 
-create function public.unpublish_page(p_page_id uuid)
-returns public.pages
+create function beacon.unpublish_page(p_page_id uuid)
+returns beacon.pages
 language plpgsql
 security invoker
-set search_path = public
+set search_path = beacon, extensions
 as $$
 declare
-  v_page public.pages;
+  v_page beacon.pages;
 begin
-  update public.pages
+  update beacon.pages
   set is_published = false
   where id = p_page_id
   returning * into v_page;
@@ -108,6 +108,6 @@ begin
 end;
 $$;
 
-grant execute on function public.publish_page(uuid) to authenticated;
-grant execute on function public.update_published_page(uuid) to authenticated;
-grant execute on function public.unpublish_page(uuid) to authenticated;
+grant execute on function beacon.publish_page(uuid) to authenticated;
+grant execute on function beacon.update_published_page(uuid) to authenticated;
+grant execute on function beacon.unpublish_page(uuid) to authenticated;
