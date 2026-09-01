@@ -151,6 +151,28 @@ describe("useUploadScreenshot", () => {
     expect(created).toMatchObject({ id: "shot-1", imageUrl: "screenshots/page-1/abc.png" });
   });
 
+  it("rejects with the server's error code when the presign route refuses the file (e.g. over the size cap), without creating a DB row", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/api/s3/presign") {
+          return { ok: false, status: 413, json: async () => ({ error: "FILE_TOO_LARGE", maxUploadBytes: 1000 }) };
+        }
+        return { ok: true };
+      }),
+    );
+    const insert = vi.fn();
+    mockSupabase.from.mockReturnValue({ insert });
+
+    const file = new File(["fake-bytes"], "huge.png", { type: "image/png" });
+    const { result } = renderHook(() => useUploadScreenshot());
+
+    await expect(
+      result.current({ pageId: "page-1", order: 0, file, width: 800, height: 600 }),
+    ).rejects.toThrow("FILE_TOO_LARGE");
+    expect(insert).not.toHaveBeenCalled();
+  });
+
   it("throws when the S3 upload itself fails, without creating a DB row", async () => {
     vi.stubGlobal(
       "fetch",
