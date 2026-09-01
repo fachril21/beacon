@@ -91,6 +91,8 @@ export interface Space {
   id: ID;
   organizationId: ID;
   name: string;
+  /** Public URL slug (/public/{orgSlug}/spaces/{slug}) — assigned from the name on create, unique per Organization, stable afterward. */
+  slug: string;
   /** Category shown as a kicker on Space summary cards (DESIGN.md §5.4) — e.g. "Aplikasi Mobile". */
   category: string | null;
   /** Per-Space "publishable" flag (PRD.md Flow 2 step 2) — default OFF/internal-only. */

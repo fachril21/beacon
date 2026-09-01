@@ -38,6 +38,7 @@ const space: Space = {
   id: "space-1",
   organizationId: "org-1",
   name: "Test Space",
+  slug: "test-space",
   category: null,
   isPublishable: true,
   createdByUserId: "user-1",

@@ -33,6 +33,7 @@ const baseSpace: Space = {
   id: "space-1",
   organizationId: "org-1",
   name: "Aplikasi Mobile",
+  slug: "test-space",
   category: null,
   isPublishable: false,
   createdByUserId: "user-1",

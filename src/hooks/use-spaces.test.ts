@@ -33,6 +33,7 @@ describe("useCreateSpace", () => {
       id: "space-1",
       organization_id: "org-1",
       name: "Mobile App",
+      slug: "mobile-app",
       category: null,
       is_publishable: false,
       created_by_user_id: "user-1",
@@ -76,6 +77,7 @@ describe("useCreateSpace", () => {
       id: "space-1",
       organization_id: "org-1",
       name: "Mobile App",
+      slug: "mobile-app",
       category: null,
       is_publishable: false,
       created_by_user_id: "user-1",
@@ -121,7 +123,7 @@ describe("useUpdateSpace", () => {
 
   it("updates is_publishable on the row and syncs the local store", async () => {
     spacesStore.setState([
-      { id: "space-1", organizationId: "org-1", name: "Mobile App", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
+      { id: "space-1", organizationId: "org-1", name: "Mobile App", slug: "sp", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
     ]);
     const eqMock = vi.fn(() => Promise.resolve({ error: null }));
     const updateMock = vi.fn(() => ({ eq: eqMock }));
@@ -139,7 +141,7 @@ describe("useUpdateSpace", () => {
 
   it("updates name on the row and syncs the local store", async () => {
     spacesStore.setState([
-      { id: "space-1", organizationId: "org-1", name: "Mobile App", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
+      { id: "space-1", organizationId: "org-1", name: "Mobile App", slug: "sp", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
     ]);
     const eqMock = vi.fn(() => Promise.resolve({ error: null }));
     const updateMock = vi.fn(() => ({ eq: eqMock }));
@@ -157,7 +159,7 @@ describe("useUpdateSpace", () => {
 
   it("throws when Supabase returns an error, without touching the local store", async () => {
     spacesStore.setState([
-      { id: "space-1", organizationId: "org-1", name: "Mobile App", category: null, isPublishable: true, createdByUserId: "user-1", createdAt: "t" },
+      { id: "space-1", organizationId: "org-1", name: "Mobile App", slug: "sp", category: null, isPublishable: true, createdByUserId: "user-1", createdAt: "t" },
     ]);
     const eqMock = vi.fn(() => Promise.resolve({ error: { message: "permission denied" } }));
     mockSupabase.from.mockReturnValue({ update: () => ({ eq: eqMock }) });
@@ -271,8 +273,8 @@ describe("useDeleteSpace", () => {
 
   it("deletes the row and removes the Space plus everything scoped to it from local stores", async () => {
     spacesStore.setState([
-      { id: "space-1", organizationId: "org-1", name: "Mobile App", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
-      { id: "space-2", organizationId: "org-1", name: "Web App", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
+      { id: "space-1", organizationId: "org-1", name: "Mobile App", slug: "sp", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
+      { id: "space-2", organizationId: "org-1", name: "Web App", slug: "sp", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
     ]);
     pagesStore.setState([
       { id: "page-1", spaceId: "space-1", parentPageId: null, title: "A", order: 0, content: emptyDoc(), visibility: "internal", slug: null, isPublished: false, publishedContentSnapshot: null, publishedAt: null, createdByUserId: "user-1", createdAt: "t", updatedAt: "t" },
@@ -301,7 +303,7 @@ describe("useDeleteSpace", () => {
 
   it("throws when Supabase returns an error, without touching the local store", async () => {
     spacesStore.setState([
-      { id: "space-1", organizationId: "org-1", name: "Mobile App", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
+      { id: "space-1", organizationId: "org-1", name: "Mobile App", slug: "sp", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
     ]);
     const eqMock = vi.fn(() => Promise.resolve({ error: { message: "permission denied" } }));
     mockSupabase.from.mockReturnValue({ delete: () => ({ eq: eqMock }) });
@@ -320,8 +322,8 @@ describe("useOrganizationSpaces", () => {
 
   it("returns only the Spaces belonging to the given Organization, even when the caller has access to Spaces in other Organizations too", async () => {
     const spaceRows: import("@/lib/supabase/mappers").SpaceRow[] = [
-      { id: "space-1", organization_id: "org-1", name: "Org 1 Space", category: null, is_publishable: false, created_by_user_id: "user-1", created_at: "t" },
-      { id: "space-2", organization_id: "org-2", name: "Org 2 Space", category: null, is_publishable: false, created_by_user_id: "user-1", created_at: "t" },
+      { id: "space-1", organization_id: "org-1", name: "Org 1 Space", slug: "sp", category: null, is_publishable: false, created_by_user_id: "user-1", created_at: "t" },
+      { id: "space-2", organization_id: "org-2", name: "Org 2 Space", slug: "sp", category: null, is_publishable: false, created_by_user_id: "user-1", created_at: "t" },
     ];
     const permissionRows = [
       { id: "perm-1", space_id: "space-1", user_id: "user-1", role: "admin" },
@@ -339,8 +341,8 @@ describe("useOrganizationSpaces", () => {
 
   it("returns every accessible Space when organizationId is undefined (backward compatible)", async () => {
     const spaceRows: import("@/lib/supabase/mappers").SpaceRow[] = [
-      { id: "space-1", organization_id: "org-1", name: "Org 1 Space", category: null, is_publishable: false, created_by_user_id: "user-1", created_at: "t" },
-      { id: "space-2", organization_id: "org-2", name: "Org 2 Space", category: null, is_publishable: false, created_by_user_id: "user-1", created_at: "t" },
+      { id: "space-1", organization_id: "org-1", name: "Org 1 Space", slug: "sp", category: null, is_publishable: false, created_by_user_id: "user-1", created_at: "t" },
+      { id: "space-2", organization_id: "org-2", name: "Org 2 Space", slug: "sp", category: null, is_publishable: false, created_by_user_id: "user-1", created_at: "t" },
     ];
     const permissionRows = [
       { id: "perm-1", space_id: "space-1", user_id: "user-1", role: "admin" },
