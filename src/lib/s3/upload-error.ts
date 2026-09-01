@@ -7,6 +7,14 @@
  * Organization/Space invite routes use. Keeping the user-facing copy here
  * lets the route and the hook stay language-neutral.
  */
-export function screenshotUploadErrorMessage(_error: unknown): string {
-  return "Gagal mengunggah gambar, silakan coba lagi.";
+export function screenshotUploadErrorMessage(error: unknown): string {
+  const code = error instanceof Error ? error.message : "";
+  switch (code) {
+    case "FILE_TOO_LARGE":
+      return "Gambar terlalu besar untuk diunggah.";
+    case "INVALID_FILE_TYPE":
+      return "Berkas harus berupa gambar (PNG, JPG, atau WEBP).";
+    default:
+      return "Gagal mengunggah gambar, silakan coba lagi.";
+  }
 }

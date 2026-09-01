@@ -146,7 +146,11 @@ export function useUploadScreenshot() {
         }),
       });
       if (!presignRes.ok) {
-        throw new Error("Failed to get an upload URL");
+        // The route answers with a machine code (FILE_TOO_LARGE,
+        // INVALID_FILE_TYPE, ...); surface it so the caller can show the
+        // right message instead of a generic failure.
+        const body = (await presignRes.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? "PRESIGN_FAILED");
       }
       const { url, objectKey } = (await presignRes.json()) as PresignResponse;
 
@@ -156,7 +160,7 @@ export function useUploadScreenshot() {
         body: input.file,
       });
       if (!uploadRes.ok) {
-        throw new Error("Failed to upload the image");
+        throw new Error("UPLOAD_FAILED");
       }
 
       return createBlock({
