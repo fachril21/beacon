@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { getSupabaseUrl, getSupabaseAnonKey, getSupabaseServiceRoleKey } from "./env";
+import {
+  getSupabaseUrl,
+  getSupabaseAnonKey,
+  getSupabaseServiceRoleKey,
+  getSupabaseSchema,
+} from "./env";
 
 describe("supabase env validation", () => {
   const original = { ...process.env };
@@ -26,5 +31,20 @@ describe("supabase env validation", () => {
   it("throws when the service role key is missing", () => {
     delete process.env.SUPABASE_SERVICE_ROLE_KEY;
     expect(() => getSupabaseServiceRoleKey()).toThrowError(/SUPABASE_SERVICE_ROLE_KEY/);
+  });
+
+  it("defaults the schema to 'public' when NEXT_PUBLIC_SUPABASE_SCHEMA is unset", () => {
+    delete process.env.NEXT_PUBLIC_SUPABASE_SCHEMA;
+    expect(getSupabaseSchema()).toBe("public");
+  });
+
+  it("returns the configured schema when NEXT_PUBLIC_SUPABASE_SCHEMA is set", () => {
+    process.env.NEXT_PUBLIC_SUPABASE_SCHEMA = "beacon";
+    expect(getSupabaseSchema()).toBe("beacon");
+  });
+
+  it("falls back to 'public' when NEXT_PUBLIC_SUPABASE_SCHEMA is blank", () => {
+    process.env.NEXT_PUBLIC_SUPABASE_SCHEMA = "   ";
+    expect(getSupabaseSchema()).toBe("public");
   });
 });

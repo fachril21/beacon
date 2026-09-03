@@ -4,7 +4,7 @@
 --
 -- The clause was:
 --   not exists (
---     select 1 from public.permissions p where p.space_id = space_id
+--     select 1 from beacon.permissions p where p.space_id = space_id
 --   )
 -- The bare `space_id` on the right was meant to correlate to the NEW row
 -- being inserted (the policy's own table, `permissions`). But the subquery
@@ -30,24 +30,24 @@
 -- (`permissions.space_id`), which is unambiguous since the subquery's alias
 -- is `p`, not `permissions` — the standard technique for breaking this kind
 -- of RLS self-correlation ambiguity.
-drop policy if exists permissions_insert_admin_or_bootstrap on public.permissions;
+drop policy if exists permissions_insert_admin_or_bootstrap on beacon.permissions;
 
 create policy permissions_insert_admin_or_bootstrap
-  on public.permissions for insert
+  on beacon.permissions for insert
   to authenticated
   with check (
-    public.space_role_at_least(space_id, 'admin')
+    beacon.space_role_at_least(space_id, 'admin')
     or (
       user_id = auth.uid()
-      and public.is_space_creator(space_id)
+      and beacon.is_space_creator(space_id)
       and not exists (
-        select 1 from public.permissions p where p.space_id = permissions.space_id
+        select 1 from beacon.permissions p where p.space_id = permissions.space_id
       )
     )
   );
 
 -- Same shadowing shape existed in spaces_select_member_or_publishable's
--- bootstrap clause (`not exists (select 1 from public.permissions p where
+-- bootstrap clause (`not exists (select 1 from beacon.permissions p where
 -- p.space_id = id)` — `permissions` also has its own `id` column, so bare
 -- `id` bound to `p.id`, not `spaces.id`). There it failed *open* rather
 -- than closed: `p.space_id = p.id` is never true for real data (different
@@ -56,16 +56,16 @@ create policy permissions_insert_admin_or_bootstrap
 -- the creator instead of closing once a Permission row exists — a latent
 -- correctness/security gap, not the bug the User hit, but the same root
 -- cause and worth closing at the same time.
-drop policy if exists spaces_select_member_or_publishable on public.spaces;
+drop policy if exists spaces_select_member_or_publishable on beacon.spaces;
 
 create policy spaces_select_member_or_publishable
-  on public.spaces for select
+  on beacon.spaces for select
   to authenticated
   using (
     is_publishable = true
-    or public.user_space_role(id) is not null
+    or beacon.user_space_role(id) is not null
     or (
       created_by_user_id = auth.uid()
-      and not exists (select 1 from public.permissions p where p.space_id = spaces.id)
+      and not exists (select 1 from beacon.permissions p where p.space_id = spaces.id)
     )
   );

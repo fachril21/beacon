@@ -16,7 +16,7 @@ begin;
 -- with no owner/admin rights).
 -- =============================================================================
 
-insert into public.organizations (id, name, domain, is_domain_verified)
+insert into beacon.organizations (id, name, domain, is_domain_verified)
 values ('e0000000-0000-0000-0000-00000000000e', 'Org One', null, false);
 
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token, email_change_token_new, email_change)
@@ -25,7 +25,7 @@ values
   ('b0000000-0000-0000-0000-00000000000b','00000000-0000-0000-0000-000000000000','authenticated','authenticated','existing-b@example.com', crypt('x', gen_salt('bf')), now(), '{}', '{}', now(), now(), '', '', '', ''),
   ('d0000000-0000-0000-0000-00000000000d','00000000-0000-0000-0000-000000000000','authenticated','authenticated','member-d@example.com', crypt('x', gen_salt('bf')), now(), '{}', '{}', now(), now(), '', '', '', '');
 
-insert into public.organization_memberships (organization_id, user_id, role) values
+insert into beacon.organization_memberships (organization_id, user_id, role) values
   ('e0000000-0000-0000-0000-00000000000e', 'a0000000-0000-0000-0000-00000000000a', 'owner'),
   ('e0000000-0000-0000-0000-00000000000e', 'd0000000-0000-0000-0000-00000000000d', 'member');
 
@@ -37,13 +37,13 @@ insert into public.organization_memberships (organization_id, user_id, role) val
 select set_config('request.jwt.claims', json_build_object('sub', 'a0000000-0000-0000-0000-00000000000a', 'role', 'authenticated')::text, true);
 set local role authenticated;
 
-select public.invite_to_organization('e0000000-0000-0000-0000-00000000000e', 'existing-b@example.com', 'member') ->> 'status'
+select beacon.invite_to_organization('e0000000-0000-0000-0000-00000000000e', 'existing-b@example.com', 'member') ->> 'status'
   as expect_added;
 
-select role as expect_member_role from public.organization_memberships
+select role as expect_member_role from beacon.organization_memberships
 where organization_id = 'e0000000-0000-0000-0000-00000000000e' and user_id = 'b0000000-0000-0000-0000-00000000000b';
 
-select count(*)::int as expect_zero_invitation_rows from public.organization_invitations
+select count(*)::int as expect_zero_invitation_rows from beacon.organization_invitations
 where organization_id = 'e0000000-0000-0000-0000-00000000000e' and lower(email) = 'existing-b@example.com';
 
 -- =============================================================================
@@ -51,10 +51,10 @@ where organization_id = 'e0000000-0000-0000-0000-00000000000e' and lower(email) 
 -- row, role defaults to what was requested, status = pending.
 -- =============================================================================
 
-select public.invite_to_organization('e0000000-0000-0000-0000-00000000000e', 'brand-new@example.com', 'admin') ->> 'status'
+select beacon.invite_to_organization('e0000000-0000-0000-0000-00000000000e', 'brand-new@example.com', 'admin') ->> 'status'
   as expect_invited;
 
-select status as expect_pending, role as expect_admin from public.organization_invitations
+select status as expect_pending, role as expect_admin from beacon.organization_invitations
 where organization_id = 'e0000000-0000-0000-0000-00000000000e' and lower(email) = 'brand-new@example.com';
 
 -- =============================================================================
@@ -62,10 +62,10 @@ where organization_id = 'e0000000-0000-0000-0000-00000000000e' and lower(email) 
 -- instead of accumulating duplicates.
 -- =============================================================================
 
-select public.invite_to_organization('e0000000-0000-0000-0000-00000000000e', 'brand-new@example.com', 'member') ->> 'status'
+select beacon.invite_to_organization('e0000000-0000-0000-0000-00000000000e', 'brand-new@example.com', 'member') ->> 'status'
   as expect_invited_again;
 
-select count(*)::int as expect_one_row, (array_agg(role))[1] as expect_role_updated_to_member from public.organization_invitations
+select count(*)::int as expect_one_row, (array_agg(role))[1] as expect_role_updated_to_member from beacon.organization_invitations
 where organization_id = 'e0000000-0000-0000-0000-00000000000e' and lower(email) = 'brand-new@example.com';
 
 -- =============================================================================
@@ -78,7 +78,7 @@ select set_config('request.jwt.claims', json_build_object('sub', 'd0000000-0000-
 set local role authenticated;
 
 savepoint case_4;
-select public.invite_to_organization('e0000000-0000-0000-0000-00000000000e', 'someone@example.com', 'member');
+select beacon.invite_to_organization('e0000000-0000-0000-0000-00000000000e', 'someone@example.com', 'member');
 rollback to savepoint case_4;
 
 -- =============================================================================
@@ -91,36 +91,36 @@ reset role;
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token, email_change_token_new, email_change)
 values ('f0000000-0000-0000-0000-00000000000f','00000000-0000-0000-0000-000000000000','authenticated','authenticated','brand-new@example.com', crypt('x', gen_salt('bf')), now(), '{}', '{}', now(), now(), '', '', '', '');
 
-select token as invite_token from public.organization_invitations
+select token as invite_token from beacon.organization_invitations
 where organization_id = 'e0000000-0000-0000-0000-00000000000e' and lower(email) = 'brand-new@example.com' \gset
 
 -- wrong user (D) tries to accept F's invite by token -> rejected
 select set_config('request.jwt.claims', json_build_object('sub', 'd0000000-0000-0000-0000-00000000000d', 'role', 'authenticated')::text, true);
 set local role authenticated;
 savepoint case_5_wrong_user;
-select public.accept_organization_invite(:'invite_token');
+select beacon.accept_organization_invite(:'invite_token');
 rollback to savepoint case_5_wrong_user;
 
 -- the actual invited user (F) accepts -> membership created, status flips
 select set_config('request.jwt.claims', json_build_object('sub', 'f0000000-0000-0000-0000-00000000000f', 'role', 'authenticated')::text, true);
 set local role authenticated;
 
-select public.accept_organization_invite(:'invite_token') ->> 'status' as expect_accepted;
+select beacon.accept_organization_invite(:'invite_token') ->> 'status' as expect_accepted;
 
-select role as expect_member_role_f from public.organization_memberships
+select role as expect_member_role_f from beacon.organization_memberships
 where organization_id = 'e0000000-0000-0000-0000-00000000000e' and user_id = 'f0000000-0000-0000-0000-00000000000f';
 
 -- organization_invitations is owner/admin-only under RLS (mirrors
 -- permissions_select_admin_or_self) — F, a plain member, correctly cannot
 -- see this row themselves, so check as postgres (bypasses RLS) instead.
 reset role;
-select status as expect_invitation_accepted from public.organization_invitations where token = :'invite_token';
+select status as expect_invitation_accepted from beacon.organization_invitations where token = :'invite_token';
 
 select set_config('request.jwt.claims', json_build_object('sub', 'f0000000-0000-0000-0000-00000000000f', 'role', 'authenticated')::text, true);
 set local role authenticated;
 
 -- accepting the same (already-ACCEPTED) token again is idempotent, not an error
-select public.accept_organization_invite(:'invite_token') ->> 'status' as expect_idempotent_accepted;
+select beacon.accept_organization_invite(:'invite_token') ->> 'status' as expect_idempotent_accepted;
 
 -- =============================================================================
 -- Case 6: exactly-one-owner invariant under transfer_organization_ownership —
@@ -132,18 +132,18 @@ reset role;
 select set_config('request.jwt.claims', json_build_object('sub', 'a0000000-0000-0000-0000-00000000000a', 'role', 'authenticated')::text, true);
 set local role authenticated;
 
-select public.transfer_organization_ownership('e0000000-0000-0000-0000-00000000000e', 'd0000000-0000-0000-0000-00000000000d') ->> 'status'
+select beacon.transfer_organization_ownership('e0000000-0000-0000-0000-00000000000e', 'd0000000-0000-0000-0000-00000000000d') ->> 'status'
   as expect_transferred;
 
-select role as expect_a_is_now_admin from public.organization_memberships
+select role as expect_a_is_now_admin from beacon.organization_memberships
 where organization_id = 'e0000000-0000-0000-0000-00000000000e' and user_id = 'a0000000-0000-0000-0000-00000000000a';
 
-select role as expect_d_is_now_owner from public.organization_memberships
+select role as expect_d_is_now_owner from beacon.organization_memberships
 where organization_id = 'e0000000-0000-0000-0000-00000000000e' and user_id = 'd0000000-0000-0000-0000-00000000000d';
 
 -- A (no longer owner) cannot transfer again.
 savepoint case_6_stale_owner;
-select public.transfer_organization_ownership('e0000000-0000-0000-0000-00000000000e', 'b0000000-0000-0000-0000-00000000000b');
+select beacon.transfer_organization_ownership('e0000000-0000-0000-0000-00000000000e', 'b0000000-0000-0000-0000-00000000000b');
 rollback to savepoint case_6_stale_owner;
 
 -- =============================================================================
@@ -151,7 +151,7 @@ rollback to savepoint case_6_stale_owner;
 -- =============================================================================
 
 savepoint case_7;
-select public.remove_organization_member('e0000000-0000-0000-0000-00000000000e', 'd0000000-0000-0000-0000-00000000000d');
+select beacon.remove_organization_member('e0000000-0000-0000-0000-00000000000e', 'd0000000-0000-0000-0000-00000000000d');
 rollback to savepoint case_7;
 
 rollback;

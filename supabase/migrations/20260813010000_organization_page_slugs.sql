@@ -14,11 +14,11 @@
 -- in-app "create Organization" form to wire slug input into.
 -- ---------------------------------------------------------------------------
 
-alter table public.organizations add column slug text;
+alter table beacon.organizations add column slug text;
 
 create extension if not exists unaccent;
 
-create function public.slugify(p_text text)
+create function beacon.slugify(p_text text)
 returns text
 language sql
 immutable
@@ -32,10 +32,10 @@ as $$
   );
 $$;
 
-comment on function public.slugify(text) is
+comment on function beacon.slugify(text) is
   'Mirrors src/lib/slug.ts slugify() — kept in sync by hand, not generated, since Postgres and JS have no shared source. Requires the unaccent extension for diacritic stripping.';
 
-create function public.organizations_set_slug()
+create function beacon.organizations_set_slug()
 returns trigger
 language plpgsql
 as $$
@@ -48,9 +48,9 @@ begin
     return new;
   end if;
 
-  base_slug := public.slugify(new.name);
+  base_slug := beacon.slugify(new.name);
   candidate := base_slug;
-  while exists (select 1 from public.organizations where slug = candidate and id <> new.id) loop
+  while exists (select 1 from beacon.organizations where slug = candidate and id <> new.id) loop
     n := n + 1;
     candidate := base_slug || '-' || n;
   end loop;
@@ -60,8 +60,8 @@ end;
 $$;
 
 create trigger organizations_set_slug_trigger
-before insert on public.organizations
-for each row execute function public.organizations_set_slug();
+before insert on beacon.organizations
+for each row execute function beacon.organizations_set_slug();
 
 -- Backfill the two existing seed Organizations (Dibimbing, Cakrawala
 -- University) — trigger only fires on INSERT, not on rows that already exist.
@@ -72,22 +72,22 @@ declare
   candidate text;
   n int;
 begin
-  for r in select id, name from public.organizations where slug is null order by created_at loop
-    base_slug := public.slugify(r.name);
+  for r in select id, name from beacon.organizations where slug is null order by created_at loop
+    base_slug := beacon.slugify(r.name);
     candidate := base_slug;
     n := 1;
-    while exists (select 1 from public.organizations where slug = candidate and id <> r.id) loop
+    while exists (select 1 from beacon.organizations where slug = candidate and id <> r.id) loop
       n := n + 1;
       candidate := base_slug || '-' || n;
     end loop;
-    update public.organizations set slug = candidate where id = r.id;
+    update beacon.organizations set slug = candidate where id = r.id;
   end loop;
 end $$;
 
-alter table public.organizations alter column slug set not null;
-alter table public.organizations add constraint organizations_slug_unique unique (slug);
+alter table beacon.organizations alter column slug set not null;
+alter table beacon.organizations add constraint organizations_slug_unique unique (slug);
 
-comment on column public.organizations.slug is
+comment on column beacon.organizations.slug is
   'Platform-domain identity (/public/{slug}) — always available, independent of custom-domain verification. Publicly readable via the existing organizations_select_public policy.';
 
 -- ---------------------------------------------------------------------------
@@ -99,30 +99,30 @@ comment on column public.organizations.slug is
 -- is needed to keep it consistent after creation.
 -- ---------------------------------------------------------------------------
 
-alter table public.pages add column organization_id uuid references public.organizations (id);
+alter table beacon.pages add column organization_id uuid references beacon.organizations (id);
 
-create function public.pages_set_organization_id()
+create function beacon.pages_set_organization_id()
 returns trigger
 language plpgsql
 as $$
 begin
   select s.organization_id into new.organization_id
-  from public.spaces s
+  from beacon.spaces s
   where s.id = new.space_id;
   return new;
 end;
 $$;
 
 create trigger pages_set_organization_id_trigger
-before insert on public.pages
-for each row execute function public.pages_set_organization_id();
+before insert on beacon.pages
+for each row execute function beacon.pages_set_organization_id();
 
-update public.pages p
+update beacon.pages p
 set organization_id = s.organization_id
-from public.spaces s
+from beacon.spaces s
 where s.id = p.space_id and p.organization_id is null;
 
-alter table public.pages alter column organization_id set not null;
+alter table beacon.pages alter column organization_id set not null;
 
 -- ---------------------------------------------------------------------------
 -- pages.slug — auto-generated at publish time (not at creation), since only
@@ -131,7 +131,7 @@ alter table public.pages alter column organization_id set not null;
 -- assign it, collision-safe, the first time a Page is published.
 -- ---------------------------------------------------------------------------
 
-alter table public.pages add column slug text;
+alter table beacon.pages add column slug text;
 
 do $$
 declare
@@ -140,26 +140,26 @@ declare
   candidate text;
   n int;
 begin
-  for r in select id, title, organization_id from public.pages where is_published = true and slug is null order by created_at loop
-    base_slug := public.slugify(coalesce(nullif(trim(r.title), ''), 'untitled'));
+  for r in select id, title, organization_id from beacon.pages where is_published = true and slug is null order by created_at loop
+    base_slug := beacon.slugify(coalesce(nullif(trim(r.title), ''), 'untitled'));
     candidate := base_slug;
     n := 1;
     while exists (
-      select 1 from public.pages
+      select 1 from beacon.pages
       where organization_id = r.organization_id and slug = candidate and id <> r.id
     ) loop
       n := n + 1;
       candidate := base_slug || '-' || n;
     end loop;
-    update public.pages set slug = candidate where id = r.id;
+    update beacon.pages set slug = candidate where id = r.id;
   end loop;
 end $$;
 
 create unique index pages_organization_id_slug_unique
-  on public.pages (organization_id, slug)
+  on beacon.pages (organization_id, slug)
   where slug is not null;
 
-comment on column public.pages.slug is
+comment on column beacon.pages.slug is
   'Public URL slug (/public/{orgSlug}/pages/{slug}) — null until first published; assigned by publish_page(), unique per Organization. Never reused across Organizations (see pages_organization_id_slug_unique).';
 
 -- ---------------------------------------------------------------------------
@@ -168,15 +168,15 @@ comment on column public.pages.slug is
 -- Page, matching "never a fallback to real content on a different URL").
 -- ---------------------------------------------------------------------------
 
-create or replace function public.publish_page(p_page_id uuid)
-returns public.pages
+create or replace function beacon.publish_page(p_page_id uuid)
+returns beacon.pages
 language plpgsql
 security invoker
-set search_path = public
+set search_path = beacon, extensions
 as $$
 declare
   v_published_at timestamptz := now();
-  v_page public.pages;
+  v_page beacon.pages;
   v_base_slug text;
   v_candidate text;
   v_n int := 1;
@@ -184,14 +184,14 @@ declare
   v_existing_slug text;
 begin
   select organization_id, slug into v_organization_id, v_existing_slug
-  from public.pages where id = p_page_id;
+  from beacon.pages where id = p_page_id;
 
   if v_existing_slug is null then
-    select title into v_base_slug from public.pages where id = p_page_id;
-    v_base_slug := public.slugify(coalesce(nullif(trim(v_base_slug), ''), 'untitled'));
+    select title into v_base_slug from beacon.pages where id = p_page_id;
+    v_base_slug := beacon.slugify(coalesce(nullif(trim(v_base_slug), ''), 'untitled'));
     v_candidate := v_base_slug;
     while exists (
-      select 1 from public.pages
+      select 1 from beacon.pages
       where organization_id = v_organization_id and slug = v_candidate and id <> p_page_id
     ) loop
       v_n := v_n + 1;
@@ -201,10 +201,10 @@ begin
     v_candidate := v_existing_slug;
   end if;
 
-  update public.pages
+  update beacon.pages
   set is_published = true,
       published_at = v_published_at,
-      published_content_snapshot = public.build_published_snapshot(p_page_id, v_published_at),
+      published_content_snapshot = beacon.build_published_snapshot(p_page_id, v_published_at),
       slug = v_candidate
   where id = p_page_id
   returning * into v_page;

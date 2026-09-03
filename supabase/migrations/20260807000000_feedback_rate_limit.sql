@@ -9,8 +9,8 @@
 -- client-trusted one. This is a deliberate architecture substitution, not a
 -- silent scope cut — see docs/testing/stage-3-engagement.tdd.md.
 
-create table public.feedback_rate_limits (
-  page_id uuid not null references public.pages (id) on delete cascade,
+create table beacon.feedback_rate_limits (
+  page_id uuid not null references beacon.pages (id) on delete cascade,
   ip_address inet not null,
   window_start timestamptz not null,
   count int not null default 0,
@@ -22,7 +22,7 @@ create table public.feedback_rate_limits (
 -- platform -- not a header an anonymous client can spoof past that proxy).
 -- Falls back to "allow" when no HTTP header context exists (e.g. a direct
 -- psql/seed-script insert), so this never blocks non-HTTP paths.
-create or replace function public.feedback_rate_limit_ok(
+create or replace function beacon.feedback_rate_limit_ok(
   p_page_id uuid,
   p_max_per_window int default 3,
   p_window_minutes int default 60
@@ -30,7 +30,7 @@ create or replace function public.feedback_rate_limit_ok(
 returns boolean
 language plpgsql
 security definer
-set search_path = public
+set search_path = beacon, extensions
 as $$
 declare
   v_ip inet;
@@ -49,7 +49,7 @@ begin
 
   v_window_start := to_timestamp(floor(extract(epoch from now()) / (p_window_minutes * 60)) * (p_window_minutes * 60));
 
-  insert into public.feedback_rate_limits (page_id, ip_address, window_start, count)
+  insert into beacon.feedback_rate_limits (page_id, ip_address, window_start, count)
   values (p_page_id, v_ip, v_window_start, 1)
   on conflict (page_id, ip_address, window_start)
   do update set count = feedback_rate_limits.count + 1
@@ -59,21 +59,21 @@ begin
 end;
 $$;
 
-drop policy if exists feedback_insert_public_on_published on public.feedback;
+drop policy if exists feedback_insert_public_on_published on beacon.feedback;
 
 create policy feedback_insert_public_on_published
-  on public.feedback for insert
+  on beacon.feedback for insert
   to anon, authenticated
   with check (
     exists (
-      select 1 from public.pages p
-      join public.spaces s on s.id = p.space_id
+      select 1 from beacon.pages p
+      join beacon.spaces s on s.id = p.space_id
       where p.id = feedback.page_id
         and p.is_published = true
         and p.visibility = 'publishable'
         and s.is_publishable = true
     )
-    and public.feedback_rate_limit_ok(feedback.page_id)
+    and beacon.feedback_rate_limit_ok(feedback.page_id)
   );
 
-grant select, insert on public.feedback_rate_limits to anon, authenticated, service_role;
+grant select, insert on beacon.feedback_rate_limits to anon, authenticated, service_role;

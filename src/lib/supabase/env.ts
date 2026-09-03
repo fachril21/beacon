@@ -23,3 +23,14 @@ export function getSupabaseAnonKey(): string {
 export function getSupabaseServiceRoleKey(): string {
   return requireEnv("SUPABASE_SERVICE_ROLE_KEY", process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
+
+/**
+ * Postgres schema the app's tables/RPCs live in. Defaults to "public" so a
+ * standalone deployment needs no extra config; set NEXT_PUBLIC_SUPABASE_SCHEMA
+ * when Beacon shares one Supabase project with another app and must be
+ * namespaced into its own schema (see docs/). Must be NEXT_PUBLIC_ because the
+ * browser client reads it too.
+ */
+export function getSupabaseSchema(): string {
+  return process.env.NEXT_PUBLIC_SUPABASE_SCHEMA?.trim() || "public";
+}
