@@ -86,8 +86,16 @@ export function useInternalSearch(query: string, userId: string | undefined, org
  * visibility/space.is_publishable; the organization_id check here is the
  * same app-level scoping use-public-content.ts relies on until Epic 14a's
  * Host-header middleware lands.
+ *
+ * spaceId, when set, further narrows results to that one Space — the public
+ * site is browsed per-Space, so searching from inside a Space never surfaces
+ * pages from a sibling Space.
  */
-export function usePublicSearch(query: string, organizationId: string | undefined): SearchResult[] {
+export function usePublicSearch(
+  query: string,
+  organizationId: string | undefined,
+  spaceId?: string,
+): SearchResult[] {
   const debouncedQuery = useDebounced(query, SEARCH_DEBOUNCE_MS);
   const [results, setResults] = useState<SearchResult[]>([]);
 
@@ -113,7 +121,8 @@ export function usePublicSearch(query: string, organizationId: string | undefine
             row.is_published &&
             row.published_content_snapshot &&
             row.spaces?.organization_id === organizationId &&
-            row.spaces.is_publishable,
+            row.spaces.is_publishable &&
+            (!spaceId || row.space_id === spaceId),
         )
         .map((row) => ({
           pageId: row.id,
@@ -129,7 +138,7 @@ export function usePublicSearch(query: string, organizationId: string | undefine
     return () => {
       cancelled = true;
     };
-  }, [debouncedQuery, organizationId]);
+  }, [debouncedQuery, organizationId, spaceId]);
 
   return debouncedQuery.trim() && organizationId ? results : [];
 }

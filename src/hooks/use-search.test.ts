@@ -122,4 +122,31 @@ describe("usePublicSearch", () => {
     await waitFor(() => expect(textSearch).toHaveBeenCalled());
     expect(result.current).toEqual([]);
   });
+
+  it("scopes results to a single Space when a spaceId is given (no cross-Space results)", async () => {
+    const inSpace = pageRow({
+      id: "page-1",
+      space_id: "space-1",
+      is_published: true,
+      visibility: "publishable",
+      slug: "in-space",
+      published_content_snapshot: { title: "In space", content: emptyDoc(), screenshotBlocks: {}, publishedAt: "t" },
+      spaces: { name: "Mobile App", organization_id: "org-1", is_publishable: true },
+    });
+    const otherSpace = pageRow({
+      id: "page-2",
+      space_id: "space-2",
+      is_published: true,
+      visibility: "publishable",
+      slug: "other-space",
+      published_content_snapshot: { title: "Other space", content: emptyDoc(), screenshotBlocks: {}, publishedAt: "t" },
+      spaces: { name: "Onboarding", organization_id: "org-1", is_publishable: true },
+    });
+    const textSearch = vi.fn(() => Promise.resolve({ data: [inSpace, otherSpace], error: null }));
+    mockSupabase.from.mockReturnValue({ select: vi.fn(() => ({ textSearch })) });
+
+    const { result } = renderHook(() => usePublicSearch("space", "org-1", "space-1"));
+    await waitFor(() => expect(textSearch).toHaveBeenCalled());
+    expect(result.current.map((r) => r.pageId)).toEqual(["page-1"]);
+  });
 });

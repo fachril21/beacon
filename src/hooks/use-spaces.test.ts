@@ -6,7 +6,7 @@ import { emptyDoc } from "@/lib/mock/blocknote-content";
 const mockSupabase = { from: vi.fn() };
 vi.mock("@/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => mockSupabase }));
 
-const { useCreateSpace, useUpdateSpaceRole, useAddOrgMemberToSpace, useDeleteSpace, useOrganizationSpaces } = await import("./use-spaces");
+const { useCreateSpace, useUpdateSpace, useUpdateSpaceRole, useAddOrgMemberToSpace, useDeleteSpace, useOrganizationSpaces } = await import("./use-spaces");
 
 function resetStores() {
   spacesStore.setState([]);
@@ -33,6 +33,7 @@ describe("useCreateSpace", () => {
       id: "space-1",
       organization_id: "org-1",
       name: "Mobile App",
+      slug: "mobile-app",
       category: null,
       is_publishable: false,
       created_by_user_id: "user-1",
@@ -76,6 +77,7 @@ describe("useCreateSpace", () => {
       id: "space-1",
       organization_id: "org-1",
       name: "Mobile App",
+      slug: "mobile-app",
       category: null,
       is_publishable: false,
       created_by_user_id: "user-1",
@@ -110,6 +112,61 @@ describe("useCreateSpace", () => {
     expect(spacesDeleteEq).toHaveBeenCalledWith("id", "space-1");
     expect(spacesStore.getState()).toEqual([]);
     expect(permissionsStore.getState()).toEqual([]);
+  });
+});
+
+describe("useUpdateSpace", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetStores();
+  });
+
+  it("updates is_publishable on the row and syncs the local store", async () => {
+    spacesStore.setState([
+      { id: "space-1", organizationId: "org-1", name: "Mobile App", slug: "sp", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
+    ]);
+    const eqMock = vi.fn(() => Promise.resolve({ error: null }));
+    const updateMock = vi.fn(() => ({ eq: eqMock }));
+    mockSupabase.from.mockReturnValue({ update: updateMock });
+
+    const { result } = renderHook(() => useUpdateSpace());
+    await act(async () => {
+      await result.current("space-1", { isPublishable: true });
+    });
+
+    expect(updateMock).toHaveBeenCalledWith({ is_publishable: true });
+    expect(eqMock).toHaveBeenCalledWith("id", "space-1");
+    expect(spacesStore.getState()).toEqual([expect.objectContaining({ id: "space-1", isPublishable: true })]);
+  });
+
+  it("updates name on the row and syncs the local store", async () => {
+    spacesStore.setState([
+      { id: "space-1", organizationId: "org-1", name: "Mobile App", slug: "sp", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
+    ]);
+    const eqMock = vi.fn(() => Promise.resolve({ error: null }));
+    const updateMock = vi.fn(() => ({ eq: eqMock }));
+    mockSupabase.from.mockReturnValue({ update: updateMock });
+
+    const { result } = renderHook(() => useUpdateSpace());
+    await act(async () => {
+      await result.current("space-1", { name: "Mobile App v2" });
+    });
+
+    expect(updateMock).toHaveBeenCalledWith({ name: "Mobile App v2" });
+    expect(eqMock).toHaveBeenCalledWith("id", "space-1");
+    expect(spacesStore.getState()).toEqual([expect.objectContaining({ id: "space-1", name: "Mobile App v2" })]);
+  });
+
+  it("throws when Supabase returns an error, without touching the local store", async () => {
+    spacesStore.setState([
+      { id: "space-1", organizationId: "org-1", name: "Mobile App", slug: "sp", category: null, isPublishable: true, createdByUserId: "user-1", createdAt: "t" },
+    ]);
+    const eqMock = vi.fn(() => Promise.resolve({ error: { message: "permission denied" } }));
+    mockSupabase.from.mockReturnValue({ update: () => ({ eq: eqMock }) });
+
+    const { result } = renderHook(() => useUpdateSpace());
+    await expect(result.current("space-1", { isPublishable: false })).rejects.toEqual({ message: "permission denied" });
+    expect(spacesStore.getState()).toEqual([expect.objectContaining({ id: "space-1", isPublishable: true })]);
   });
 });
 
@@ -216,8 +273,8 @@ describe("useDeleteSpace", () => {
 
   it("deletes the row and removes the Space plus everything scoped to it from local stores", async () => {
     spacesStore.setState([
-      { id: "space-1", organizationId: "org-1", name: "Mobile App", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
-      { id: "space-2", organizationId: "org-1", name: "Web App", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
+      { id: "space-1", organizationId: "org-1", name: "Mobile App", slug: "sp", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
+      { id: "space-2", organizationId: "org-1", name: "Web App", slug: "sp", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
     ]);
     pagesStore.setState([
       { id: "page-1", spaceId: "space-1", parentPageId: null, title: "A", order: 0, content: emptyDoc(), visibility: "internal", slug: null, isPublished: false, publishedContentSnapshot: null, publishedAt: null, createdByUserId: "user-1", createdAt: "t", updatedAt: "t" },
@@ -246,7 +303,7 @@ describe("useDeleteSpace", () => {
 
   it("throws when Supabase returns an error, without touching the local store", async () => {
     spacesStore.setState([
-      { id: "space-1", organizationId: "org-1", name: "Mobile App", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
+      { id: "space-1", organizationId: "org-1", name: "Mobile App", slug: "sp", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
     ]);
     const eqMock = vi.fn(() => Promise.resolve({ error: { message: "permission denied" } }));
     mockSupabase.from.mockReturnValue({ delete: () => ({ eq: eqMock }) });
@@ -265,8 +322,8 @@ describe("useOrganizationSpaces", () => {
 
   it("returns only the Spaces belonging to the given Organization, even when the caller has access to Spaces in other Organizations too", async () => {
     const spaceRows: import("@/lib/supabase/mappers").SpaceRow[] = [
-      { id: "space-1", organization_id: "org-1", name: "Org 1 Space", category: null, is_publishable: false, created_by_user_id: "user-1", created_at: "t" },
-      { id: "space-2", organization_id: "org-2", name: "Org 2 Space", category: null, is_publishable: false, created_by_user_id: "user-1", created_at: "t" },
+      { id: "space-1", organization_id: "org-1", name: "Org 1 Space", slug: "sp", category: null, is_publishable: false, created_by_user_id: "user-1", created_at: "t" },
+      { id: "space-2", organization_id: "org-2", name: "Org 2 Space", slug: "sp", category: null, is_publishable: false, created_by_user_id: "user-1", created_at: "t" },
     ];
     const permissionRows = [
       { id: "perm-1", space_id: "space-1", user_id: "user-1", role: "admin" },
@@ -284,8 +341,8 @@ describe("useOrganizationSpaces", () => {
 
   it("returns every accessible Space when organizationId is undefined (backward compatible)", async () => {
     const spaceRows: import("@/lib/supabase/mappers").SpaceRow[] = [
-      { id: "space-1", organization_id: "org-1", name: "Org 1 Space", category: null, is_publishable: false, created_by_user_id: "user-1", created_at: "t" },
-      { id: "space-2", organization_id: "org-2", name: "Org 2 Space", category: null, is_publishable: false, created_by_user_id: "user-1", created_at: "t" },
+      { id: "space-1", organization_id: "org-1", name: "Org 1 Space", slug: "sp", category: null, is_publishable: false, created_by_user_id: "user-1", created_at: "t" },
+      { id: "space-2", organization_id: "org-2", name: "Org 2 Space", slug: "sp", category: null, is_publishable: false, created_by_user_id: "user-1", created_at: "t" },
     ];
     const permissionRows = [
       { id: "perm-1", space_id: "space-1", user_id: "user-1", role: "admin" },

@@ -1,4 +1,9 @@
-/** S3-compatible object storage env vars — same code path for any provider (Backblaze B2, AWS S3, ...), per PRD.md NFR "Dev environment parity". */
+/**
+ * Object storage env vars for the screenshot upload flow (PROJECT.md §9.3 /
+ * PRD.md Epic 12). Production is real AWS S3 with virtual-hosted-style URLs;
+ * the same code path also serves any S3-compatible emulator (e.g. MinIO) by
+ * changing only these vars, per PRD.md NFR "Dev environment parity".
+ */
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -8,7 +13,7 @@ function requireEnv(name: string): string {
   return value;
 }
 
-/** Unset for AWS S3 (uses the SDK's regional default endpoint); set to the provider's endpoint otherwise (e.g. Backblaze B2). */
+/** Unset for AWS S3 (the SDK derives the regional endpoint); may be set explicitly to https://s3.<region>.amazonaws.com or to an emulator's endpoint. */
 export function getS3Endpoint(): string | undefined {
   return process.env.S3_ENDPOINT || undefined;
 }
@@ -29,7 +34,7 @@ export function getS3SecretAccessKey(): string {
   return requireEnv("S3_SECRET_ACCESS_KEY");
 }
 
-/** Required for providers using path-style buckets (e.g. MinIO); AWS S3 and Backblaze B2 should leave this unset. */
+/** Leave unset/false for real AWS S3 (virtual-hosted-style); set true only for a path-style emulator such as MinIO. */
 export function getS3ForcePathStyle(): boolean {
   return process.env.S3_FORCE_PATH_STYLE === "true";
 }

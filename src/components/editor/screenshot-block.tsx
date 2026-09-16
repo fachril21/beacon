@@ -13,6 +13,7 @@ import {
   usePatchScreenshotAnnotationsLocal,
 } from "@/hooks/use-screenshot-blocks";
 import { resolveScreenshotUrl } from "@/lib/s3/screenshot-url";
+import { screenshotUploadErrorMessage } from "@/lib/s3/upload-error";
 import { createStore } from "@/lib/store";
 import { useActiveAnnotationTool } from "@/lib/annotation-tool-store";
 import type { Annotation } from "@/lib/types";
@@ -97,8 +98,8 @@ function ScreenshotBlockRender({ block, editor }: ScreenshotBlockRenderProps) {
     try {
       const newBlock = await uploadScreenshot({ pageId, order: 0, file, width, height });
       assignBlockId(newBlock.id);
-    } catch {
-      toast.error("Gagal mengunggah gambar, silakan coba lagi.");
+    } catch (error) {
+      toast.error(screenshotUploadErrorMessage(error));
     } finally {
       setIsUploading(false);
     }

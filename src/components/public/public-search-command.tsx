@@ -6,6 +6,7 @@ import { CommandDialog, CommandInput, CommandList, CommandEmpty, CommandGroup, C
 import { SearchX } from "lucide-react";
 import { usePublicSearch } from "@/hooks/use-search";
 import { usePublicOrgContext } from "@/hooks/use-public-org";
+import { usePublicSpace } from "@/hooks/public-space-context";
 import { SearchResultRow } from "@/components/beacon/search-result-row";
 
 export function PublicSearchCommand({
@@ -19,8 +20,9 @@ export function PublicSearchCommand({
 }) {
   const router = useRouter();
   const { basePath } = usePublicOrgContext();
+  const currentSpace = usePublicSpace();
   const [query, setQuery] = useState("");
-  const results = usePublicSearch(query, organizationId);
+  const results = usePublicSearch(query, organizationId, currentSpace?.space.id);
 
   function handleOpenChange(next: boolean) {
     if (!next) setQuery("");

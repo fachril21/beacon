@@ -38,7 +38,7 @@ const { getSignedUrl } = await import("@aws-sdk/s3-request-presigner");
 const { PutObjectCommand } = await import("@aws-sdk/client-s3");
 
 describe("createPresignedUpload", () => {
-  it("requests a presigned PUT scoped to the bucket/key/content-type — Backblaze B2's S3-compatible API does not support presigned POST", async () => {
+  it("requests a presigned PUT scoped to the bucket/key/content-type", async () => {
     const fakeClient = {} as never;
     const result = await createPresignedUpload({
       client: fakeClient,

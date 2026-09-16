@@ -27,11 +27,12 @@ export interface CreatePresignedUploadInput {
 }
 
 /**
- * A presigned PUT, not a presigned POST — Backblaze B2's S3-compatible API
- * does not support browser-based POST uploads. The upload size cap is
- * therefore only checked pre-flight in the presign route, not enforced by
- * the storage layer itself (a POST policy's content-length-range condition
- * has no PUT equivalent).
+ * A presigned PUT (not a presigned POST): one URL scoped to exactly one
+ * object key and content type, which is all a single-file screenshot upload
+ * needs, and the identical call works against any S3-compatible emulator.
+ * The upload size cap is therefore checked pre-flight in the presign route
+ * (Epic 12 AC), not by the storage layer — a PUT has no equivalent of a POST
+ * policy's content-length-range condition.
  */
 export async function createPresignedUpload(input: CreatePresignedUploadInput): Promise<PresignedUpload> {
   const command = new PutObjectCommand({

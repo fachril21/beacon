@@ -114,6 +114,7 @@ export interface SpaceRow {
   id: string;
   organization_id: string;
   name: string;
+  slug: string;
   category: string | null;
   is_publishable: boolean;
   created_by_user_id: string;
@@ -125,6 +126,7 @@ export function mapSpaceRow(row: SpaceRow): Space {
     id: row.id,
     organizationId: row.organization_id,
     name: row.name,
+    slug: row.slug,
     category: row.category,
     isPublishable: row.is_publishable,
     createdByUserId: row.created_by_user_id,

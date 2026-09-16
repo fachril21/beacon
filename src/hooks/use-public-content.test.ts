@@ -5,119 +5,140 @@ import { emptyDoc } from "@/lib/mock/blocknote-content";
 const mockSupabase = { from: vi.fn() };
 vi.mock("@/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => mockSupabase }));
 
-const { usePublicToc, usePublicPage } = await import("./use-public-content");
+let mockParams: Record<string, string | undefined> = {};
+vi.mock("next/navigation", () => ({ useParams: () => mockParams }));
 
-describe("usePublicToc", () => {
-  beforeEach(() => vi.clearAllMocks());
+const { usePublicSpaces, usePublicCurrentSpace, usePublicPage } = await import("./use-public-content");
 
-  it("queries only publishable Spaces in the given Organization, then their published Pages", async () => {
-    const spaceRow = {
-      id: "space-1",
-      organization_id: "org-1",
-      name: "Mobile App",
-      category: null,
-      is_publishable: true,
-      created_by_user_id: "user-1",
-      created_at: "t",
-    };
-    const pageRow = {
-      id: "page-1",
-      space_id: "space-1",
-      parent_page_id: null,
-      title: "Getting started",
-      order: 0,
-      content: emptyDoc(),
-      visibility: "publishable",
-      is_published: true,
-      published_content_snapshot: { title: "Getting started", content: emptyDoc(), screenshotBlocks: {}, publishedAt: "t" },
-      published_at: "t",
-      created_by_user_id: "user-1",
-      created_at: "t",
-      updated_at: "t",
-    };
+/** Chainable + awaitable Supabase query-builder stub resolving to `response`. */
+function qb(response: { data: unknown; error: unknown }) {
+  const stub: Record<string, unknown> = {};
+  for (const m of ["select", "eq", "in", "order"]) stub[m] = vi.fn(() => stub);
+  stub.single = vi.fn(() => Promise.resolve(response));
+  stub.then = (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) =>
+    Promise.resolve(response).then(resolve, reject);
+  return stub;
+}
 
-    const spacesEq2 = vi.fn(() => Promise.resolve({ data: [spaceRow], error: null }));
-    const spacesEq1 = vi.fn(() => ({ eq: spacesEq2 }));
-    const pagesEq = vi.fn(() => Promise.resolve({ data: [pageRow], error: null }));
-    const pagesIn = vi.fn(() => ({ eq: pagesEq }));
+/** Queue one response per `from(table)` call, in order; last entry repeats. */
+function mockFrom(handlers: Record<string, { data: unknown; error: unknown }[]>) {
+  const counts: Record<string, number> = {};
+  mockSupabase.from.mockImplementation((table: string) => {
+    const list = handlers[table];
+    if (!list) throw new Error(`unexpected table ${table}`);
+    const i = counts[table] ?? 0;
+    counts[table] = i + 1;
+    return qb(list[Math.min(i, list.length - 1)]);
+  });
+}
 
-    mockSupabase.from.mockImplementation((table: string) => {
-      if (table === "spaces") return { select: () => ({ eq: spacesEq1 }) };
-      if (table === "pages") return { select: () => ({ in: pagesIn }) };
-      throw new Error(`unexpected table ${table}`);
+const spaceRow = (over: Record<string, unknown> = {}) => ({
+  id: "space-1",
+  organization_id: "org-1",
+  name: "Mobile App",
+  slug: "mobile-app",
+  category: null,
+  is_publishable: true,
+  created_by_user_id: "user-1",
+  created_at: "t",
+  ...over,
+});
+
+const publishedPageRow = (over: Record<string, unknown> = {}) => ({
+  id: "page-1",
+  space_id: "space-1",
+  parent_page_id: null,
+  title: "Getting started",
+  order: 0,
+  content: emptyDoc(),
+  visibility: "publishable",
+  slug: "getting-started",
+  is_published: true,
+  published_content_snapshot: { title: "Getting started", content: emptyDoc(), screenshotBlocks: {}, publishedAt: "t" },
+  published_at: "t",
+  created_by_user_id: "user-1",
+  created_at: "t",
+  updated_at: "t",
+  ...over,
+});
+
+describe("usePublicSpaces", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockParams = {};
+  });
+
+  it("returns publishable Spaces of the Organization that have at least one published Page, with a page count", async () => {
+    mockFrom({
+      spaces: [{ data: [spaceRow(), spaceRow({ id: "space-2", slug: "empty-space" })], error: null }],
+      pages: [{ data: [{ space_id: "space-1" }, { space_id: "space-1" }], error: null }],
     });
 
-    const { result } = renderHook(() => usePublicToc("org-1"));
+    const { result } = renderHook(() => usePublicSpaces("org-1"));
     await waitFor(() => expect(result.current).toHaveLength(1));
 
-    expect(spacesEq1).toHaveBeenCalledWith("organization_id", "org-1");
-    expect(spacesEq2).toHaveBeenCalledWith("is_publishable", true);
-    expect(pagesIn).toHaveBeenCalledWith("space_id", ["space-1"]);
-    expect(result.current[0]).toMatchObject({
-      space: { id: "space-1" },
-      pages: [{ page: { id: "page-1" }, children: [] }],
-    });
+    expect(result.current[0]).toMatchObject({ space: { id: "space-1", slug: "mobile-app" }, publishedPageCount: 2 });
   });
 
   it("returns an empty array without querying when organizationId is undefined", () => {
-    const { result } = renderHook(() => usePublicToc(undefined));
+    const { result } = renderHook(() => usePublicSpaces(undefined));
     expect(result.current).toEqual([]);
     expect(mockSupabase.from).not.toHaveBeenCalled();
   });
+});
 
-  it("nests a published child page under its published parent instead of listing it flat", async () => {
-    const spaceRow = {
-      id: "space-1",
-      organization_id: "org-1",
-      name: "Mobile App",
-      category: null,
-      is_publishable: true,
-      created_by_user_id: "user-1",
-      created_at: "t",
-    };
-    const parentRow = {
-      id: "parent",
-      space_id: "space-1",
-      parent_page_id: null,
-      title: "Parent",
-      order: 0,
-      content: emptyDoc(),
-      visibility: "publishable",
-      is_published: true,
-      published_content_snapshot: { title: "Parent", content: emptyDoc(), screenshotBlocks: {}, publishedAt: "t" },
-      published_at: "t",
-      created_by_user_id: "user-1",
-      created_at: "t",
-      updated_at: "t",
-    };
-    const childRow = {
-      ...parentRow,
-      id: "child",
-      parent_page_id: "parent",
-      title: "Child",
-      order: 0,
-      published_content_snapshot: { title: "Child", content: emptyDoc(), screenshotBlocks: {}, publishedAt: "t" },
-    };
+describe("usePublicCurrentSpace", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockParams = {};
+  });
 
-    const spacesEq2 = vi.fn(() => Promise.resolve({ data: [spaceRow], error: null }));
-    const spacesEq1 = vi.fn(() => ({ eq: spacesEq2 }));
-    const pagesEq = vi.fn(() => Promise.resolve({ data: [childRow, parentRow], error: null }));
-    const pagesIn = vi.fn(() => ({ eq: pagesEq }));
+  it("returns null without querying on the directory route (no spaceSlug, no pageSlug)", () => {
+    const { result } = renderHook(() => usePublicCurrentSpace("org-1"));
+    expect(result.current).toBeNull();
+    expect(mockSupabase.from).not.toHaveBeenCalled();
+  });
 
-    mockSupabase.from.mockImplementation((table: string) => {
-      if (table === "spaces") return { select: () => ({ eq: spacesEq1 }) };
-      if (table === "pages") return { select: () => ({ in: pagesIn }) };
-      throw new Error(`unexpected table ${table}`);
+  it("resolves the Space by its slug and returns only that Space's published page tree", async () => {
+    mockParams = { orgSlug: "dibimbing", spaceSlug: "mobile-app" };
+    mockFrom({
+      spaces: [{ data: spaceRow(), error: null }],
+      pages: [{ data: [publishedPageRow(), publishedPageRow({ id: "page-2", parent_page_id: "page-1" })], error: null }],
     });
 
-    const { result } = renderHook(() => usePublicToc("org-1"));
-    await waitFor(() => expect(result.current).toHaveLength(1));
+    const { result } = renderHook(() => usePublicCurrentSpace("org-1"));
+    await waitFor(() => expect(result.current).not.toBeNull());
 
-    const { pages } = result.current[0];
-    expect(pages).toHaveLength(1);
-    expect(pages[0].page.id).toBe("parent");
-    expect(pages[0].children).toHaveLength(1);
-    expect(pages[0].children[0].page.id).toBe("child");
+    expect(result.current!.space).toMatchObject({ id: "space-1", slug: "mobile-app" });
+    expect(result.current!.pages).toHaveLength(1);
+    expect(result.current!.pages[0].page.id).toBe("page-1");
+    expect(result.current!.pages[0].children[0].page.id).toBe("page-2");
+  });
+
+  it("on a page route resolves the current Space from the published Page's own space_id", async () => {
+    mockParams = { orgSlug: "dibimbing", pageSlug: "getting-started" };
+    mockFrom({
+      pages: [
+        { data: { space_id: "space-1" }, error: null }, // slug lookup
+        { data: [publishedPageRow()], error: null }, // the space's page list
+      ],
+      spaces: [{ data: spaceRow(), error: null }],
+    });
+
+    const { result } = renderHook(() => usePublicCurrentSpace("org-1"));
+    await waitFor(() => expect(result.current).not.toBeNull());
+
+    expect(result.current!.space).toMatchObject({ id: "space-1" });
+    expect(result.current!.pages[0].page.id).toBe("page-1");
+  });
+
+  it("returns null when the slug matches no publishable Space (never a fallback)", async () => {
+    mockParams = { orgSlug: "dibimbing", spaceSlug: "does-not-exist" };
+    mockFrom({ spaces: [{ data: null, error: { message: "no rows" } }] });
+
+    const { result } = renderHook(() => usePublicCurrentSpace("org-1"));
+    await waitFor(() => expect(mockSupabase.from).toHaveBeenCalled());
+    expect(result.current).toBeNull();
   });
 });
 

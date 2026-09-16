@@ -29,18 +29,18 @@ export async function POST(request: Request) {
   const { pageId, fileName, contentType, fileSize } = body;
 
   if (!pageId || !fileName || !contentType || typeof fileSize !== "number") {
-    return NextResponse.json({ error: "pageId, fileName, contentType, and fileSize are required" }, { status: 400 });
+    return NextResponse.json({ error: "MISSING_FIELDS" }, { status: 400 });
   }
   if (!contentType.startsWith("image/")) {
-    return NextResponse.json({ error: "Only image uploads are allowed" }, { status: 400 });
+    return NextResponse.json({ error: "INVALID_FILE_TYPE" }, { status: 400 });
   }
 
+  // Machine-readable codes, not prose — the browser maps them to
+  // Bahasa Indonesia copy (src/lib/s3/upload-error.ts), same convention as
+  // the Organization/Space invite routes.
   const maxUploadBytes = getS3MaxUploadBytes();
   if (fileSize > maxUploadBytes) {
-    return NextResponse.json(
-      { error: `File exceeds the ${maxUploadBytes}-byte upload limit` },
-      { status: 413 },
-    );
+    return NextResponse.json({ error: "FILE_TOO_LARGE", maxUploadBytes }, { status: 413 });
   }
 
   const key = buildScreenshotObjectKey(pageId, fileName);

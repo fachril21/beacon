@@ -133,6 +133,30 @@ export function useCreateSpace() {
 }
 
 /**
+ * Updates a Space's own settings after creation — its name and its publishable
+ * flag (PRD.md Flow 2 step 2's toggle, previously only settable in the New
+ * Space modal). Admin-only at the data layer via `spaces_update_admin_only`
+ * (20260806100100_rls_policies.sql), so no extra client-side gate is needed
+ * here. Flipping `isPublishable` off makes the Space internal-only again — RLS
+ * immediately hides its published Pages from the public site, but nothing is
+ * deleted.
+ */
+export function useUpdateSpace() {
+  return useCallback(async (id: string, patch: { name?: string; isPublishable?: boolean }) => {
+    const supabase = getSupabaseBrowserClient();
+
+    const row: Record<string, unknown> = {};
+    if (patch.name !== undefined) row.name = patch.name;
+    if (patch.isPublishable !== undefined) row.is_publishable = patch.isPublishable;
+
+    const { error } = await supabase.from("spaces").update(row).eq("id", id);
+    if (error) throw error;
+
+    spacesStore.setState((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  }, []);
+}
+
+/**
  * Deletes a Space. Postgres cascades the delete to every Page in it (and, in
  * turn, each Page's screenshot_blocks/versions/comments/feedback) plus the
  * Space's own permissions rows — but the local stores have no way to know
