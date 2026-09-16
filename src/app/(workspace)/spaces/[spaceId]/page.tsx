@@ -4,7 +4,7 @@ import { use, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { FileText, Plus, Settings, Trash2, Users } from "lucide-react";
+import { Copy, FileText, Plus, Settings, Trash2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/beacon/empty-state";
@@ -12,6 +12,7 @@ import { DeleteConfirmDialog } from "@/components/workspace/delete-confirm-dialo
 import { useSpace, useSpaceRole, useDeleteSpace } from "@/hooks/use-spaces";
 import { useChildPages, useCreatePage } from "@/hooks/use-pages";
 import { useSession } from "@/hooks/use-session";
+import { useOrganization } from "@/hooks/use-organizations";
 
 export default function SpacePage({ params }: { params: Promise<{ spaceId: string }> }) {
   const { spaceId } = use(params);
@@ -19,6 +20,7 @@ export default function SpacePage({ params }: { params: Promise<{ spaceId: strin
   const { user } = useSession();
   const space = useSpace(spaceId);
   const role = useSpaceRole(spaceId, user?.id);
+  const organization = useOrganization(space?.organizationId);
   const rootPages = useChildPages(spaceId, null);
   const createPage = useCreatePage();
   const deleteSpace = useDeleteSpace();
@@ -35,6 +37,17 @@ export default function SpacePage({ params }: { params: Promise<{ spaceId: strin
     } catch {
       toast.error("Tidak dapat membuat Halaman, silakan coba lagi.");
       setIsCreating(false);
+    }
+  }
+
+  async function handleCopyPublicUrl() {
+    if (!organization || !space) return;
+    const publicUrl = `${window.location.origin}/public/${organization.slug}/spaces/${space.slug}`;
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      toast.success("Link publik disalin ke clipboard.");
+    } catch {
+      toast.error("Gagal menyalin link, silakan coba lagi.");
     }
   }
 
@@ -74,6 +87,12 @@ export default function SpacePage({ params }: { params: Promise<{ spaceId: strin
             </Badge>
           </div>
           <div className="flex shrink-0 gap-2">
+            {space.isPublishable && organization && (
+              <Button variant="secondary" size="sm" onClick={() => void handleCopyPublicUrl()}>
+                <Copy className="size-3.5" />
+                Salin link publik
+              </Button>
+            )}
             {role === "admin" && (
               <>
                 <Link href={`/spaces/${spaceId}/settings`}>
