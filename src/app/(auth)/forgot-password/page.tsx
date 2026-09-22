@@ -19,10 +19,13 @@ export default function ForgotPasswordPage() {
     setIsSubmitting(true);
     try {
       await requestPasswordReset(email);
-    } catch {
+    } catch (error) {
       // Supabase's own anti-enumeration response never reveals whether the
       // email has an account — show the same confirmation either way so a
       // failed send can't be distinguished from "no such account" either.
+      // Still log it: a misconfiguration (e.g. a missing env var) throws
+      // here too, and would otherwise fail completely silently.
+      console.error("requestPasswordReset failed", error);
     } finally {
       setIsSubmitting(false);
       setIsSent(true);
