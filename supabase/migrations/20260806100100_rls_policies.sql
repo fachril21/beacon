@@ -3,16 +3,16 @@
 -- access — access exists only through the policies below, so "forgot a
 -- WHERE clause" is not a way to leak data (PROJECT.md §9.5).
 
-alter table public.organizations enable row level security;
-alter table public.profiles enable row level security;
-alter table public.spaces enable row level security;
-alter table public.permissions enable row level security;
-alter table public.pending_invites enable row level security;
-alter table public.pages enable row level security;
-alter table public.screenshot_blocks enable row level security;
-alter table public.versions enable row level security;
-alter table public.comments enable row level security;
-alter table public.feedback enable row level security;
+alter table beacon.organizations enable row level security;
+alter table beacon.profiles enable row level security;
+alter table beacon.spaces enable row level security;
+alter table beacon.permissions enable row level security;
+alter table beacon.pending_invites enable row level security;
+alter table beacon.pages enable row level security;
+alter table beacon.screenshot_blocks enable row level security;
+alter table beacon.versions enable row level security;
+alter table beacon.comments enable row level security;
+alter table beacon.feedback enable row level security;
 
 -- ---------------------------------------------------------------------------
 -- Helper functions — SECURITY DEFINER so policies that call them don't
@@ -21,46 +21,46 @@ alter table public.feedback enable row level security;
 -- search_path per Postgres's SECURITY DEFINER hardening guidance.
 -- ---------------------------------------------------------------------------
 
-create function public.current_profile_organization_id()
+create function beacon.current_profile_organization_id()
 returns uuid
 language sql
 stable
 security definer
-set search_path = public
+set search_path = beacon, extensions
 as $$
-  select organization_id from public.profiles where id = auth.uid();
+  select organization_id from beacon.profiles where id = auth.uid();
 $$;
 
-create function public.current_profile_organization_role()
+create function beacon.current_profile_organization_role()
 returns text
 language sql
 stable
 security definer
-set search_path = public
+set search_path = beacon, extensions
 as $$
-  select organization_role from public.profiles where id = auth.uid();
+  select organization_role from beacon.profiles where id = auth.uid();
 $$;
 
-create function public.user_space_role(p_space_id uuid)
+create function beacon.user_space_role(p_space_id uuid)
 returns text
 language sql
 stable
 security definer
-set search_path = public
+set search_path = beacon, extensions
 as $$
-  select role from public.permissions
+  select role from beacon.permissions
   where space_id = p_space_id and user_id = auth.uid();
 $$;
 
 -- viewer < editor < admin, used by "at least this role" checks below.
-create function public.space_role_at_least(p_space_id uuid, p_min_role text)
+create function beacon.space_role_at_least(p_space_id uuid, p_min_role text)
 returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = beacon, extensions
 as $$
-  select case public.user_space_role(p_space_id)
+  select case beacon.user_space_role(p_space_id)
     when 'admin' then true
     when 'editor' then p_min_role in ('viewer', 'editor')
     when 'viewer' then p_min_role = 'viewer'
@@ -68,14 +68,14 @@ as $$
   end;
 $$;
 
-create function public.page_space_id(p_page_id uuid)
+create function beacon.page_space_id(p_page_id uuid)
 returns uuid
 language sql
 stable
 security definer
-set search_path = public
+set search_path = beacon, extensions
 as $$
-  select space_id from public.pages where id = p_page_id;
+  select space_id from beacon.pages where id = p_page_id;
 $$;
 
 -- ---------------------------------------------------------------------------
@@ -85,20 +85,20 @@ $$;
 -- ---------------------------------------------------------------------------
 
 create policy organizations_select_public
-  on public.organizations for select
+  on beacon.organizations for select
   to anon, authenticated
   using (true);
 
 create policy organizations_update_owner_only
-  on public.organizations for update
+  on beacon.organizations for update
   to authenticated
   using (
-    id = public.current_profile_organization_id()
-    and public.current_profile_organization_role() = 'owner'
+    id = beacon.current_profile_organization_id()
+    and beacon.current_profile_organization_role() = 'owner'
   )
   with check (
-    id = public.current_profile_organization_id()
-    and public.current_profile_organization_role() = 'owner'
+    id = beacon.current_profile_organization_id()
+    and beacon.current_profile_organization_role() = 'owner'
   );
 
 -- ---------------------------------------------------------------------------
@@ -107,12 +107,12 @@ create policy organizations_update_owner_only
 -- ---------------------------------------------------------------------------
 
 create policy profiles_select_same_organization
-  on public.profiles for select
+  on beacon.profiles for select
   to authenticated
-  using (organization_id = public.current_profile_organization_id());
+  using (organization_id = beacon.current_profile_organization_id());
 
 create policy profiles_update_self
-  on public.profiles for update
+  on beacon.profiles for update
   to authenticated
   using (id = auth.uid())
   with check (id = auth.uid());
@@ -126,28 +126,28 @@ create policy profiles_update_self
 -- ---------------------------------------------------------------------------
 
 create policy spaces_select_public_publishable
-  on public.spaces for select
+  on beacon.spaces for select
   to anon
   using (is_publishable = true);
 
 create policy spaces_select_member_or_publishable
-  on public.spaces for select
+  on beacon.spaces for select
   to authenticated
   using (
     is_publishable = true
-    or public.user_space_role(id) is not null
+    or beacon.user_space_role(id) is not null
   );
 
 create policy spaces_insert_own_organization
-  on public.spaces for insert
+  on beacon.spaces for insert
   to authenticated
-  with check (organization_id = public.current_profile_organization_id());
+  with check (organization_id = beacon.current_profile_organization_id());
 
 create policy spaces_update_admin_only
-  on public.spaces for update
+  on beacon.spaces for update
   to authenticated
-  using (public.space_role_at_least(id, 'admin'))
-  with check (public.space_role_at_least(id, 'admin'));
+  using (beacon.space_role_at_least(id, 'admin'))
+  with check (beacon.space_role_at_least(id, 'admin'));
 
 -- ---------------------------------------------------------------------------
 -- Permission — Members screen (Flow 7): admin-only read/write, matching
@@ -155,10 +155,10 @@ create policy spaces_update_admin_only
 -- ---------------------------------------------------------------------------
 
 create policy permissions_select_admin_or_self
-  on public.permissions for select
+  on beacon.permissions for select
   to authenticated
   using (
-    public.space_role_at_least(space_id, 'admin')
+    beacon.space_role_at_least(space_id, 'admin')
     or user_id = auth.uid()
   );
 
@@ -168,38 +168,38 @@ create policy permissions_select_admin_or_self
 -- allows exactly one case — the Space's own creator claiming their own row —
 -- and only while the Space has no permission rows at all yet.
 create policy permissions_insert_admin_or_bootstrap
-  on public.permissions for insert
+  on beacon.permissions for insert
   to authenticated
   with check (
-    public.space_role_at_least(space_id, 'admin')
+    beacon.space_role_at_least(space_id, 'admin')
     or (
       user_id = auth.uid()
       and exists (
-        select 1 from public.spaces s
+        select 1 from beacon.spaces s
         where s.id = space_id and s.created_by_user_id = auth.uid()
       )
       and not exists (
-        select 1 from public.permissions p where p.space_id = space_id
+        select 1 from beacon.permissions p where p.space_id = space_id
       )
     )
   );
 
 create policy permissions_update_admin_only
-  on public.permissions for update
+  on beacon.permissions for update
   to authenticated
-  using (public.space_role_at_least(space_id, 'admin'))
-  with check (public.space_role_at_least(space_id, 'admin'));
+  using (beacon.space_role_at_least(space_id, 'admin'))
+  with check (beacon.space_role_at_least(space_id, 'admin'));
 
 create policy permissions_delete_admin_only
-  on public.permissions for delete
+  on beacon.permissions for delete
   to authenticated
-  using (public.space_role_at_least(space_id, 'admin'));
+  using (beacon.space_role_at_least(space_id, 'admin'));
 
 create policy pending_invites_admin_only
-  on public.pending_invites for all
+  on beacon.pending_invites for all
   to authenticated
-  using (public.space_role_at_least(space_id, 'admin'))
-  with check (public.space_role_at_least(space_id, 'admin'));
+  using (beacon.space_role_at_least(space_id, 'admin'))
+  with check (beacon.space_role_at_least(space_id, 'admin'));
 
 -- ---------------------------------------------------------------------------
 -- Page — the core visibility rule (PRD.md §5.3): public reads require
@@ -208,42 +208,42 @@ create policy pending_invites_admin_only
 -- ---------------------------------------------------------------------------
 
 create policy pages_select_public_published
-  on public.pages for select
+  on beacon.pages for select
   to anon
   using (
     visibility = 'publishable'
     and is_published = true
     and exists (
-      select 1 from public.spaces s
+      select 1 from beacon.spaces s
       where s.id = pages.space_id and s.is_publishable = true
     )
   );
 
 create policy pages_select_member_or_published
-  on public.pages for select
+  on beacon.pages for select
   to authenticated
   using (
-    public.user_space_role(space_id) is not null
+    beacon.user_space_role(space_id) is not null
     or (
       visibility = 'publishable'
       and is_published = true
       and exists (
-        select 1 from public.spaces s
+        select 1 from beacon.spaces s
         where s.id = pages.space_id and s.is_publishable = true
       )
     )
   );
 
 create policy pages_insert_editor
-  on public.pages for insert
+  on beacon.pages for insert
   to authenticated
-  with check (public.space_role_at_least(space_id, 'editor'));
+  with check (beacon.space_role_at_least(space_id, 'editor'));
 
 create policy pages_update_editor
-  on public.pages for update
+  on beacon.pages for update
   to authenticated
-  using (public.space_role_at_least(space_id, 'editor'))
-  with check (public.space_role_at_least(space_id, 'editor'));
+  using (beacon.space_role_at_least(space_id, 'editor'))
+  with check (beacon.space_role_at_least(space_id, 'editor'));
 
 -- ---------------------------------------------------------------------------
 -- ScreenshotBlock — mirrors the owning Page's internal visibility. Public
@@ -252,15 +252,15 @@ create policy pages_update_editor
 -- ---------------------------------------------------------------------------
 
 create policy screenshot_blocks_select_member
-  on public.screenshot_blocks for select
+  on beacon.screenshot_blocks for select
   to authenticated
-  using (public.user_space_role(public.page_space_id(page_id)) is not null);
+  using (beacon.user_space_role(beacon.page_space_id(page_id)) is not null);
 
 create policy screenshot_blocks_write_editor
-  on public.screenshot_blocks for all
+  on beacon.screenshot_blocks for all
   to authenticated
-  using (public.space_role_at_least(public.page_space_id(page_id), 'editor'))
-  with check (public.space_role_at_least(public.page_space_id(page_id), 'editor'));
+  using (beacon.space_role_at_least(beacon.page_space_id(page_id), 'editor'))
+  with check (beacon.space_role_at_least(beacon.page_space_id(page_id), 'editor'));
 
 -- ---------------------------------------------------------------------------
 -- Version — any Space member can read history; only editors/admins create
@@ -268,28 +268,28 @@ create policy screenshot_blocks_write_editor
 -- ---------------------------------------------------------------------------
 
 create policy versions_select_member
-  on public.versions for select
+  on beacon.versions for select
   to authenticated
-  using (public.user_space_role(public.page_space_id(page_id)) is not null);
+  using (beacon.user_space_role(beacon.page_space_id(page_id)) is not null);
 
 create policy versions_insert_editor
-  on public.versions for insert
+  on beacon.versions for insert
   to authenticated
-  with check (public.space_role_at_least(public.page_space_id(page_id), 'editor'));
+  with check (beacon.space_role_at_least(beacon.page_space_id(page_id), 'editor'));
 
 -- ---------------------------------------------------------------------------
 -- Comment (Stage 3 wiring) — any Space member (viewer+) can read and post.
 -- ---------------------------------------------------------------------------
 
 create policy comments_select_member
-  on public.comments for select
+  on beacon.comments for select
   to authenticated
-  using (public.user_space_role(public.page_space_id(page_id)) is not null);
+  using (beacon.user_space_role(beacon.page_space_id(page_id)) is not null);
 
 create policy comments_insert_member
-  on public.comments for insert
+  on beacon.comments for insert
   to authenticated
-  with check (public.user_space_role(public.page_space_id(page_id)) is not null);
+  with check (beacon.user_space_role(beacon.page_space_id(page_id)) is not null);
 
 -- ---------------------------------------------------------------------------
 -- Feedback (Stage 3 wiring) — anonymous single-click Yes/No on a published
@@ -298,12 +298,12 @@ create policy comments_insert_member
 -- ---------------------------------------------------------------------------
 
 create policy feedback_insert_public_on_published
-  on public.feedback for insert
+  on beacon.feedback for insert
   to anon, authenticated
   with check (
     exists (
-      select 1 from public.pages p
-      join public.spaces s on s.id = p.space_id
+      select 1 from beacon.pages p
+      join beacon.spaces s on s.id = p.space_id
       where p.id = feedback.page_id
         and p.is_published = true
         and p.visibility = 'publishable'
@@ -312,9 +312,9 @@ create policy feedback_insert_public_on_published
   );
 
 create policy feedback_select_editor
-  on public.feedback for select
+  on beacon.feedback for select
   to authenticated
-  using (public.space_role_at_least(public.page_space_id(page_id), 'editor'));
+  using (beacon.space_role_at_least(beacon.page_space_id(page_id), 'editor'));
 
 -- ---------------------------------------------------------------------------
 -- New-user provisioning — Flow 1 signup has no Organization field, so a new
@@ -325,19 +325,19 @@ create policy feedback_select_editor
 -- seed). A real multi-org self-serve signup is out of v1 scope (PRD.md §12).
 -- ---------------------------------------------------------------------------
 
-create function public.handle_new_user()
+create function beacon.handle_new_user()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = beacon, extensions
 as $$
 declare
-  invite public.pending_invites%rowtype;
+  invite beacon.pending_invites%rowtype;
   invite_found boolean;
   target_org_id uuid;
 begin
   select pi.* into invite
-  from public.pending_invites pi
+  from beacon.pending_invites pi
   where lower(pi.email) = lower(new.email)
   order by pi.created_at asc
   limit 1;
@@ -345,15 +345,15 @@ begin
 
   if invite_found then
     select s.organization_id into target_org_id
-    from public.spaces s where s.id = invite.space_id;
+    from beacon.spaces s where s.id = invite.space_id;
   else
     select o.id into target_org_id
-    from public.organizations o
+    from beacon.organizations o
     order by o.created_at asc
     limit 1;
   end if;
 
-  insert into public.profiles (id, email, name, organization_id, organization_role)
+  insert into beacon.profiles (id, email, name, organization_id, organization_role)
   values (
     new.id,
     new.email,
@@ -363,17 +363,24 @@ begin
   );
 
   if invite_found then
-    insert into public.permissions (space_id, user_id, role)
+    insert into beacon.permissions (space_id, user_id, role)
     values (invite.space_id, new.id, invite.role)
     on conflict (space_id, user_id) do nothing;
 
-    delete from public.pending_invites where id = invite.id;
+    delete from beacon.pending_invites where id = invite.id;
   end if;
 
   return new;
 end;
 $$;
 
-create trigger on_auth_user_created
+-- Trigger name is prefixed because `auth.users` is shared across every app in
+-- the Supabase project: an unprefixed `on_auth_user_created` would collide
+-- with another app's trigger of the same name on the same table
+-- (ERROR 42710: trigger "on_auth_user_created" for relation "users" already
+-- exists). The `drop ... if exists` targets only the beacon-prefixed name, so
+-- re-running this migration never touches the other app's trigger.
+drop trigger if exists beacon_on_auth_user_created on auth.users;
+create trigger beacon_on_auth_user_created
   after insert on auth.users
-  for each row execute function public.handle_new_user();
+  for each row execute function beacon.handle_new_user();

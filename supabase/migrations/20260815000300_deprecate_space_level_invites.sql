@@ -1,7 +1,7 @@
 -- Retires the Space-level email-invite path now that Organization-level
 -- invites exist (20260815000200_organization_rpcs.sql). Bringing a brand
 -- new person into Beacon at all now goes exclusively through an
--- Organization invite; Space-level access (public.permissions) only ever
+-- Organization invite; Space-level access (beacon.permissions) only ever
 -- grants existing Organization members going forward, via a roster picker,
 -- not a second independent email flow — see
 -- docs/organization-permission-structure.md.
@@ -23,7 +23,7 @@
 -- to join the org once).
 -- ---------------------------------------------------------------------------
 
-insert into public.organization_invitations (organization_id, email, role, invited_by_user_id, status, created_at)
+insert into beacon.organization_invitations (organization_id, email, role, invited_by_user_id, status, created_at)
 select distinct on (s.organization_id, lower(pi.email))
   s.organization_id,
   lower(pi.email),
@@ -31,8 +31,8 @@ select distinct on (s.organization_id, lower(pi.email))
   pi.invited_by_user_id,
   'pending',
   pi.created_at
-from public.pending_invites pi
-join public.spaces s on s.id = pi.space_id
+from beacon.pending_invites pi
+join beacon.spaces s on s.id = pi.space_id
 order by s.organization_id, lower(pi.email), pi.created_at desc
 on conflict (organization_id, lower(email)) where status = 'pending' do nothing;
 
@@ -42,6 +42,6 @@ on conflict (organization_id, lower(email)) where status = 'pending' do nothing;
 -- it); nothing else references either object after this point.
 -- ---------------------------------------------------------------------------
 
-drop function public.invite_to_space(uuid, text, text);
-drop policy if exists pending_invites_admin_only on public.pending_invites;
-drop table public.pending_invites;
+drop function beacon.invite_to_space(uuid, text, text);
+drop policy if exists pending_invites_admin_only on beacon.pending_invites;
+drop table beacon.pending_invites;

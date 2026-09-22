@@ -1,6 +1,6 @@
 -- The org-membership access gate. Modifies the ONE helper function every
 -- Space/Page/ScreenshotBlock/Version/Comment RLS policy already routes
--- through (public.user_space_role, 20260806100100_rls_policies.sql) so org
+-- through (beacon.user_space_role, 20260806100100_rls_policies.sql) so org
 -- membership becomes a prerequisite for all of them at once, instead of
 -- duplicating the check across a dozen individual policies.
 --
@@ -13,14 +13,14 @@
 -- policies) — only organization_role_for is new here.
 -- ---------------------------------------------------------------------------
 
-create function public.organization_role_for(p_organization_id uuid)
+create function beacon.organization_role_for(p_organization_id uuid)
 returns text
 language sql
 stable
 security definer
-set search_path = public
+set search_path = beacon, extensions
 as $$
-  select role from public.organization_memberships
+  select role from beacon.organization_memberships
   where organization_id = p_organization_id and user_id = auth.uid();
 $$;
 
@@ -35,20 +35,20 @@ $$;
 -- versions, comments — is gated by this one change.
 -- ---------------------------------------------------------------------------
 
-create or replace function public.user_space_role(p_space_id uuid)
+create or replace function beacon.user_space_role(p_space_id uuid)
 returns text
 language sql
 stable
 security definer
-set search_path = public
+set search_path = beacon, extensions
 as $$
   select p.role
-  from public.permissions p
-  join public.spaces s on s.id = p.space_id
+  from beacon.permissions p
+  join beacon.spaces s on s.id = p.space_id
   where p.space_id = p_space_id
     and p.user_id = auth.uid()
     and exists (
-      select 1 from public.organization_memberships om
+      select 1 from beacon.organization_memberships om
       where om.organization_id = s.organization_id and om.user_id = auth.uid()
     );
 $$;
@@ -60,19 +60,19 @@ $$;
 -- prerequisite, not just a read-time filter).
 -- ---------------------------------------------------------------------------
 
-create function public.permissions_require_org_membership()
+create function beacon.permissions_require_org_membership()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = beacon, extensions
 as $$
 declare
   v_organization_id uuid;
 begin
-  select organization_id into v_organization_id from public.spaces where id = new.space_id;
+  select organization_id into v_organization_id from beacon.spaces where id = new.space_id;
 
   if not exists (
-    select 1 from public.organization_memberships
+    select 1 from beacon.organization_memberships
     where organization_id = v_organization_id and user_id = new.user_id
   ) then
     raise exception 'NOT_ORGANIZATION_MEMBER: user is not a member of this Space''s Organization' using errcode = '42501';
@@ -83,20 +83,20 @@ end;
 $$;
 
 create trigger permissions_require_org_membership_trigger
-  before insert or update on public.permissions
-  for each row execute function public.permissions_require_org_membership();
+  before insert or update on beacon.permissions
+  for each row execute function beacon.permissions_require_org_membership();
 
 -- ---------------------------------------------------------------------------
 -- spaces — creation now requires org membership (any role), not equality
 -- with a single profiles.organization_id.
 -- ---------------------------------------------------------------------------
 
-drop policy spaces_insert_own_organization on public.spaces;
+drop policy spaces_insert_own_organization on beacon.spaces;
 
 create policy spaces_insert_own_organization
-  on public.spaces for insert
+  on beacon.spaces for insert
   to authenticated
-  with check (public.is_organization_member(organization_id));
+  with check (beacon.is_organization_member(organization_id));
 
 -- ---------------------------------------------------------------------------
 -- profiles — visible to yourself, or to anyone who shares at least one
@@ -104,17 +104,17 @@ create policy spaces_insert_own_organization
 -- shared org, not a single one).
 -- ---------------------------------------------------------------------------
 
-drop policy profiles_select_same_organization on public.profiles;
+drop policy profiles_select_same_organization on beacon.profiles;
 
 create policy profiles_select_shared_organization
-  on public.profiles for select
+  on beacon.profiles for select
   to authenticated
   using (
     id = auth.uid()
     or exists (
       select 1
-      from public.organization_memberships mine
-      join public.organization_memberships theirs
+      from beacon.organization_memberships mine
+      join beacon.organization_memberships theirs
         on theirs.organization_id = mine.organization_id
       where mine.user_id = auth.uid() and theirs.user_id = profiles.id
     )
@@ -124,13 +124,13 @@ create policy profiles_select_shared_organization
 -- organizations — UPDATE (domain settings) restricted to that org's OWNER.
 -- ---------------------------------------------------------------------------
 
-drop policy organizations_update_owner_only on public.organizations;
+drop policy organizations_update_owner_only on beacon.organizations;
 
 create policy organizations_update_owner_only
-  on public.organizations for update
+  on beacon.organizations for update
   to authenticated
-  using (public.organization_role_for(id) = 'owner')
-  with check (public.organization_role_for(id) = 'owner');
+  using (beacon.organization_role_for(id) = 'owner')
+  with check (beacon.organization_role_for(id) = 'owner');
 
 -- current_profile_organization_id/current_profile_organization_role assumed
 -- a single Organization per profile and are superseded by the two functions
@@ -140,7 +140,7 @@ create policy organizations_update_owner_only
 -- e.g. 20260812010000_fix_permissions_bootstrap_column_shadowing.sql) to use
 -- is_organization_member instead before the two helpers are dropped.
 
-create or replace function public.check_domain_verification_rate_limit(
+create or replace function beacon.check_domain_verification_rate_limit(
   p_organization_id uuid,
   p_max_per_window int default 5,
   p_window_minutes int default 10
@@ -148,19 +148,19 @@ create or replace function public.check_domain_verification_rate_limit(
 returns boolean
 language plpgsql
 security definer
-set search_path = public
+set search_path = beacon, extensions
 as $$
 declare
   v_window_start timestamptz;
   v_count int;
 begin
-  if not public.is_organization_member(p_organization_id) then
+  if not beacon.is_organization_member(p_organization_id) then
     return false;
   end if;
 
   v_window_start := to_timestamp(floor(extract(epoch from now()) / (p_window_minutes * 60)) * (p_window_minutes * 60));
 
-  insert into public.domain_verification_attempts (organization_id, window_start, count)
+  insert into beacon.domain_verification_attempts (organization_id, window_start, count)
   values (p_organization_id, v_window_start, 1)
   on conflict (organization_id, window_start)
   do update set count = domain_verification_attempts.count + 1
@@ -170,8 +170,8 @@ begin
 end;
 $$;
 
-drop function public.current_profile_organization_id();
-drop function public.current_profile_organization_role();
+drop function beacon.current_profile_organization_id();
+drop function beacon.current_profile_organization_role();
 
 -- ---------------------------------------------------------------------------
 -- handle_new_user — previously auto-assigned every new signup into whichever
@@ -185,19 +185,25 @@ drop function public.current_profile_organization_role();
 -- token, or whenever an invite link is opened by an already-registered user.
 -- ---------------------------------------------------------------------------
 
-create or replace function public.handle_new_user()
+create or replace function beacon.handle_new_user()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = beacon, extensions
 as $$
 begin
-  insert into public.profiles (id, email, name)
+  -- on conflict: when Beacon shares one Supabase project with another app,
+  -- every signup in the project fires this trigger regardless of which app it
+  -- came from. A brand-new profile with no Organization membership sees
+  -- nothing (the membership gate below), so a stray row is harmless — but the
+  -- insert must never raise, or it would abort the other app's signup too.
+  insert into beacon.profiles (id, email, name)
   values (
     new.id,
     new.email,
     coalesce(new.raw_user_meta_data ->> 'name', '')
-  );
+  )
+  on conflict (id) do nothing;
 
   return new;
 end;

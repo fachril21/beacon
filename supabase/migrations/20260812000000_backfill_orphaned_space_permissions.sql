@@ -21,9 +21,9 @@
 -- bootstrap insert succeeded the first time. Idempotent — safe to rerun,
 -- and a no-op for every Space created after the RLS fix (which will already
 -- have its creator's admin row).
-insert into public.permissions (space_id, user_id, role)
+insert into beacon.permissions (space_id, user_id, role)
 select s.id, s.created_by_user_id, 'admin'
-from public.spaces s
+from beacon.spaces s
 where not exists (
-  select 1 from public.permissions p where p.space_id = s.id
+  select 1 from beacon.permissions p where p.space_id = s.id
 );

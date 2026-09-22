@@ -35,8 +35,8 @@ values ('a0000000-0000-0000-0000-00000000000a','00000000-0000-0000-0000-00000000
 -- 20260815000100_organization_membership_gate.sql's handle_new_user
 -- rewrite) — set up creator A's own Organization + membership explicitly,
 -- the same as the real useCreateOrganization flow would.
-insert into public.organizations (id, name) values ('90000000-0000-0000-0000-000000000009', 'Creator A Org') returning id as org_id \gset
-insert into public.organization_memberships (organization_id, user_id, role)
+insert into beacon.organizations (id, name) values ('90000000-0000-0000-0000-000000000009', 'Creator A Org') returning id as org_id \gset
+insert into beacon.organization_memberships (organization_id, user_id, role)
 values (:'org_id', 'a0000000-0000-0000-0000-00000000000a', 'owner');
 
 select set_config('request.jwt.claims', json_build_object('sub', 'a0000000-0000-0000-0000-00000000000a', 'role', 'authenticated')::text, true);
@@ -46,14 +46,14 @@ set local role authenticated;
 -- `.insert().select().single()` does. EXPECT: one row returned (name
 -- visible). Before the fix this raised "new row violates row-level
 -- security policy for table spaces".
-insert into public.spaces (id, organization_id, name, category, is_publishable, created_by_user_id)
+insert into beacon.spaces (id, organization_id, name, category, is_publishable, created_by_user_id)
 values ('b0000000-0000-0000-0000-00000000000b', :'org_id', 'Test Space A', null, false, 'a0000000-0000-0000-0000-00000000000a')
 returning id, name as expect_one_row_named_test_space_a;
 
 -- Step 2 (useCreateSpace's second write): the creator's own bootstrap admin
 -- Permission row. EXPECT: one row inserted. Before the fix this raised
 -- "new row violates row-level security policy for table permissions".
-insert into public.permissions (space_id, user_id, role)
+insert into beacon.permissions (space_id, user_id, role)
 values ('b0000000-0000-0000-0000-00000000000b', 'a0000000-0000-0000-0000-00000000000a', 'admin')
 returning id, role as expect_one_row_role_admin;
 
@@ -71,14 +71,14 @@ set local role authenticated;
 -- EXPECT: count = 0 — a stranger must not see another creator's
 -- non-publishable, no-longer-bootstrapping Space.
 select 'stranger sees creator A''s space, expect 0:' as check, count(*)
-from public.spaces where id = 'b0000000-0000-0000-0000-00000000000b';
+from beacon.spaces where id = 'b0000000-0000-0000-0000-00000000000b';
 
 -- EXPECT: ERROR (row-level security policy violation) — a stranger must not
 -- be able to self-insert an admin Permission row on a Space they did not
 -- create, even though that Space already has zero-then-one Permission rows
 -- (the bootstrap window logic must key off `is_space_creator`, not merely
 -- "no permissions exist yet").
-insert into public.permissions (space_id, user_id, role)
+insert into beacon.permissions (space_id, user_id, role)
 values ('b0000000-0000-0000-0000-00000000000b', 'c0000000-0000-0000-0000-00000000000c', 'admin');
 
 rollback;
@@ -98,17 +98,17 @@ begin;
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token, email_change_token_new, email_change)
 values ('a0000000-0000-0000-0000-00000000000a','00000000-0000-0000-0000-000000000000','authenticated','authenticated','creator-a2@example.com', crypt('x', gen_salt('bf')), now(), '{}', '{}', now(), now(), '', '', '', '');
 
-insert into public.organizations (id, name) values ('90000000-0000-0000-0000-000000000009', 'Creator A2 Org') returning id as org_id \gset
-insert into public.organization_memberships (organization_id, user_id, role)
+insert into beacon.organizations (id, name) values ('90000000-0000-0000-0000-000000000009', 'Creator A2 Org') returning id as org_id \gset
+insert into beacon.organization_memberships (organization_id, user_id, role)
 values (:'org_id', 'a0000000-0000-0000-0000-00000000000a', 'owner');
 
 select set_config('request.jwt.claims', json_build_object('sub', 'a0000000-0000-0000-0000-00000000000a', 'role', 'authenticated')::text, true);
 set local role authenticated;
 
 -- First Space: zero Permission rows exist anywhere for this user yet.
-insert into public.spaces (id, organization_id, name, category, is_publishable, created_by_user_id)
+insert into beacon.spaces (id, organization_id, name, category, is_publishable, created_by_user_id)
 values ('b1000000-0000-0000-0000-00000000000b', :'org_id', 'First Space', null, false, 'a0000000-0000-0000-0000-00000000000a');
-insert into public.permissions (space_id, user_id, role)
+insert into beacon.permissions (space_id, user_id, role)
 values ('b1000000-0000-0000-0000-00000000000b', 'a0000000-0000-0000-0000-00000000000a', 'admin')
 returning id, space_id, role as expect_first_space_bootstrap_ok;
 
@@ -117,9 +117,9 @@ returning id, space_id, role as expect_first_space_bootstrap_ok;
 -- already having a Permission row on a *different* Space must not matter.
 -- Before the column-shadowing fix, this raised "new row violates row-level
 -- security policy for table permissions".
-insert into public.spaces (id, organization_id, name, category, is_publishable, created_by_user_id)
+insert into beacon.spaces (id, organization_id, name, category, is_publishable, created_by_user_id)
 values ('d1000000-0000-0000-0000-00000000000d', :'org_id', 'Second Space', null, false, 'a0000000-0000-0000-0000-00000000000a');
-insert into public.permissions (space_id, user_id, role)
+insert into beacon.permissions (space_id, user_id, role)
 values ('d1000000-0000-0000-0000-00000000000d', 'a0000000-0000-0000-0000-00000000000a', 'admin')
 returning id, space_id, role as expect_second_space_bootstrap_ok;
 

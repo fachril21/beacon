@@ -27,7 +27,7 @@ begin;
 -- Space + Permission row inside it. User B has no membership in Org 1 at all.
 -- =============================================================================
 
-insert into public.organizations (id, name, domain, is_domain_verified)
+insert into beacon.organizations (id, name, domain, is_domain_verified)
 values ('e0000000-0000-0000-0000-00000000000e', 'Org One', null, false);
 
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token, email_change_token_new, email_change)
@@ -38,7 +38,7 @@ values
 -- profiles rows are created by handle_new_user automatically on auth.users
 -- insert; point them at Org One for a stable organization_id "active org"
 -- pointer (no longer authoritative for access after the gate migration).
-update public.profiles set organization_id = 'e0000000-0000-0000-0000-00000000000e'
+update beacon.profiles set organization_id = 'e0000000-0000-0000-0000-00000000000e'
 where id in ('a0000000-0000-0000-0000-00000000000a', 'c0000000-0000-0000-0000-00000000000c');
 
 -- =============================================================================
@@ -50,7 +50,7 @@ where id in ('a0000000-0000-0000-0000-00000000000a', 'c0000000-0000-0000-0000-00
 select set_config('request.jwt.claims', json_build_object('sub', 'a0000000-0000-0000-0000-00000000000a', 'role', 'authenticated')::text, true);
 set local role authenticated;
 
-insert into public.organization_memberships (organization_id, user_id, role)
+insert into beacon.organization_memberships (organization_id, user_id, role)
 values ('e0000000-0000-0000-0000-00000000000e', 'a0000000-0000-0000-0000-00000000000a', 'owner')
 returning organization_id, role as expect_owner_bootstrap_ok;
 
@@ -66,7 +66,7 @@ returning organization_id, role as expect_owner_bootstrap_ok;
 
 reset role;
 savepoint case_2;
-insert into public.organization_memberships (organization_id, user_id, role)
+insert into beacon.organization_memberships (organization_id, user_id, role)
 values ('e0000000-0000-0000-0000-00000000000e', 'c0000000-0000-0000-0000-00000000000c', 'owner');
 rollback to savepoint case_2;
 
@@ -79,11 +79,11 @@ rollback to savepoint case_2;
 select set_config('request.jwt.claims', json_build_object('sub', 'a0000000-0000-0000-0000-00000000000a', 'role', 'authenticated')::text, true);
 set local role authenticated;
 
-insert into public.spaces (id, organization_id, name, category, is_publishable, created_by_user_id)
+insert into beacon.spaces (id, organization_id, name, category, is_publishable, created_by_user_id)
 values ('b0000000-0000-0000-0000-00000000000b', 'e0000000-0000-0000-0000-00000000000e', 'Test Space', null, false, 'a0000000-0000-0000-0000-00000000000a')
 returning id, name as expect_space_created_ok;
 
-insert into public.permissions (space_id, user_id, role)
+insert into beacon.permissions (space_id, user_id, role)
 values ('b0000000-0000-0000-0000-00000000000b', 'a0000000-0000-0000-0000-00000000000a', 'admin')
 returning id, role as expect_permission_created_ok;
 
@@ -100,7 +100,7 @@ select set_config('request.jwt.claims', json_build_object('sub', 'c0000000-0000-
 set local role authenticated;
 
 savepoint case_4;
-insert into public.permissions (space_id, user_id, role)
+insert into beacon.permissions (space_id, user_id, role)
 values ('b0000000-0000-0000-0000-00000000000b', 'c0000000-0000-0000-0000-00000000000c', 'admin');
 rollback to savepoint case_4;
 
@@ -118,18 +118,18 @@ rollback to savepoint case_4;
 reset role;
 
 -- User C legitimately joins Org One, is legitimately granted Space access...
-insert into public.organization_memberships (organization_id, user_id, role)
+insert into beacon.organization_memberships (organization_id, user_id, role)
 values ('e0000000-0000-0000-0000-00000000000e', 'c0000000-0000-0000-0000-00000000000c', 'member');
 
 select set_config('request.jwt.claims', json_build_object('sub', 'a0000000-0000-0000-0000-00000000000a', 'role', 'authenticated')::text, true);
 set local role authenticated;
-insert into public.permissions (space_id, user_id, role)
+insert into beacon.permissions (space_id, user_id, role)
 values ('b0000000-0000-0000-0000-00000000000b', 'c0000000-0000-0000-0000-00000000000c', 'viewer');
 
 -- ...then is removed from the Organization, with the Permission row left
 -- behind (the realistic "not cleaned up" case).
 reset role;
-delete from public.organization_memberships
+delete from beacon.organization_memberships
 where organization_id = 'e0000000-0000-0000-0000-00000000000e' and user_id = 'c0000000-0000-0000-0000-00000000000c';
 
 select set_config('request.jwt.claims', json_build_object('sub', 'c0000000-0000-0000-0000-00000000000c', 'role', 'authenticated')::text, true);
@@ -138,6 +138,6 @@ set local role authenticated;
 -- EXPECT: count = 0 — a stale Permission row for a non-org-member must not
 -- grant Space visibility.
 select 'non-member with stale permission row sees the space, expect 0:' as check, count(*)
-from public.spaces where id = 'b0000000-0000-0000-0000-00000000000b';
+from beacon.spaces where id = 'b0000000-0000-0000-0000-00000000000b';
 
 rollback;

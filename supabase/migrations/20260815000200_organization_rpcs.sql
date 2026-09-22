@@ -17,19 +17,19 @@
 -- row (deduped per (org, lower(email)) while PENDING).
 -- ---------------------------------------------------------------------------
 
-create function public.invite_to_organization(p_organization_id uuid, p_email text, p_role text)
+create function beacon.invite_to_organization(p_organization_id uuid, p_email text, p_role text)
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = beacon, extensions
 as $$
 declare
   v_email text := lower(trim(p_email));
   v_profile_id uuid;
-  v_membership public.organization_memberships%rowtype;
-  v_invite public.organization_invitations%rowtype;
+  v_membership beacon.organization_memberships%rowtype;
+  v_invite beacon.organization_invitations%rowtype;
 begin
-  if not public.is_organization_owner_or_admin(p_organization_id) then
+  if not beacon.is_organization_owner_or_admin(p_organization_id) then
     raise exception 'NOT_AUTHORIZED: only an Organization owner or admin can invite members' using errcode = '42501';
   end if;
 
@@ -37,10 +37,10 @@ begin
     raise exception 'INVALID_ROLE: % cannot be granted directly via invite', p_role using errcode = '22023';
   end if;
 
-  select id into v_profile_id from public.profiles where lower(email) = v_email;
+  select id into v_profile_id from beacon.profiles where lower(email) = v_email;
 
   if v_profile_id is not null then
-    insert into public.organization_memberships (organization_id, user_id, role)
+    insert into beacon.organization_memberships (organization_id, user_id, role)
     values (p_organization_id, v_profile_id, p_role)
     on conflict (organization_id, user_id) do update set role = excluded.role
     returning * into v_membership;
@@ -48,7 +48,7 @@ begin
     return jsonb_build_object('status', 'added', 'membership', to_jsonb(v_membership));
   end if;
 
-  insert into public.organization_invitations (organization_id, email, role, invited_by_user_id)
+  insert into beacon.organization_invitations (organization_id, email, role, invited_by_user_id)
   values (p_organization_id, v_email, p_role, auth.uid())
   on conflict (organization_id, lower(email)) where status = 'pending'
   do update set role = excluded.role, invited_by_user_id = excluded.invited_by_user_id, created_at = now(), expires_at = now() + interval '7 days'
@@ -65,20 +65,20 @@ $$;
 -- Idempotent on an already-ACCEPTED token for the same user.
 -- ---------------------------------------------------------------------------
 
-create function public.accept_organization_invite(p_token text)
+create function beacon.accept_organization_invite(p_token text)
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = beacon, extensions
 as $$
 declare
-  v_invite public.organization_invitations%rowtype;
+  v_invite beacon.organization_invitations%rowtype;
   v_caller_email text;
-  v_membership public.organization_memberships%rowtype;
+  v_membership beacon.organization_memberships%rowtype;
 begin
-  select email into v_caller_email from public.profiles where id = auth.uid();
+  select email into v_caller_email from beacon.profiles where id = auth.uid();
 
-  select * into v_invite from public.organization_invitations where token = p_token;
+  select * into v_invite from beacon.organization_invitations where token = p_token;
   if v_invite.id is null then
     raise exception 'INVITE_NOT_FOUND: no invitation matches this token' using errcode = 'P0002';
   end if;
@@ -88,7 +88,7 @@ begin
   end if;
 
   if v_invite.status = 'accepted' then
-    select * into v_membership from public.organization_memberships
+    select * into v_membership from beacon.organization_memberships
     where organization_id = v_invite.organization_id and user_id = auth.uid();
     return jsonb_build_object('status', 'already_accepted', 'membership', to_jsonb(v_membership));
   end if;
@@ -98,16 +98,16 @@ begin
   end if;
 
   if v_invite.expires_at < now() then
-    update public.organization_invitations set status = 'expired' where id = v_invite.id;
+    update beacon.organization_invitations set status = 'expired' where id = v_invite.id;
     raise exception 'INVITE_EXPIRED: this invitation has expired' using errcode = '42501';
   end if;
 
-  insert into public.organization_memberships (organization_id, user_id, role)
+  insert into beacon.organization_memberships (organization_id, user_id, role)
   values (v_invite.organization_id, auth.uid(), v_invite.role)
   on conflict (organization_id, user_id) do update set role = excluded.role
   returning * into v_membership;
 
-  update public.organization_invitations set status = 'accepted', accepted_at = now() where id = v_invite.id;
+  update beacon.organization_invitations set status = 'accepted', accepted_at = now() where id = v_invite.id;
 
   return jsonb_build_object('status', 'accepted', 'membership', to_jsonb(v_membership));
 end;
@@ -121,16 +121,16 @@ $$;
 -- UPDATE runs, the first has already vacated the old owner's row.
 -- ---------------------------------------------------------------------------
 
-create function public.transfer_organization_ownership(p_organization_id uuid, p_new_owner_user_id uuid)
+create function beacon.transfer_organization_ownership(p_organization_id uuid, p_new_owner_user_id uuid)
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = beacon, extensions
 as $$
 declare
   v_caller uuid := auth.uid();
 begin
-  if public.organization_role_for(p_organization_id) <> 'owner' then
+  if beacon.organization_role_for(p_organization_id) <> 'owner' then
     raise exception 'NOT_AUTHORIZED: only the current owner can transfer ownership' using errcode = '42501';
   end if;
 
@@ -139,16 +139,16 @@ begin
   end if;
 
   if not exists (
-    select 1 from public.organization_memberships
+    select 1 from beacon.organization_memberships
     where organization_id = p_organization_id and user_id = p_new_owner_user_id
   ) then
     raise exception 'NOT_A_MEMBER: the target user is not a member of this Organization' using errcode = '42501';
   end if;
 
-  update public.organization_memberships set role = 'admin'
+  update beacon.organization_memberships set role = 'admin'
   where organization_id = p_organization_id and user_id = v_caller;
 
-  update public.organization_memberships set role = 'owner'
+  update beacon.organization_memberships set role = 'owner'
   where organization_id = p_organization_id and user_id = p_new_owner_user_id;
 
   return jsonb_build_object('status', 'transferred', 'newOwnerId', p_new_owner_user_id);
@@ -163,25 +163,25 @@ $$;
 -- zero-rows-affected DELETE.
 -- ---------------------------------------------------------------------------
 
-create function public.remove_organization_member(p_organization_id uuid, p_user_id uuid)
+create function beacon.remove_organization_member(p_organization_id uuid, p_user_id uuid)
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = beacon, extensions
 as $$
 begin
-  if auth.uid() <> p_user_id and not public.is_organization_owner_or_admin(p_organization_id) then
+  if auth.uid() <> p_user_id and not beacon.is_organization_owner_or_admin(p_organization_id) then
     raise exception 'NOT_AUTHORIZED: only an owner or admin can remove another member' using errcode = '42501';
   end if;
 
   if exists (
-    select 1 from public.organization_memberships
+    select 1 from beacon.organization_memberships
     where organization_id = p_organization_id and user_id = p_user_id and role = 'owner'
   ) then
     raise exception 'CANNOT_REMOVE_OWNER: transfer ownership before removing the current owner' using errcode = '42501';
   end if;
 
-  delete from public.organization_memberships
+  delete from beacon.organization_memberships
   where organization_id = p_organization_id and user_id = p_user_id;
 
   return jsonb_build_object('status', 'removed');

@@ -12,7 +12,7 @@
 -- comma-separated segment (the original client, per the X-Forwarded-For
 -- convention every hop appends to, never overwrites).
 
-create or replace function public.feedback_rate_limit_ok(
+create or replace function beacon.feedback_rate_limit_ok(
   p_page_id uuid,
   p_max_per_window int default 3,
   p_window_minutes int default 60
@@ -20,7 +20,7 @@ create or replace function public.feedback_rate_limit_ok(
 returns boolean
 language plpgsql
 security definer
-set search_path = public
+set search_path = beacon, extensions
 as $$
 declare
   v_ip inet;
@@ -42,7 +42,7 @@ begin
 
   v_window_start := to_timestamp(floor(extract(epoch from now()) / (p_window_minutes * 60)) * (p_window_minutes * 60));
 
-  insert into public.feedback_rate_limits (page_id, ip_address, window_start, count)
+  insert into beacon.feedback_rate_limits (page_id, ip_address, window_start, count)
   values (p_page_id, v_ip, v_window_start, 1)
   on conflict (page_id, ip_address, window_start)
   do update set count = feedback_rate_limits.count + 1

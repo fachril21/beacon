@@ -34,14 +34,19 @@ describe("supabase env validation", () => {
     expect(() => getSupabaseServiceRoleKey()).toThrowError(/SUPABASE_SERVICE_ROLE_KEY/);
   });
 
-  it("throws a descriptive error when NEXT_PUBLIC_SUPABASE_SCHEMA is missing", () => {
+  it("defaults the schema to 'public' when NEXT_PUBLIC_SUPABASE_SCHEMA is unset", () => {
     delete process.env.NEXT_PUBLIC_SUPABASE_SCHEMA;
-    expect(() => getSupabaseSchema()).toThrowError(/NEXT_PUBLIC_SUPABASE_SCHEMA/);
+    expect(getSupabaseSchema()).toBe("public");
   });
 
-  it("returns the configured schema when present", () => {
+  it("returns the configured schema when NEXT_PUBLIC_SUPABASE_SCHEMA is set", () => {
     process.env.NEXT_PUBLIC_SUPABASE_SCHEMA = "beacon";
     expect(getSupabaseSchema()).toBe("beacon");
+  });
+
+  it("falls back to 'public' when NEXT_PUBLIC_SUPABASE_SCHEMA is blank", () => {
+    process.env.NEXT_PUBLIC_SUPABASE_SCHEMA = "   ";
+    expect(getSupabaseSchema()).toBe("public");
   });
 
   it("throws a descriptive error when NEXT_PUBLIC_KERJAIN_RESET_PASSWORD_URL is missing", () => {

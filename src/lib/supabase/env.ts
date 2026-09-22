@@ -24,9 +24,15 @@ export function getSupabaseServiceRoleKey(): string {
   return requireEnv("SUPABASE_SERVICE_ROLE_KEY", process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
-/** Postgres schema every Supabase client queries against (e.g. "beacon") — see supabase/migrations for the schema-rename migration. */
+/**
+ * Postgres schema the app's tables/RPCs live in. Defaults to "public" so a
+ * standalone deployment needs no extra config; set NEXT_PUBLIC_SUPABASE_SCHEMA
+ * when Beacon shares one Supabase project with another app and must be
+ * namespaced into its own schema (see docs/). Must be NEXT_PUBLIC_ because the
+ * browser client reads it too.
+ */
 export function getSupabaseSchema(): string {
-  return requireEnv("NEXT_PUBLIC_SUPABASE_SCHEMA", process.env.NEXT_PUBLIC_SUPABASE_SCHEMA);
+  return process.env.NEXT_PUBLIC_SUPABASE_SCHEMA?.trim() || "public";
 }
 
 /** Beacon's Supabase project is shared with Kerjain, so recovery emails must land on Kerjain's reset-password page, not Beacon's own. */

@@ -27,7 +27,7 @@
 --   policy for table spaces".
 --
 -- Bug 2 — permissions_insert_admin_or_bootstrap's own with-check subquery:
---   that policy ran a raw `exists (select 1 from public.spaces s where
+--   that policy ran a raw `exists (select 1 from beacon.spaces s where
 --   s.id = space_id and s.created_by_user_id = auth.uid())` subquery, which
 --   is itself filtered by the same spaces_select_member_or_publishable
 --   policy — so even once Bug 1 is fixed and the Space becomes visible, this
@@ -41,15 +41,15 @@
 -- the creator, before any Permission row exists yet for the Space — rather
 -- than a permanent standing grant.
 
-create or replace function public.is_space_creator(p_space_id uuid)
+create or replace function beacon.is_space_creator(p_space_id uuid)
 returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = beacon, extensions
 as $$
   select exists (
-    select 1 from public.spaces s
+    select 1 from beacon.spaces s
     where s.id = p_space_id and s.created_by_user_id = auth.uid()
   );
 $$;
@@ -57,34 +57,34 @@ $$;
 -- Bug 1 fix: let the creator see their own Space during the bootstrap
 -- window (no Permission row on it yet), in addition to the existing
 -- publishable/member visibility.
-drop policy if exists spaces_select_member_or_publishable on public.spaces;
+drop policy if exists spaces_select_member_or_publishable on beacon.spaces;
 
 create policy spaces_select_member_or_publishable
-  on public.spaces for select
+  on beacon.spaces for select
   to authenticated
   using (
     is_publishable = true
-    or public.user_space_role(id) is not null
+    or beacon.user_space_role(id) is not null
     or (
       created_by_user_id = auth.uid()
-      and not exists (select 1 from public.permissions p where p.space_id = id)
+      and not exists (select 1 from beacon.permissions p where p.space_id = id)
     )
   );
 
 -- Bug 2 fix: use the SECURITY DEFINER helper instead of a raw subquery
 -- against spaces, so it isn't re-filtered by spaces' own RLS.
-drop policy if exists permissions_insert_admin_or_bootstrap on public.permissions;
+drop policy if exists permissions_insert_admin_or_bootstrap on beacon.permissions;
 
 create policy permissions_insert_admin_or_bootstrap
-  on public.permissions for insert
+  on beacon.permissions for insert
   to authenticated
   with check (
-    public.space_role_at_least(space_id, 'admin')
+    beacon.space_role_at_least(space_id, 'admin')
     or (
       user_id = auth.uid()
-      and public.is_space_creator(space_id)
+      and beacon.is_space_creator(space_id)
       and not exists (
-        select 1 from public.permissions p where p.space_id = space_id
+        select 1 from beacon.permissions p where p.space_id = space_id
       )
     )
   );
