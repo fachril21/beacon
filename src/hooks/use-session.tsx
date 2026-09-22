@@ -2,7 +2,6 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { getKerjainResetPasswordUrl } from "@/lib/supabase/env";
 import { mapProfileRow, type ProfileRow } from "@/lib/supabase/mappers";
 import type { User } from "@/lib/types";
 
@@ -31,7 +30,6 @@ interface SessionContextValue {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (input: SignUpInput) => Promise<void>;
   signOut: () => Promise<void>;
-  requestPasswordReset: (email: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
 }
 
@@ -121,27 +119,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [supabase]);
 
   /**
-   * Sends a real recovery email via whatever SMTP is configured in the
-   * project's Auth settings (same delivery path as signup-confirmation and
-   * invite emails). Supabase's own response never reveals whether the email
-   * actually has an account — the anti-enumeration behavior is already
-   * built into the API, so no extra handling is needed here.
-   *
-   * redirectTo points at Kerjain, not Beacon: this Supabase project is
-   * shared between the two internal platforms, and auth (including
-   * password recovery) is consolidated on Kerjain's side.
-   */
-  const requestPasswordReset = useCallback(
-    async (email: string) => {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: getKerjainResetPasswordUrl(),
-      });
-      if (error) throw error;
-    },
-    [supabase],
-  );
-
-  /**
    * Requires an active session — valid either because the recovery/invite
    * email's link just established one (Supabase's client auto-detects the
    * URL's token on load), or because a signed-in User is changing their own
@@ -157,8 +134,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ user, isAuthenticated: !!user, isLoading, signIn, signUp, signOut, requestPasswordReset, updatePassword }),
-    [user, isLoading, signIn, signUp, signOut, requestPasswordReset, updatePassword],
+    () => ({ user, isAuthenticated: !!user, isLoading, signIn, signUp, signOut, updatePassword }),
+    [user, isLoading, signIn, signUp, signOut, updatePassword],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

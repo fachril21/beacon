@@ -35,7 +35,7 @@ export function getSupabaseSchema(): string {
   return process.env.NEXT_PUBLIC_SUPABASE_SCHEMA?.trim() || "public";
 }
 
-/** Beacon's Supabase project is shared with Kerjain, so recovery emails must land on Kerjain's reset-password page, not Beacon's own. */
-export function getKerjainResetPasswordUrl(): string {
-  return requireEnv("NEXT_PUBLIC_KERJAIN_RESET_PASSWORD_URL", process.env.NEXT_PUBLIC_KERJAIN_RESET_PASSWORD_URL);
+/** Beacon's Supabase project is shared with Kerjain, and auth (including password recovery) is consolidated there — "Lupa kata sandi?" sends the user to Kerjain's own forgot-password page instead of Beacon requesting the reset itself. */
+export function getKerjainForgotPasswordUrl(): string {
+  return requireEnv("NEXT_PUBLIC_KERJAIN_FORGOT_PASSWORD_URL", process.env.NEXT_PUBLIC_KERJAIN_FORGOT_PASSWORD_URL);
 }

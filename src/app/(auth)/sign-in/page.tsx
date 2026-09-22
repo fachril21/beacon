@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { AlertCircle } from "lucide-react";
 import { useSession, InvalidCredentialsError } from "@/hooks/use-session";
+import { getKerjainForgotPasswordUrl } from "@/lib/supabase/env";
 
 class MockNetworkError extends Error {}
 
@@ -74,9 +75,13 @@ export default function SignInPage() {
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
               <Label htmlFor="password">Kata sandi</Label>
-              <Link href="/forgot-password" className="text-caption text-primary-muted-foreground underline underline-offset-4 hover:text-primary-hover">
+              {/* External: password recovery is consolidated on Kerjain (src/lib/supabase/env.ts), not handled by Beacon itself. */}
+              <a
+                href={getKerjainForgotPasswordUrl()}
+                className="text-caption text-primary-muted-foreground underline underline-offset-4 hover:text-primary-hover"
+              >
                 Lupa kata sandi?
-              </Link>
+              </a>
             </div>
             <Input
               id="password"

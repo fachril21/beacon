@@ -5,14 +5,15 @@ import { useRouter, usePathname } from "next/navigation";
 import { useSession } from "@/hooks/use-session";
 
 /**
- * complete-invite and reset-password are the two (auth) pages that need an
- * active session to work at all — Supabase's client establishes one from
- * the invite/recovery email link's URL token before either page can render
- * its set-password form (SetPasswordForm). Redirecting them away the
- * instant they're "authenticated" would bounce every real invited/
- * recovering User to Workspace Home before they could ever set a password.
+ * complete-invite is the one (auth) page that needs an active session to
+ * work at all — Supabase's client establishes one from the invite email
+ * link's URL token before the page can render its set-password form
+ * (SetPasswordForm). Redirecting it away the instant it's "authenticated"
+ * would bounce every real invited User to Workspace Home before they could
+ * ever set a password. Password recovery has no Beacon-side equivalent: it's
+ * consolidated on Kerjain (src/lib/supabase/env.ts's getKerjainForgotPasswordUrl).
  */
-const SKIP_AUTHENTICATED_REDIRECT = new Set(["/complete-invite", "/reset-password"]);
+const SKIP_AUTHENTICATED_REDIRECT = new Set(["/complete-invite"]);
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();

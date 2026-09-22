@@ -4,7 +4,7 @@ import {
   getSupabaseAnonKey,
   getSupabaseServiceRoleKey,
   getSupabaseSchema,
-  getKerjainResetPasswordUrl,
+  getKerjainForgotPasswordUrl,
 } from "./env";
 
 describe("supabase env validation", () => {
@@ -49,13 +49,13 @@ describe("supabase env validation", () => {
     expect(getSupabaseSchema()).toBe("public");
   });
 
-  it("throws a descriptive error when NEXT_PUBLIC_KERJAIN_RESET_PASSWORD_URL is missing", () => {
-    delete process.env.NEXT_PUBLIC_KERJAIN_RESET_PASSWORD_URL;
-    expect(() => getKerjainResetPasswordUrl()).toThrowError(/NEXT_PUBLIC_KERJAIN_RESET_PASSWORD_URL/);
+  it("throws a descriptive error when NEXT_PUBLIC_KERJAIN_FORGOT_PASSWORD_URL is missing", () => {
+    delete process.env.NEXT_PUBLIC_KERJAIN_FORGOT_PASSWORD_URL;
+    expect(() => getKerjainForgotPasswordUrl()).toThrowError(/NEXT_PUBLIC_KERJAIN_FORGOT_PASSWORD_URL/);
   });
 
-  it("returns the configured Kerjain reset-password URL when present", () => {
-    process.env.NEXT_PUBLIC_KERJAIN_RESET_PASSWORD_URL = "https://kerjain-liard.vercel.app/reset-password";
-    expect(getKerjainResetPasswordUrl()).toBe("https://kerjain-liard.vercel.app/reset-password");
+  it("returns the configured Kerjain forgot-password URL when present", () => {
+    process.env.NEXT_PUBLIC_KERJAIN_FORGOT_PASSWORD_URL = "https://kerjain-liard.vercel.app/forgot-password";
+    expect(getKerjainForgotPasswordUrl()).toBe("https://kerjain-liard.vercel.app/forgot-password");
   });
 });

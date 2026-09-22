@@ -13,7 +13,6 @@ const mockSupabase = {
     signInWithPassword: vi.fn(),
     signUp: vi.fn(),
     signOut: vi.fn(),
-    resetPasswordForEmail: vi.fn(),
     updateUser: vi.fn(),
   },
   from: vi.fn(),
@@ -45,7 +44,6 @@ describe("useSession", () => {
     vi.clearAllMocks();
     authStateCallbacks.length = 0;
     mockSupabase.auth.getSession.mockResolvedValue({ data: { session: null } });
-    process.env.NEXT_PUBLIC_KERJAIN_RESET_PASSWORD_URL = "https://kerjain-liard.vercel.app/reset-password";
   });
 
   it("starts signed out when there is no Supabase session", async () => {
@@ -127,28 +125,6 @@ describe("useSession", () => {
       await result.current.signOut();
     });
     expect(mockSupabase.auth.signOut).toHaveBeenCalledTimes(1);
-  });
-
-  it("requestPasswordReset calls resetPasswordForEmail with a redirect to Kerjain's reset-password page", async () => {
-    mockSupabase.auth.resetPasswordForEmail.mockResolvedValue({ error: null });
-    const { result } = renderUseSession();
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-    await act(async () => {
-      await result.current.requestPasswordReset("a@example.com");
-    });
-
-    expect(mockSupabase.auth.resetPasswordForEmail).toHaveBeenCalledWith("a@example.com", {
-      redirectTo: "https://kerjain-liard.vercel.app/reset-password",
-    });
-  });
-
-  it("requestPasswordReset throws when Supabase returns an error", async () => {
-    mockSupabase.auth.resetPasswordForEmail.mockResolvedValue({ error: { message: "rate limited" } });
-    const { result } = renderUseSession();
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-    await expect(result.current.requestPasswordReset("a@example.com")).rejects.toBeTruthy();
   });
 
   it("updatePassword calls supabase.auth.updateUser with the new password", async () => {
