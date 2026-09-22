@@ -17,7 +17,7 @@ A User can belong to more than one Organization (`organization_memberships` is a
 
 ## Org membership is a prerequisite for Space/Page access
 
-This is enforced in one place, not duplicated across policies: `public.user_space_role(space_id)` — the single helper every Space/Page/ScreenshotBlock/Version/Comment RLS policy already routes through — now also requires an `organization_memberships` row for that Space's Organization. Losing Organization membership silently revokes every Space permission's *effect* without needing to delete the Space-level rows themselves (though `permissions_require_org_membership_trigger` also blocks new/updated Space grants for a non-member at write time).
+This is enforced in one place, not duplicated across policies: `beacon.user_space_role(space_id)` — the single helper every Space/Page/ScreenshotBlock/Version/Comment RLS policy already routes through — now also requires an `organization_memberships` row for that Space's Organization. Losing Organization membership silently revokes every Space permission's *effect* without needing to delete the Space-level rows themselves (though `permissions_require_org_membership_trigger` also blocks new/updated Space grants for a non-member at write time).
 
 Practical effect: a Space's `permissions` row is now meaningless without a matching Organization membership. Space-level access can only ever be granted to someone already in the Organization — there is no independent Space-level invite path anymore.
 

@@ -1,6 +1,6 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
-import { getSupabaseServiceRoleKey, getSupabaseUrl } from "./env";
+import { getSupabaseSchema, getSupabaseServiceRoleKey, getSupabaseUrl } from "./env";
 
 /**
  * Service-role Supabase client — bypasses RLS entirely. Only for server-only
@@ -10,6 +10,7 @@ import { getSupabaseServiceRoleKey, getSupabaseUrl } from "./env";
  */
 export function getSupabaseAdminClient() {
   return createClient(getSupabaseUrl(), getSupabaseServiceRoleKey(), {
+    db: { schema: getSupabaseSchema() },
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
