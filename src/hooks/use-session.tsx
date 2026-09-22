@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { getKerjainResetPasswordUrl } from "@/lib/supabase/env";
 import { mapProfileRow, type ProfileRow } from "@/lib/supabase/mappers";
 import type { User } from "@/lib/types";
 
@@ -125,11 +126,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
    * invite emails). Supabase's own response never reveals whether the email
    * actually has an account — the anti-enumeration behavior is already
    * built into the API, so no extra handling is needed here.
+   *
+   * redirectTo points at Kerjain, not Beacon: this Supabase project is
+   * shared between the two internal platforms, and auth (including
+   * password recovery) is consolidated on Kerjain's side.
    */
   const requestPasswordReset = useCallback(
     async (email: string) => {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: getKerjainResetPasswordUrl(),
       });
       if (error) throw error;
     },

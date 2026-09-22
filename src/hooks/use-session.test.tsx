@@ -45,6 +45,7 @@ describe("useSession", () => {
     vi.clearAllMocks();
     authStateCallbacks.length = 0;
     mockSupabase.auth.getSession.mockResolvedValue({ data: { session: null } });
+    process.env.NEXT_PUBLIC_KERJAIN_RESET_PASSWORD_URL = "https://kerjain-liard.vercel.app/reset-password";
   });
 
   it("starts signed out when there is no Supabase session", async () => {
@@ -128,7 +129,7 @@ describe("useSession", () => {
     expect(mockSupabase.auth.signOut).toHaveBeenCalledTimes(1);
   });
 
-  it("requestPasswordReset calls resetPasswordForEmail with a redirect back to /reset-password", async () => {
+  it("requestPasswordReset calls resetPasswordForEmail with a redirect to Kerjain's reset-password page", async () => {
     mockSupabase.auth.resetPasswordForEmail.mockResolvedValue({ error: null });
     const { result } = renderUseSession();
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -138,7 +139,7 @@ describe("useSession", () => {
     });
 
     expect(mockSupabase.auth.resetPasswordForEmail).toHaveBeenCalledWith("a@example.com", {
-      redirectTo: expect.stringContaining("/reset-password"),
+      redirectTo: "https://kerjain-liard.vercel.app/reset-password",
     });
   });
 

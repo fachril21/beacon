@@ -23,3 +23,13 @@ export function getSupabaseAnonKey(): string {
 export function getSupabaseServiceRoleKey(): string {
   return requireEnv("SUPABASE_SERVICE_ROLE_KEY", process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
+
+/** Postgres schema every Supabase client queries against (e.g. "beacon") — see supabase/migrations for the schema-rename migration. */
+export function getSupabaseSchema(): string {
+  return requireEnv("NEXT_PUBLIC_SUPABASE_SCHEMA", process.env.NEXT_PUBLIC_SUPABASE_SCHEMA);
+}
+
+/** Beacon's Supabase project is shared with Kerjain, so recovery emails must land on Kerjain's reset-password page, not Beacon's own. */
+export function getKerjainResetPasswordUrl(): string {
+  return requireEnv("NEXT_PUBLIC_KERJAIN_RESET_PASSWORD_URL", process.env.NEXT_PUBLIC_KERJAIN_RESET_PASSWORD_URL);
+}
