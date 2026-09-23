@@ -12,8 +12,10 @@ begin;
 
 -- =============================================================================
 -- Fixtures: Org One (OWNER = A), an existing-but-unrelated Account (B, no
--- membership in Org One), and an unrelated stranger (D, MEMBER of Org One
--- with no owner/admin rights).
+-- membership in Org One), an unrelated stranger (D, MEMBER of Org One with no
+-- owner/admin rights, kept a plain 'member' throughout for Case 4/6/7 below),
+-- and a second Org One MEMBER (C) used only for the role-change case (1b) so
+-- D's role stays untouched for the later cases that depend on it.
 -- =============================================================================
 
 insert into beacon.organizations (id, name, domain, is_domain_verified)
@@ -23,33 +25,79 @@ insert into auth.users (id, instance_id, aud, role, email, encrypted_password, e
 values
   ('a0000000-0000-0000-0000-00000000000a','00000000-0000-0000-0000-000000000000','authenticated','authenticated','owner-a@example.com', crypt('x', gen_salt('bf')), now(), '{}', '{}', now(), now(), '', '', '', ''),
   ('b0000000-0000-0000-0000-00000000000b','00000000-0000-0000-0000-000000000000','authenticated','authenticated','existing-b@example.com', crypt('x', gen_salt('bf')), now(), '{}', '{}', now(), now(), '', '', '', ''),
+  ('c0000000-0000-0000-0000-00000000000c','00000000-0000-0000-0000-000000000000','authenticated','authenticated','member-c@example.com', crypt('x', gen_salt('bf')), now(), '{}', '{}', now(), now(), '', '', '', ''),
   ('d0000000-0000-0000-0000-00000000000d','00000000-0000-0000-0000-000000000000','authenticated','authenticated','member-d@example.com', crypt('x', gen_salt('bf')), now(), '{}', '{}', now(), now(), '', '', '', '');
 
 insert into beacon.organization_memberships (organization_id, user_id, role) values
   ('e0000000-0000-0000-0000-00000000000e', 'a0000000-0000-0000-0000-00000000000a', 'owner'),
+  ('e0000000-0000-0000-0000-00000000000e', 'c0000000-0000-0000-0000-00000000000c', 'member'),
   ('e0000000-0000-0000-0000-00000000000e', 'd0000000-0000-0000-0000-00000000000d', 'member');
 
 -- =============================================================================
--- Case 1: OWNER invites an existing Account by email -> immediate membership,
--- no organization_invitations row.
+-- Case 1: OWNER invites an existing Account by email who is NOT yet a member
+-- of this Organization -> pending organization_invitations row, no instant
+-- membership. This used to add ANY existing Account immediately; now
+-- everyone who isn't already a member must confirm via
+-- accept_organization_invite, same as a brand-new email always has.
 -- =============================================================================
 
 select set_config('request.jwt.claims', json_build_object('sub', 'a0000000-0000-0000-0000-00000000000a', 'role', 'authenticated')::text, true);
 set local role authenticated;
 
 select beacon.invite_to_organization('e0000000-0000-0000-0000-00000000000e', 'existing-b@example.com', 'member') ->> 'status'
-  as expect_added;
+  as expect_invited_not_added;
 
-select role as expect_member_role from beacon.organization_memberships
+select count(*)::int as expect_zero_membership_rows from beacon.organization_memberships
 where organization_id = 'e0000000-0000-0000-0000-00000000000e' and user_id = 'b0000000-0000-0000-0000-00000000000b';
 
-select count(*)::int as expect_zero_invitation_rows from beacon.organization_invitations
+select status as expect_pending, role as expect_member from beacon.organization_invitations
 where organization_id = 'e0000000-0000-0000-0000-00000000000e' and lower(email) = 'existing-b@example.com';
+
+-- =============================================================================
+-- Case 1b: re-inviting someone who IS ALREADY a member of this Organization
+-- (C, currently 'member') updates their role instantly instead -- this is
+-- the only "change role" UI that exists today, and there's nothing to
+-- confirm since they're already inside the org. Uses C rather than D so D
+-- stays a plain 'member' for Case 4/6/7 below, which depend on that role.
+-- =============================================================================
+
+select beacon.invite_to_organization('e0000000-0000-0000-0000-00000000000e', 'member-c@example.com', 'admin') ->> 'status'
+  as expect_added_role_change;
+
+select role as expect_c_is_now_admin from beacon.organization_memberships
+where organization_id = 'e0000000-0000-0000-0000-00000000000e' and user_id = 'c0000000-0000-0000-0000-00000000000c';
+
+select count(*)::int as expect_zero_invitation_rows_for_c from beacon.organization_invitations
+where organization_id = 'e0000000-0000-0000-0000-00000000000e' and lower(email) = 'member-c@example.com';
+
+-- =============================================================================
+-- Case 1c: B (the existing Account from Case 1, still just PENDING, not a
+-- member) accepts their own invite -> membership created, exactly the same
+-- confirm-via-email journey as a brand-new signup already goes through. This
+-- is the actual behavior change this migration is for: B never got added
+-- silently in Case 1, and only becomes a member here, by their own action.
+-- =============================================================================
+
+reset role;
+select token as invite_token_b from beacon.organization_invitations
+where organization_id = 'e0000000-0000-0000-0000-00000000000e' and lower(email) = 'existing-b@example.com' \gset
+
+select set_config('request.jwt.claims', json_build_object('sub', 'b0000000-0000-0000-0000-00000000000b', 'role', 'authenticated')::text, true);
+set local role authenticated;
+
+select beacon.accept_organization_invite(:'invite_token_b') ->> 'status' as expect_b_accepted;
+
+select role as expect_b_is_now_member from beacon.organization_memberships
+where organization_id = 'e0000000-0000-0000-0000-00000000000e' and user_id = 'b0000000-0000-0000-0000-00000000000b';
 
 -- =============================================================================
 -- Case 2: OWNER invites an unknown email -> pending organization_invitations
 -- row, role defaults to what was requested, status = pending.
 -- =============================================================================
+
+reset role;
+select set_config('request.jwt.claims', json_build_object('sub', 'a0000000-0000-0000-0000-00000000000a', 'role', 'authenticated')::text, true);
+set local role authenticated;
 
 select beacon.invite_to_organization('e0000000-0000-0000-0000-00000000000e', 'brand-new@example.com', 'admin') ->> 'status'
   as expect_invited;

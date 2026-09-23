@@ -5,15 +5,22 @@ import { useRouter, usePathname } from "next/navigation";
 import { useSession } from "@/hooks/use-session";
 
 /**
- * complete-invite is the one (auth) page that needs an active session to
- * work at all — Supabase's client establishes one from the invite email
- * link's URL token before the page can render its set-password form
- * (SetPasswordForm). Redirecting it away the instant it's "authenticated"
- * would bounce every real invited User to Workspace Home before they could
- * ever set a password. Password recovery has no Beacon-side equivalent: it's
- * consolidated on Kerjain (src/lib/supabase/env.ts's getKerjainForgotPasswordUrl).
+ * complete-invite and accept-invite are the two (auth) pages that need an
+ * active session to work at all. complete-invite: Supabase's client
+ * establishes one from the invite email link's URL token before the page
+ * can render its set-password form (SetPasswordForm). accept-invite: an
+ * Organization invite to someone who ALREADY has a Beacon Account (but
+ * isn't a member of that Organization yet, so invite_to_organization's own
+ * "already registered" fallback sends them a real recovery-style email
+ * instead of an account-creation one — src/app/api/organizations/[id]/invite/route.ts)
+ * also establishes a session from the URL token on arrival, then needs to
+ * stay put long enough to call accept_organization_invite itself. Redirecting
+ * either page away the instant it's "authenticated" would bounce the User to
+ * Workspace Home before they could ever set a password or accept the invite.
+ * Password recovery has no Beacon-side equivalent: it's consolidated on
+ * Kerjain (src/lib/supabase/env.ts's getKerjainForgotPasswordUrl).
  */
-const SKIP_AUTHENTICATED_REDIRECT = new Set(["/complete-invite"]);
+const SKIP_AUTHENTICATED_REDIRECT = new Set(["/complete-invite", "/accept-invite"]);
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
