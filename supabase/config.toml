@@ -239,23 +239,24 @@ otp_length = 6
 # Number of seconds before the email OTP expires (defaults to 1 hour).
 otp_expiry = 3600
 
-# Production SMTP: Resend. Only `pass` uses env() substitution — a known CLI
-# bug (https://github.com/supabase/cli/issues/3255) doesn't expand env() for
-# the `host` field specifically, so the non-secret fields are hardcoded
-# instead of routing around a bug that only affects one of them.
-#
-# admin_email uses Resend's shared sandbox sender (no verified domain yet),
-# which only delivers to the Resend account's own verified email address —
-# real invited/recovering users will not receive mail until a domain is
-# verified in Resend and this is updated to an address on that domain.
+# Custom SMTP disabled — reverted from Resend back to Supabase Auth's own
+# built-in mailer. Resend was only ever wired up with its shared sandbox
+# sender (no verified domain), which silently only delivers to the Resend
+# account's own verified email address — real invited/recovering users at
+# any other address never received mail (see
+# docs/testing/invite-existing-member-to-space.tdd.md, Addendum 4/5).
+# The built-in mailer's own send-rate ceiling (~2/hour on Supabase Cloud,
+# the original reason for switching to Resend in the first place — same
+# doc, Addendum 4) does not apply here: this project's Supabase instance is
+# self-hosted on the company's own VPS (PROJECT.md §9.2), not Supabase
+# Cloud, so [auth.rate_limit] email_sent below is the only cap in effect.
+# NOTE: this file only documents local-dev/intended settings — the live
+# self-hosted instance's actual GoTrue SMTP config is whatever env vars
+# (GOTRUE_SMTP_*) are set in that VPS's own deployment (docker-compose/env
+# file), which lives outside this repo and must be updated to match by
+# whoever administers the VPS.
 [auth.email.smtp]
-enabled = true
-host = "smtp.resend.com"
-port = 587
-user = "resend"
-pass = "env(RESEND_API_KEY)"
-admin_email = "onboarding@resend.dev"
-sender_name = "Beacon"
+enabled = false
 
 # Uncomment to customize email template
 # [auth.email.template.invite]
