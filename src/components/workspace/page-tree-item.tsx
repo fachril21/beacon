@@ -77,7 +77,7 @@ export function PageTreeItem({ page, spaceId, depth }: PageTreeItemProps) {
     >
       <div
         className={cn(
-          "group/row relative flex items-center gap-1 rounded-sm py-3 pr-2 text-body-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+          "group/row relative flex h-8 items-center gap-1 rounded-sm pr-2 text-body-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
           isActive && "bg-sidebar-accent text-sidebar-primary before:absolute before:inset-y-1 before:left-0 before:w-0.5 before:rounded-full before:bg-sidebar-primary",
         )}
         style={{ paddingLeft: `${8 + depth * 16}px` }}

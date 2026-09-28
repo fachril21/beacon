@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Bell } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useSession } from "@/hooks/use-session";
-import { useNotifications, useMarkNotificationRead } from "@/hooks/use-notifications";
+import { useNotifications, useMarkNotificationRead, useUnreadNotificationCount } from "@/hooks/use-notifications";
 import { useUser } from "@/hooks/use-users";
 import { usePage } from "@/hooks/use-pages";
 import { sidebarNavIconClass, sidebarNavRowClass } from "./sidebar-row";
@@ -37,7 +37,7 @@ export function NotificationBell() {
   const { user } = useSession();
   const notifications = useNotifications(user?.id);
   const markRead = useMarkNotificationRead();
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
+  const unreadCount = useUnreadNotificationCount(user?.id);
 
   function handleOpen(notificationId: string) {
     void markRead(notificationId);

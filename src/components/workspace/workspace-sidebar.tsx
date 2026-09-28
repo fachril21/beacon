@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { ChevronRight, LogOut, Plus, Search, Settings } from "lucide-react";
+import { ChevronRight, ChevronsUpDown, Home, Lock, LogOut, Plus, Search, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSession } from "@/hooks/use-session";
 import { useOrganizationSpaces } from "@/hooks/use-spaces";
@@ -15,25 +15,19 @@ import { PageTreeItem } from "./page-tree-item";
 import { NewSpaceDialog } from "./new-space-dialog";
 import { NotificationBell } from "./notification-bell";
 import { OrganizationSwitcher } from "./organization-switcher";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { sidebarNavIconClass, sidebarNavRowClass } from "./sidebar-row";
+import type { Space } from "@/lib/types";
 
-function SidebarSectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="px-2 pt-4 pb-1.5 text-caption font-semibold tracking-[0.04em] text-sidebar-foreground/50 uppercase first:pt-0">
-      {children}
-    </p>
-  );
-}
-
-function SpaceSection({ spaceId, name }: { spaceId: string; name: string }) {
+function SpaceSection({ space, defaultExpanded }: { space: Space; defaultExpanded: boolean }) {
   const pathname = usePathname();
-  const [isExpanded, setIsExpanded] = useState(true);
-  const rootPages = useChildPages(spaceId, null);
-  const isSpaceActive = pathname === `/spaces/${spaceId}`;
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+  const rootPages = useChildPages(space.id, null);
+  const isSpaceActive = pathname === `/spaces/${space.id}`;
 
   return (
     <div className="flex flex-col">
-      <div className="group/space flex items-center gap-1 py-2 pr-2 pl-2">
+      <div className="group/space flex h-8 items-center gap-1 pr-2 pl-2">
         <button
           type="button"
           onClick={() => setIsExpanded((v) => !v)}
@@ -42,20 +36,23 @@ function SpaceSection({ spaceId, name }: { spaceId: string; name: string }) {
         >
           <ChevronRight className={cn("size-3.5 transition-transform", isExpanded && "rotate-90")} />
         </button>
+        {!space.isPublishable && (
+          <Lock className="size-3 shrink-0 text-sidebar-foreground/40" aria-label="Hanya internal" />
+        )}
         <Link
-          href={`/spaces/${spaceId}`}
+          href={`/spaces/${space.id}`}
           className={cn(
-            "min-w-0 flex-1 truncate text-caption font-semibold tracking-wide text-sidebar-foreground uppercase hover:text-sidebar-accent-foreground",
+            "min-w-0 flex-1 truncate text-body-sm font-semibold text-sidebar-foreground hover:text-sidebar-accent-foreground",
             isSpaceActive && "text-sidebar-primary",
           )}
         >
-          {name}
+          {space.name}
         </Link>
       </div>
       {isExpanded && (
         <SortableContext items={rootPages.map((p) => p.id)} strategy={verticalListSortingStrategy}>
           {rootPages.map((page) => (
-            <PageTreeItem key={page.id} page={page} spaceId={spaceId} depth={1} />
+            <PageTreeItem key={page.id} page={page} spaceId={space.id} depth={1} />
           ))}
         </SortableContext>
       )}
@@ -64,6 +61,8 @@ function SpaceSection({ spaceId, name }: { spaceId: string; name: string }) {
 }
 
 export function WorkspaceSidebar({ onOpenSearch }: { onOpenSearch: () => void }) {
+  const pathname = usePathname();
+  const router = useRouter();
   const { user, signOut } = useSession();
   const currentOrganization = useCurrentOrganization();
   const spaces = useOrganizationSpaces(user?.id, currentOrganization?.id);
@@ -71,6 +70,10 @@ export function WorkspaceSidebar({ onOpenSearch }: { onOpenSearch: () => void })
   const reorderPages = useReorderPages();
   const [isNewSpaceOpen, setIsNewSpaceOpen] = useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  const activeSpaceId =
+    spaces.find((s) => pathname === `/spaces/${s.id}` || pathname.startsWith(`/spaces/${s.id}/`))?.id ??
+    spaces[0]?.id;
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -111,47 +114,67 @@ export function WorkspaceSidebar({ onOpenSearch }: { onOpenSearch: () => void })
         </button>
       </div>
 
+      {/* Primary nav — Beranda and Notifikasi live above the Space tree */}
+      <div className="flex flex-col gap-0.5 px-2 pb-2">
+        <Link href="/" className={sidebarNavRowClass}>
+          <Home className={sidebarNavIconClass} />
+          Beranda
+        </Link>
+        <NotificationBell />
+      </div>
+
       <div className="flex-1 overflow-y-auto px-2 pb-2">
-        <SidebarSectionLabel>Space</SidebarSectionLabel>
+        <div className="flex items-center justify-between px-2 pt-2 pb-1.5">
+          <span className="text-caption font-semibold tracking-[0.04em] text-sidebar-foreground/50 uppercase">Space</span>
+          <button
+            type="button"
+            aria-label="Space baru"
+            onClick={() => setIsNewSpaceOpen(true)}
+            className="flex size-5 items-center justify-center rounded-sm text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          >
+            <Plus className="size-3.5" />
+          </button>
+        </div>
         {spaces.length === 0 ? (
           <p className="px-2 py-3 text-caption text-sidebar-foreground/60">Belum ada Space.</p>
         ) : (
           <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
             <div className="flex flex-col gap-1">
               {spaces.map((space) => (
-                <SpaceSection key={space.id} spaceId={space.id} name={space.name} />
+                <SpaceSection key={space.id} space={space} defaultExpanded={space.id === activeSpaceId} />
               ))}
             </div>
           </DndContext>
         )}
       </div>
 
-      <div className="border-t border-sidebar-border px-2 pt-1 pb-2">
-        <SidebarSectionLabel>Umum</SidebarSectionLabel>
-        <div className="flex flex-col gap-0.5">
-          <button type="button" className={sidebarNavRowClass} onClick={() => setIsNewSpaceOpen(true)}>
-            <Plus className={sidebarNavIconClass} />
-            Space baru
-          </button>
-          <NotificationBell />
-          <Link href="/settings/organization" className={sidebarNavRowClass}>
-            <Settings className={sidebarNavIconClass} />
+      {/* Account menu — identity row doubles as a dropdown trigger for org settings + sign out */}
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <button
+              type="button"
+              className="flex w-full items-center gap-2.5 border-t border-sidebar-border px-3 py-3 text-left hover:bg-sidebar-accent"
+            />
+          }
+        >
+          <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-secondary text-caption font-semibold text-secondary-foreground">
+            {user?.name?.[0]?.toUpperCase() ?? "?"}
+          </div>
+          <p className="min-w-0 flex-1 truncate text-body-sm text-sidebar-foreground/70">{user?.name}</p>
+          <ChevronsUpDown className="size-3.5 shrink-0 text-sidebar-foreground/50" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" side="top" className="w-56">
+          <DropdownMenuItem onClick={() => router.push("/settings/organization")}>
+            <Settings className="size-3.5" />
             Pengaturan Organisasi
-          </Link>
-          <button type="button" className={sidebarNavRowClass} onClick={signOut}>
-            <LogOut className={sidebarNavIconClass} />
+          </DropdownMenuItem>
+          <DropdownMenuItem variant="destructive" onClick={signOut}>
+            <LogOut className="size-3.5" />
             Keluar
-          </button>
-        </div>
-      </div>
-
-      {/* Footer meta row — identity only, low-emphasis */}
-      <div className="flex items-center gap-2.5 border-t border-sidebar-border px-3 py-3">
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-secondary text-caption font-semibold text-secondary-foreground">
-          {user?.name?.[0]?.toUpperCase() ?? "?"}
-        </div>
-        <p className="min-w-0 flex-1 truncate text-body-sm text-sidebar-foreground/70">{user?.name}</p>
-      </div>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <NewSpaceDialog open={isNewSpaceOpen} onOpenChange={setIsNewSpaceOpen} />
     </aside>

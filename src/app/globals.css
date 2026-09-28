@@ -129,14 +129,20 @@
   --text-mono--line-height: 1.5;
   --text-mono--font-weight: 450;
 
-  /* Container widths — DESIGN.md §4.2 */
-  --width-sidebar: 17rem; /* 272px */
+  /* Container widths — DESIGN.md §4.2, delta'd per wireframe v2 spec §1 */
+  --width-sidebar: 16rem; /* 256px — wireframe v2 §1 (was 272px) */
   --width-sidebar-collapsed: 4rem; /* 64px */
   --width-editor-column: 47.5rem; /* 760px */
   --width-screenshot-breakout: 60rem; /* 960px */
   --width-reading-column: 45rem; /* 720px */
-  --width-toc-rail: 15rem; /* 240px */
+  --width-toc-rail: 13.75rem; /* 220px — wireframe v2 §1 (was 240px) */
+  --width-right-panel: 20rem; /* 320px — wireframe v2 §1, editor right panel */
+  --width-public-tree: 16.25rem; /* 260px — wireframe v2 §1, public site theme sidebar */
   --width-app-shell: 90rem; /* 1440px */
+
+  /* Fixed chrome heights — wireframe v2 §1 */
+  --height-topbar: 3rem; /* 48px — workspace/editor topbar */
+  --height-public-nav: 4rem; /* 64px — public site nav */
 }
 
 :root {
