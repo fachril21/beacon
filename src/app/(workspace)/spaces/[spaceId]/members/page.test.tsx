@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Suspense } from "react";
-import { render, screen, act } from "@testing-library/react";
+import { render, screen, act, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import SpaceMembersPage from "./page";
 import type { Space, Permission, User, OrganizationMembership } from "@/lib/types";
@@ -161,5 +161,52 @@ describe("SpaceMembersPage member picker", () => {
     await user.click(await screen.findByRole("option", { name: /budi@corp\.id/i }));
 
     expect(await screen.findByRole("button", { name: "budi@corp.id" })).toBeInTheDocument();
+  });
+});
+
+describe("SpaceMembersPage self-removal and last-admin protection", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUser = { id: "user-1" };
+    mockRole = "admin";
+    mockSpace = { ...baseSpace };
+    mockAllUsers = [admin, alice, budi, citra];
+    mockOrganizationMembers = [makeMembership("user-1"), makeMembership("alice-id")];
+  });
+
+  it("hides the remove button on the current admin's own row but keeps it for other members", async () => {
+    mockPermissions = [
+      { id: "perm-admin", spaceId: "space-1", userId: "user-1", role: "admin" },
+      { id: "perm-alice", spaceId: "space-1", userId: "alice-id", role: "viewer" },
+    ];
+    await renderPage();
+
+    const removeButtons = screen.getAllByRole("button", { name: "Hapus anggota" });
+    expect(removeButtons).toHaveLength(1);
+
+    const aliceRow = screen.getByTestId("space-permission-row-alice-id");
+    expect(within(aliceRow).getByRole("button", { name: "Hapus anggota" })).toBeInTheDocument();
+
+    const selfRow = screen.getByTestId("space-permission-row-user-1");
+    expect(within(selfRow).queryByRole("button", { name: "Hapus anggota" })).not.toBeInTheDocument();
+  });
+
+  it("disables changing your own role when you are the Space's only admin", async () => {
+    mockPermissions = [{ id: "perm-admin", spaceId: "space-1", userId: "user-1", role: "admin" }];
+    await renderPage();
+
+    const selfRow = screen.getByTestId("space-permission-row-user-1");
+    expect(within(selfRow).getByRole("combobox")).toBeDisabled();
+  });
+
+  it("still allows changing your own role when another admin exists", async () => {
+    mockPermissions = [
+      { id: "perm-admin", spaceId: "space-1", userId: "user-1", role: "admin" },
+      { id: "perm-alice", spaceId: "space-1", userId: "alice-id", role: "admin" },
+    ];
+    await renderPage();
+
+    const selfRow = screen.getByTestId("space-permission-row-user-1");
+    expect(within(selfRow).getByRole("combobox")).toBeEnabled();
   });
 });

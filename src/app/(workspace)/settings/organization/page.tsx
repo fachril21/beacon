@@ -184,7 +184,11 @@ function MembersTab({
           const person = allUsers.find((u) => u.id === member.userId);
           if (!person) return null;
           return (
-            <div key={member.id} className="flex items-center justify-between gap-3 rounded-md px-3 py-3 hover:bg-accent">
+            <div
+              key={member.id}
+              data-testid={`org-member-row-${member.userId}`}
+              className="flex items-center justify-between gap-3 rounded-md px-3 py-3 hover:bg-accent"
+            >
               <div className="flex items-center gap-3">
                 <div className="flex size-8 items-center justify-center rounded-full bg-secondary text-caption font-semibold text-secondary-foreground">
                   {person.name[0]?.toUpperCase()}
@@ -206,7 +210,7 @@ function MembersTab({
                     <Crown className="size-3.5" />
                   </Button>
                 )}
-                {canManage && member.role !== "owner" && (
+                {canManage && member.role !== "owner" && member.userId !== currentUserId && (
                   <Button
                     size="icon-sm"
                     variant="ghost"

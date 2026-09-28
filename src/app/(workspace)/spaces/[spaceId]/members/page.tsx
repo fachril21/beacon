@@ -49,6 +49,7 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
     .filter((u): u is NonNullable<typeof u> => !!u);
 
   const pickedMember = addableMembers.find((u) => u.id === pickedUserId);
+  const adminCount = permissions.filter((p) => p.role === "admin").length;
 
   async function handleRoleChange(userId: string, newRole: SpaceRole) {
     try {
@@ -157,8 +158,14 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
           {permissions.map((perm) => {
             const member = allUsers.find((u) => u.id === perm.userId);
             if (!member) return null;
+            const isSelf = perm.userId === user.id;
+            const isOnlyAdmin = isSelf && perm.role === "admin" && adminCount === 1;
             return (
-              <div key={perm.id} className="flex items-center justify-between gap-3 rounded-md px-3 py-3 hover:bg-accent">
+              <div
+                key={perm.id}
+                data-testid={`space-permission-row-${perm.userId}`}
+                className="flex items-center justify-between gap-3 rounded-md px-3 py-3 hover:bg-accent"
+              >
                 <div className="flex items-center gap-3">
                   <div className="flex size-8 items-center justify-center rounded-full bg-secondary text-caption font-semibold text-secondary-foreground">
                     {member.name[0]?.toUpperCase()}
@@ -169,8 +176,12 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Select value={perm.role} onValueChange={(v) => v && void handleRoleChange(perm.userId, v as SpaceRole)}>
-                    <SelectTrigger className="w-28">
+                  <Select
+                    value={perm.role}
+                    onValueChange={(v) => v && void handleRoleChange(perm.userId, v as SpaceRole)}
+                    disabled={isOnlyAdmin}
+                  >
+                    <SelectTrigger className="w-28" title={isOnlyAdmin ? "Anda adalah admin terakhir Space ini." : undefined}>
                       <SelectValue>{ROLE_LABELS[perm.role]}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
@@ -179,14 +190,16 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
                       <SelectItem value="admin">Admin</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label="Hapus anggota"
-                    onClick={() => setRemoveTarget({ permissionId: perm.id, name: member.name })}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
+                  {!isSelf && (
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label="Hapus anggota"
+                      onClick={() => setRemoveTarget({ permissionId: perm.id, name: member.name })}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  )}
                 </div>
               </div>
             );
