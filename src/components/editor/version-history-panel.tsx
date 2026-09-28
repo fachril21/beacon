@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePageVersions, useRestoreVersion } from "@/hooks/use-versions";
 import { useUser } from "@/hooks/use-users";
@@ -19,7 +19,14 @@ function VersionAuthor({ userId }: { userId: string }) {
   return <>{user?.name ?? "Pengguna"}</>;
 }
 
-export function VersionHistoryPanel({ page, onClose }: { page: Page; onClose: () => void }) {
+/**
+ * "Riwayat" tab body of the editor side panel: version list, read-only
+ * preview with its "Pratinjau versi" banner, and Restore. The panel chrome
+ * (header, close button) belongs to EditorSidePanel; `onRestored` fires
+ * right after a restore is kicked off, exactly where the standalone panel
+ * used to close itself.
+ */
+export function VersionHistoryPanel({ page, onRestored }: { page: Page; onRestored: () => void }) {
   const versions = usePageVersions(page.id);
   const restoreVersion = useRestoreVersion();
   const { user } = useSession();
@@ -31,18 +38,11 @@ export function VersionHistoryPanel({ page, onClose }: { page: Page; onClose: ()
     if (!selected || !user) return;
     restoreVersion(page.id, selected.id, user.id);
     setSelectedId(null);
-    onClose();
+    onRestored();
   }
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col border-l border-border bg-card">
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <h2 className="text-h4 font-semibold text-foreground">Riwayat Versi</h2>
-        <Button size="icon-sm" variant="ghost" onClick={onClose} aria-label="Tutup">
-          <X className="size-4" />
-        </Button>
-      </div>
-
+    <div className="flex min-h-0 flex-1 flex-col">
       {selected ? (
         <div className="flex flex-1 flex-col overflow-hidden">
           <div className="border-b border-warning/30 bg-warning-muted px-4 py-2.5 text-caption text-warning-muted-foreground">
@@ -85,6 +85,6 @@ export function VersionHistoryPanel({ page, onClose }: { page: Page; onClose: ()
           )}
         </div>
       )}
-    </aside>
+    </div>
   );
 }

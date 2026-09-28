@@ -1,28 +1,43 @@
 "use client";
 
-import { use, useCallback, useRef, useState } from "react";
+import { use, useCallback, useRef, useState, useSyncExternalStore } from "react";
 import { FileText } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/beacon/empty-state";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useSpace, useSpaceRole } from "@/hooks/use-spaces";
 import { usePage } from "@/hooks/use-pages";
 import { useTitleAutosave } from "@/hooks/use-title-autosave";
 import { useSession } from "@/hooks/use-session";
-import { useUser } from "@/hooks/use-users";
 import { PageEditor } from "@/components/editor/page-editor";
 import { PageEditorToolbar } from "@/components/editor/page-editor-toolbar";
-import { PageToc } from "@/components/editor/page-toc";
-import { VersionHistoryPanel } from "@/components/editor/version-history-panel";
-import { formatRelativeTime } from "@/lib/format-relative-time";
+import { PageMetaRow } from "@/components/editor/page-meta-row";
+import { EditorSidePanel } from "@/components/editor/editor-side-panel";
+import { EDITOR_PANEL_TOGGLE_ID, type EditorSidePanelTab } from "@/components/editor/editor-side-panel-tab";
 import type { SaveStatus } from "@/hooks/use-page-autosave";
+
+/** Wireframe v2 §2: the right panel starts open at ≥1440px and closed below, where it would squeeze the writing column under 760px. */
+const WIDE_EDITOR_QUERY = "(min-width: 1440px)";
+
+function subscribeWideEditor(onChange: () => void) {
+  const mql = window.matchMedia(WIDE_EDITOR_QUERY);
+  mql.addEventListener("change", onChange);
+  return () => mql.removeEventListener("change", onChange);
+}
+
+function useIsWideEditor() {
+  return useSyncExternalStore(
+    subscribeWideEditor,
+    () => window.matchMedia(WIDE_EDITOR_QUERY).matches,
+    () => false,
+  );
+}
 
 export default function PageEditorPage({ params }: { params: Promise<{ spaceId: string; pageId: string }> }) {
   const { spaceId, pageId } = use(params);
   const { user } = useSession();
   const space = useSpace(spaceId);
   const page = usePage(pageId);
-  const author = useUser(page?.createdByUserId);
+  const parentPage = usePage(page?.parentPageId ?? undefined);
   const role = useSpaceRole(spaceId, user?.id);
   const canEdit = role === "editor" || role === "admin";
   const handleTitleSaveError = useCallback(() => {
@@ -30,8 +45,26 @@ export default function PageEditorPage({ params }: { params: Promise<{ spaceId: 
   }, []);
   const { title, scheduleTitleSave, flushTitleSave } = useTitleAutosave(pageId, page?.title, handleTitleSaveError);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
-  const [isVersionHistoryOpen, setIsVersionHistoryOpen] = useState(false);
   const scrollRootRef = useRef<HTMLElement | null>(null);
+
+  // `undefined` = the user hasn't touched the panel yet, so it follows the
+  // viewport default; after that, their explicit choice (a tab, or null for
+  // closed) sticks regardless of resizes.
+  const isWideEditor = useIsWideEditor();
+  const [panelChoice, setPanelChoice] = useState<EditorSidePanelTab | null | undefined>(undefined);
+  const [lastPanelTab, setLastPanelTab] = useState<EditorSidePanelTab>("toc");
+  const rightPanel: EditorSidePanelTab | null = panelChoice === undefined ? (isWideEditor ? lastPanelTab : null) : panelChoice;
+
+  function openPanelTab(tab: EditorSidePanelTab) {
+    setPanelChoice(tab);
+    setLastPanelTab(tab);
+  }
+
+  function closePanel() {
+    setPanelChoice(null);
+    // The X / Esc that closed it just unmounted with the panel — hand focus back to the topbar toggle.
+    document.getElementById(EDITOR_PANEL_TOGGLE_ID)?.focus();
+  }
 
   if (!page || !space) {
     return (
@@ -42,52 +75,53 @@ export default function PageEditorPage({ params }: { params: Promise<{ spaceId: 
   }
 
   return (
-    <div className="flex flex-1 overflow-hidden">
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <PageEditorToolbar
-          page={page}
-          space={space}
-          title={title}
-          saveStatus={saveStatus}
-          role={role}
-          onOpenVersionHistory={() => setIsVersionHistoryOpen(true)}
-        />
-        {/* Wide, centered column with generous surrounding whitespace; the ToC rail shares the centered group so the column shifts to make room for it, same as it collapsing below xl. */}
-        <main ref={scrollRootRef} className="flex-1 overflow-y-auto">
-          <div className="mx-auto flex max-w-app-shell justify-center gap-8 px-80 py-10">
-            <div className="w-full max-w-editor-column">
-              <input
-                id="page-title"
-                name="page-title"
-                value={title}
-                onChange={(e) => scheduleTitleSave(e.target.value)}
-                onBlur={() => void flushTitleSave()}
-                readOnly={!canEdit}
-                placeholder="Halaman tanpa judul"
-                autoFocus={!page.title}
-                className="w-full border-none bg-transparent text-h1 font-bold text-foreground outline-none placeholder:text-muted-foreground read-only:cursor-default"
-              />
-              <div className="mt-6">
-                <PageEditor key={pageId} page={page} onStatusChange={setSaveStatus} editable={canEdit} />
-              </div>
-
-              {/* Footer meta row — low-emphasis, avatar + last-modified timestamp */}
-              <div className="mt-16 flex items-center gap-2 border-t border-border pt-4">
-                <Avatar size="sm">
-                  <AvatarImage src={author?.avatarUrl ?? undefined} alt="" />
-                  <AvatarFallback>{author?.name?.[0]?.toUpperCase() ?? "?"}</AvatarFallback>
-                </Avatar>
-                <p className="text-caption text-muted-foreground">
-                  {author?.name && <span>Dibuat oleh {author.name} · </span>}
-                  Terakhir diubah {formatRelativeTime(page.updatedAt)}
-                </p>
-              </div>
+    <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <PageEditorToolbar
+        page={page}
+        space={space}
+        title={title}
+        saveStatus={saveStatus}
+        role={role}
+        parentPage={parentPage}
+        panelTab={rightPanel}
+        onTogglePanelTab={(tab) => (rightPanel === tab ? setPanelChoice(null) : openPanelTab(tab))}
+        onTogglePanel={() => (rightPanel ? setPanelChoice(null) : openPanelTab(lastPanelTab))}
+        onOpenVersionHistory={() => openPanelTab("history")}
+      />
+      <div className="flex min-h-0 flex-1">
+        {/* md:px-14 + the column's px-6 = 80px, exactly BlockNote's side-menu gutter ("+" and drag handle), which would otherwise be clipped by this scroll container when the column is squeezed (e.g. 1280px with the panel open). */}
+        <main ref={scrollRootRef} className="min-w-0 flex-1 overflow-y-auto md:px-14">
+          {/* max-w-(--width-editor-column), not max-w-editor-column: Tailwind 4's max-w-* reads the --container-* namespace, so the bare token name resolves to nothing. */}
+          <div className="mx-auto w-full max-w-(--width-editor-column) px-6 pt-11 pb-24">
+            <input
+              id="page-title"
+              name="page-title"
+              value={title}
+              onChange={(e) => scheduleTitleSave(e.target.value)}
+              onBlur={() => void flushTitleSave()}
+              readOnly={!canEdit}
+              placeholder="Halaman tanpa judul"
+              autoFocus={!page.title}
+              className="w-full border-none bg-transparent text-h1 font-bold text-foreground outline-none placeholder:text-muted-foreground read-only:cursor-default"
+            />
+            <div className="mt-3.5">
+              <PageMetaRow page={page} canEdit={canEdit} />
             </div>
-            <PageToc content={page.content} scrollRootRef={scrollRootRef} />
+            <div className="mt-6">
+              <PageEditor key={pageId} page={page} onStatusChange={setSaveStatus} editable={canEdit} />
+            </div>
           </div>
         </main>
+        {rightPanel && (
+          <EditorSidePanel
+            page={page}
+            tab={rightPanel}
+            onTabChange={openPanelTab}
+            onClose={closePanel}
+            scrollRootRef={scrollRootRef}
+          />
+        )}
       </div>
-      {isVersionHistoryOpen && <VersionHistoryPanel page={page} onClose={() => setIsVersionHistoryOpen(false)} />}
     </div>
   );
 }

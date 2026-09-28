@@ -1,12 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChevronDown, ExternalLink, History, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink, History, MessageSquare, PanelRight, Trash2 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -14,9 +13,10 @@ import { DeleteConfirmDialog } from "@/components/workspace/delete-confirm-dialo
 import { SaveStatusIndicator } from "./save-status-indicator";
 import { useOrganization } from "@/hooks/use-organizations";
 import { usePublishActions, useDeletePage, hasUnpublishedChanges, getPageStatus } from "@/hooks/use-pages";
-import { useHelpfulnessRate } from "@/hooks/use-feedback";
 import { isPageNearlyEmpty } from "@/lib/content-empty";
 import { StatusBadge } from "@/components/beacon/status-badge";
+import { cn } from "@/lib/utils";
+import { EDITOR_PANEL_TOGGLE_ID, EDITOR_SIDE_PANEL_ID, type EditorSidePanelTab } from "./editor-side-panel-tab";
 import type { Page, Space, SpaceRole } from "@/lib/types";
 import type { SaveStatus } from "@/hooks/use-page-autosave";
 
@@ -29,10 +29,30 @@ interface PageEditorToolbarProps {
    * editor/admin-only (US17.2) — RLS already rejects the write; this hides the
    * dead-click affordance so a viewer never sees actions they can't use. */
   role: SpaceRole | null;
+  /** Parent Page for the middle breadcrumb crumb; null/undefined for a top-level Page. */
+  parentPage?: Page | null;
+  /** Which side-panel tab is showing, or null when the panel is closed. */
+  panelTab?: EditorSidePanelTab | null;
+  /** Comments/Riwayat icons: open the panel on that tab, or close it if that tab is already showing. */
+  onTogglePanelTab?: (tab: EditorSidePanelTab) => void;
+  /** Panel toggle button: open (on the last-used tab) or close the side panel. */
+  onTogglePanel?: () => void;
+  /** "Riwayat Versi" menu item — opens the side panel on the Riwayat tab. */
   onOpenVersionHistory?: () => void;
 }
 
-export function PageEditorToolbar({ page, space, title, saveStatus, role, onOpenVersionHistory }: PageEditorToolbarProps) {
+export function PageEditorToolbar({
+  page,
+  space,
+  title,
+  saveStatus,
+  role,
+  parentPage,
+  panelTab = null,
+  onTogglePanelTab,
+  onTogglePanel,
+  onOpenVersionHistory,
+}: PageEditorToolbarProps) {
   const router = useRouter();
   const organization = useOrganization(space.organizationId);
   const { publish, update, unpublish } = usePublishActions();
@@ -55,7 +75,6 @@ export function PageEditorToolbar({ page, space, title, saveStatus, role, onOpen
   const pendingChanges = hasUnpublishedChanges(page);
   const status = getPageStatus(page);
   const publicUrl = organization && page.slug ? `/public/${organization.slug}/pages/${page.slug}` : null;
-  const helpfulness = useHelpfulnessRate(canEdit && page.isPublished ? page.id : undefined);
 
   async function doPublish() {
     if (typeof navigator !== "undefined" && !navigator.onLine) {
@@ -108,24 +127,70 @@ export function PageEditorToolbar({ page, space, title, saveStatus, role, onOpen
 
   return (
     <header className="flex shrink-0 flex-col border-b border-border">
-      <div className="flex items-center justify-between gap-4 px-6 py-3">
-        {/* Breadcrumb, left — status/mode badges sit inline beside it */}
-        <nav className="flex min-w-0 items-center gap-1.5 text-body-sm text-muted-foreground">
-          <Link href={`/spaces/${space.id}`} className="truncate hover:text-foreground">
-            {space.name}
-          </Link>
-          <span className="text-muted-foreground/50">/</span>
-          <span className="truncate text-foreground">{title || "Halaman tanpa judul"}</span>
-          {page.isPublished && <StatusBadge status={status} className="ml-1" />}
-          {canEdit && helpfulness.total > 0 && (
-            <Badge variant="outline" className="ml-1 shrink-0 font-normal text-muted-foreground">
-              {Math.round((helpfulness.rate ?? 0) * 100)}% membantu · {helpfulness.total} respons
-            </Badge>
-          )}
+      <div className="flex h-topbar items-center justify-between gap-4 px-5">
+        {/* Breadcrumb, left: Space / parent Page / this Page */}
+        <nav aria-label="Breadcrumb" className="min-w-0">
+          <ol className="flex min-w-0 items-center gap-1.5 text-body-sm text-muted-foreground">
+            <li className="min-w-0 truncate">
+              <Link href={`/spaces/${space.id}`} className="rounded-sm hover:text-foreground">
+                {space.name}
+              </Link>
+            </li>
+            {parentPage && (
+              <>
+                <li aria-hidden className="shrink-0">
+                  <ChevronRight className="size-3.5 text-muted-foreground/60" />
+                </li>
+                <li className="min-w-0 truncate">
+                  <Link href={`/spaces/${space.id}/pages/${parentPage.id}`} className="rounded-sm hover:text-foreground">
+                    {parentPage.title || "Halaman tanpa judul"}
+                  </Link>
+                </li>
+              </>
+            )}
+            <li aria-hidden className="shrink-0">
+              <ChevronRight className="size-3.5 text-muted-foreground/60" />
+            </li>
+            <li aria-current="page" className="min-w-0 truncate text-foreground">
+              {title || "Halaman tanpa judul"}
+            </li>
+          </ol>
         </nav>
 
-        {/* Right-aligned utility row, then the primary action + overflow joined as one control */}
-        <div className="flex shrink-0 items-center gap-3">
+        {/* Right cluster: save status, panel shortcuts, then status + the primary action/overflow joined as one control */}
+        <div className="flex shrink-0 items-center gap-1">
+          <span className="mr-1.5">
+            <SaveStatusIndicator status={saveStatus} />
+          </span>
+          <PanelIconButton
+            label="Komentar"
+            active={panelTab === "comments"}
+            onClick={() => onTogglePanelTab?.("comments")}
+          >
+            <MessageSquare className="size-4" />
+          </PanelIconButton>
+          <PanelIconButton label="Riwayat versi" active={panelTab === "history"} onClick={() => onTogglePanelTab?.("history")}>
+            <History className="size-4" />
+          </PanelIconButton>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  id={EDITOR_PANEL_TOGGLE_ID}
+                  size="icon"
+                  variant="ghost"
+                  aria-label="Panel samping"
+                  aria-expanded={panelTab !== null}
+                  aria-controls={panelTab !== null ? EDITOR_SIDE_PANEL_ID : undefined}
+                  onClick={() => onTogglePanel?.()}
+                  className={cn("text-muted-foreground", panelTab !== null && "bg-accent text-foreground")}
+                />
+              }
+            >
+              <PanelRight className="size-4" />
+            </TooltipTrigger>
+            <TooltipContent>{panelTab !== null ? "Tutup panel samping" : "Buka panel samping"}</TooltipContent>
+          </Tooltip>
           {page.isPublished && publicUrl && (
             <Tooltip>
               <TooltipTrigger
@@ -135,20 +200,22 @@ export function PageEditorToolbar({ page, space, title, saveStatus, role, onOpen
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="Lihat halaman publik"
-                    className={buttonVariants({ size: "icon-sm", variant: "ghost" })}
+                    className={cn(buttonVariants({ size: "icon", variant: "ghost" }), "text-muted-foreground")}
                   />
                 }
               >
-                <ExternalLink className="size-3.5" />
+                <ExternalLink className="size-4" />
               </TooltipTrigger>
               <TooltipContent>Lihat halaman publik</TooltipContent>
             </Tooltip>
           )}
-          <SaveStatusIndicator status={saveStatus} />
+
+          <span aria-hidden className="mx-1.5 h-5 w-px bg-border" />
+          <StatusBadge status={status} className="mr-1.5" />
 
           <div data-slot="button-group" className="flex items-stretch overflow-hidden rounded-md">
             {!canEdit ? null : page.isPublished ? (
-              <Button size="sm" variant="secondary" onClick={handleUpdate} disabled={!pendingChanges} className="rounded-r-none">
+              <Button size="sm" variant="secondary" onClick={handleUpdate} disabled={!pendingChanges} className="h-8 rounded-r-none">
                 Perbarui
               </Button>
             ) : disabledReason ? (
@@ -157,7 +224,7 @@ export function PageEditorToolbar({ page, space, title, saveStatus, role, onOpen
                   <Button
                     size="sm"
                     disabled
-                    className="pointer-events-none rounded-r-none bg-secondary text-muted-foreground opacity-100 hover:bg-secondary"
+                    className="pointer-events-none h-8 rounded-r-none bg-secondary text-muted-foreground opacity-100 hover:bg-secondary"
                   >
                     Publikasikan
                   </Button>
@@ -165,7 +232,7 @@ export function PageEditorToolbar({ page, space, title, saveStatus, role, onOpen
                 <TooltipContent className={!space.isPublishable ? "" : "border-t-2 border-t-warning"}>{disabledReason}</TooltipContent>
               </Tooltip>
             ) : (
-              <Button size="sm" onClick={handlePublishClick} className="rounded-r-none">
+              <Button size="sm" onClick={handlePublishClick} className="h-8 rounded-r-none">
                 Publikasikan
               </Button>
             )}
@@ -174,7 +241,7 @@ export function PageEditorToolbar({ page, space, title, saveStatus, role, onOpen
               <DropdownMenuTrigger
                 render={
                   <Button
-                    size="icon-sm"
+                    size="icon"
                     variant={!canEdit ? "ghost" : canEdit && !page.isPublished && !disabledReason ? "default" : "secondary"}
                     aria-label="Menu lainnya"
                     className={canEdit ? "rounded-l-none border-l border-l-background/20" : ""}
@@ -303,5 +370,37 @@ export function PageEditorToolbar({ page, space, title, saveStatus, role, onOpen
         onConfirm={() => void handleDeletePage()}
       />
     </header>
+  );
+}
+
+function PanelIconButton({
+  label,
+  active,
+  onClick,
+  children,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label={label}
+            aria-pressed={active}
+            onClick={onClick}
+            className={cn("text-muted-foreground", active && "bg-accent text-foreground")}
+          />
+        }
+      >
+        {children}
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }

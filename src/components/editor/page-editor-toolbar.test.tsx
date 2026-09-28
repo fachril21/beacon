@@ -25,14 +25,11 @@ const mockPublish = vi.fn(() =>
 vi.mock("@/hooks/use-pages", () => ({
   usePublishActions: () => ({ publish: mockPublish, update: vi.fn(), unpublish: vi.fn() }),
   useDeletePage: () => mockDeletePage,
-  hasUnpublishedChanges: () => false,
-  getPageStatus: () => "draft",
+  hasUnpublishedChanges: () => mockHasUnpublishedChanges(),
+  getPageStatus: (page: Page) => (page.isPublished ? (mockHasUnpublishedChanges() ? "pending" : "published") : "draft"),
 }));
 
-const mockHelpfulnessRate = vi.fn(() => ({ yes: 0, total: 0, rate: null as number | null }));
-vi.mock("@/hooks/use-feedback", () => ({
-  useHelpfulnessRate: () => mockHelpfulnessRate(),
-}));
+const mockHasUnpublishedChanges = vi.fn(() => false);
 
 const space: Space = {
   id: "space-1",
@@ -165,48 +162,76 @@ describe("PageEditorToolbar role gating (US17.2)", () => {
   });
 });
 
-describe("PageEditorToolbar helpfulness rate (US15.2)", () => {
-  it("shows the aggregate helpfulness rate to an admin on a published page with responses", () => {
-    mockHelpfulnessRate.mockReturnValue({ yes: 2, total: 3, rate: 2 / 3 });
+describe("PageEditorToolbar topbar layout (wireframe v2 §3.3)", () => {
+  it("renders Space / parent / title as a Breadcrumb nav with the current page marked", () => {
+    const parent: Page = { ...draftPage, id: "page-0", title: "Onboarding" };
     render(
-      <PageEditorToolbar
-        page={{ ...draftPage, isPublished: true }}
-        space={space}
-        title={draftPage.title}
-        saveStatus="idle"
-        role="admin"
-      />,
+      <PageEditorToolbar page={draftPage} space={space} title="Daftar & Masuk" saveStatus="idle" role="editor" parentPage={parent} />,
     );
-    expect(screen.getByText(/67%/)).toBeInTheDocument();
-    expect(screen.getByText(/3 respons/)).toBeInTheDocument();
+    const nav = screen.getByRole("navigation", { name: "Breadcrumb" });
+    expect(within(nav).getByRole("link", { name: "Test Space" })).toHaveAttribute("href", "/spaces/space-1");
+    expect(within(nav).getByRole("link", { name: "Onboarding" })).toHaveAttribute("href", "/spaces/space-1/pages/page-0");
+    expect(within(nav).getByText("Daftar & Masuk")).toHaveAttribute("aria-current", "page");
   });
 
-  it("shows nothing for a page with zero responses yet", () => {
-    mockHelpfulnessRate.mockReturnValue({ yes: 0, total: 0, rate: null });
-    render(
-      <PageEditorToolbar
-        page={{ ...draftPage, isPublished: true }}
-        space={space}
-        title={draftPage.title}
-        saveStatus="idle"
-        role="admin"
-      />,
-    );
+  it("no longer carries the helpfulness badge in the topbar (moved to PageMetaRow)", () => {
+    render(<PageEditorToolbar page={{ ...draftPage, isPublished: true }} space={space} title="x" saveStatus="idle" role="admin" />);
     expect(screen.queryByText(/respons/)).not.toBeInTheDocument();
   });
 
-  it("never shows the helpfulness rate to a viewer, even with responses (feedback_select_editor RLS mirror)", () => {
-    mockHelpfulnessRate.mockReturnValue({ yes: 2, total: 3, rate: 2 / 3 });
+  it("shows the status badge for a draft too", () => {
+    renderToolbar("editor");
+    expect(screen.getByText("Draf")).toBeInTheDocument();
+  });
+
+  it("toggles the side panel from the Komentar, Riwayat and panel buttons, reflecting the open tab", async () => {
+    const user = userEvent.setup();
+    const onTogglePanelTab = vi.fn();
+    const onTogglePanel = vi.fn();
     render(
       <PageEditorToolbar
-        page={{ ...draftPage, isPublished: true }}
+        page={draftPage}
         space={space}
-        title={draftPage.title}
+        title="x"
         saveStatus="idle"
         role="viewer"
+        panelTab="comments"
+        onTogglePanelTab={onTogglePanelTab}
+        onTogglePanel={onTogglePanel}
       />,
     );
-    expect(screen.queryByText(/respons/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Komentar" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Riwayat versi" })).toHaveAttribute("aria-pressed", "false");
+    const toggle = screen.getByRole("button", { name: "Panel samping" });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(toggle).toHaveAttribute("aria-controls", "editor-side-panel");
+
+    await user.click(screen.getByRole("button", { name: "Komentar" }));
+    await user.click(screen.getByRole("button", { name: "Riwayat versi" }));
+    await user.click(toggle);
+    expect(onTogglePanelTab.mock.calls).toEqual([["comments"], ["history"]]);
+    expect(onTogglePanel).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens version history from the chevron menu's Riwayat Versi item", async () => {
+    const user = userEvent.setup();
+    const onOpenVersionHistory = vi.fn();
+    render(
+      <PageEditorToolbar page={draftPage} space={space} title="x" saveStatus="idle" role="editor" onOpenVersionHistory={onOpenVersionHistory} />,
+    );
+    await user.click(screen.getByRole("button", { name: "Menu lainnya" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Riwayat Versi" }));
+    expect(onOpenVersionHistory).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps Tab order: breadcrumb, Komentar, Riwayat, panel toggle, Publikasikan, menu", async () => {
+    const user = userEvent.setup();
+    renderToolbar("editor");
+    const expected = ["Test Space", "Komentar", "Riwayat versi", "Panel samping", "Publikasikan", "Menu lainnya"];
+    for (const name of expected) {
+      await user.tab();
+      expect(document.activeElement).toHaveAccessibleName(name);
+    }
   });
 });
 
@@ -243,5 +268,23 @@ describe("PageEditorToolbar delete page", () => {
 
     expect(mockDeletePage).toHaveBeenCalledWith("page-1");
     await vi.waitFor(() => expect(mockPush).toHaveBeenCalledWith("/spaces/space-1"));
+  });
+});
+
+describe("PageEditorToolbar unpublished-changes banner (PRD Flow 4 step 4)", () => {
+  it("shows the banner with its own Perbarui button for an editor on a published page with pending changes", () => {
+    mockHasUnpublishedChanges.mockReturnValue(true);
+    render(<PageEditorToolbar page={{ ...draftPage, isPublished: true }} space={space} title="x" saveStatus="idle" role="editor" />);
+    expect(screen.getByText("Anda memiliki perubahan yang belum dipublikasikan.")).toBeInTheDocument();
+    expect(screen.getByText("Menunggu")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Perbarui" })).toHaveLength(2);
+    mockHasUnpublishedChanges.mockReturnValue(false);
+  });
+
+  it("never shows the banner to a viewer", () => {
+    mockHasUnpublishedChanges.mockReturnValue(true);
+    render(<PageEditorToolbar page={{ ...draftPage, isPublished: true }} space={space} title="x" saveStatus="idle" role="viewer" />);
+    expect(screen.queryByText("Anda memiliki perubahan yang belum dipublikasikan.")).not.toBeInTheDocument();
+    mockHasUnpublishedChanges.mockReturnValue(false);
   });
 });
