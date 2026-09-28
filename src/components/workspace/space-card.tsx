@@ -38,7 +38,7 @@ export function SpaceCard({ space }: { space: Space }) {
   return (
     <div className="group relative">
       <Link href={`/spaces/${space.id}`}>
-        <Card className="h-full cursor-pointer p-6 transition-colors hover:border-input">
+        <Card className="h-full cursor-pointer p-[1.125rem] transition-colors hover:border-input">
           {space.category && (
             <p className="mb-2 text-caption font-semibold tracking-[0.04em] text-muted-foreground uppercase">
               {space.category}

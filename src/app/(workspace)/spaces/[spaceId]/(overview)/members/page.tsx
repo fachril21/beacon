@@ -7,10 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
-import { NotFoundState } from "@/components/beacon/not-found-state";
 import { DeleteConfirmDialog } from "@/components/workspace/delete-confirm-dialog";
 import { useSession } from "@/hooks/use-session";
-import { useSpace, useSpaceRole, useSpacePermissions, useUpdateSpaceRole, useAddOrgMemberToSpace, useRemoveMember } from "@/hooks/use-spaces";
+import { useSpace, useSpacePermissions, useUpdateSpaceRole, useAddOrgMemberToSpace, useRemoveMember } from "@/hooks/use-spaces";
 import { useOrganizationMembers } from "@/hooks/use-organizations";
 import { useUsers } from "@/hooks/use-users";
 import type { SpaceRole } from "@/lib/types";
@@ -21,7 +20,6 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
   const { spaceId } = use(params);
   const { user } = useSession();
   const space = useSpace(spaceId);
-  const role = useSpaceRole(spaceId, user?.id);
   const permissions = useSpacePermissions(spaceId);
   const updateRole = useUpdateSpaceRole();
   const organizationMembers = useOrganizationMembers(space?.organizationId);
@@ -34,10 +32,7 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
   const [removeTarget, setRemoveTarget] = useState<{ permissionId: string; name: string } | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
 
-  if (!user || role !== "admin") {
-    return <NotFoundState />;
-  }
-  if (!space) return null;
+  if (!user || !space) return null;
 
   // Bringing a brand new person into Beacon at all now goes exclusively
   // through an Organization invite (Organization Settings > Members) — this
@@ -86,12 +81,9 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
   }
 
   return (
-    <main className="flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-[42rem] px-8 py-10">
-        <h1 className="text-h1 font-bold text-foreground">Anggota</h1>
-        <p className="mt-1.5 text-body text-muted-foreground">{space.name}</p>
-
-        <div className="mt-8 flex gap-2">
+    <>
+      <div className="max-w-[42rem]">
+      <div className="flex gap-2">
           <Popover open={isPickerOpen} onOpenChange={setIsPickerOpen}>
             <PopoverTrigger
               render={
@@ -216,6 +208,6 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
         isDeleting={isRemoving}
         onConfirm={() => void handleRemoveMember()}
       />
-    </main>
+    </>
   );
 }

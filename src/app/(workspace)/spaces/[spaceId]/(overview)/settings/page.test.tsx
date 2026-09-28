@@ -15,26 +15,30 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+const mockToast = vi.fn();
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 vi.mock("sonner", () => ({
-  toast: {
+  toast: Object.assign((...args: unknown[]) => mockToast(...args), {
     success: (...args: unknown[]) => mockToastSuccess(...args),
     error: (...args: unknown[]) => mockToastError(...args),
-  },
+  }),
 }));
 
 let mockUser: { id: string } | null = { id: "user-1" };
 vi.mock("@/hooks/use-session", () => ({ useSession: () => ({ user: mockUser }) }));
 
-let mockRole: "viewer" | "editor" | "admin" | null = "admin";
 let mockSpace: Space | undefined;
 const mockUpdateSpace = vi.fn(() => Promise.resolve());
+const mockDeleteSpace = vi.fn(() => Promise.resolve());
 vi.mock("@/hooks/use-spaces", () => ({
   useSpace: () => mockSpace,
-  useSpaceRole: () => mockRole,
   useUpdateSpace: () => mockUpdateSpace,
+  useDeleteSpace: () => mockDeleteSpace,
 }));
+
+const mockPush = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mockPush }) }));
 
 const baseSpace: Space = {
   id: "space-1",
@@ -64,9 +68,9 @@ describe("SpaceSettingsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUser = { id: "user-1" };
-    mockRole = "admin";
     mockSpace = { ...baseSpace };
     mockUpdateSpace.mockResolvedValue(undefined);
+    mockDeleteSpace.mockResolvedValue(undefined);
   });
 
   it("shows the publishable toggle reflecting the Space's current setting for an admin", async () => {
@@ -75,14 +79,6 @@ describe("SpaceSettingsPage", () => {
 
     const toggle = await screen.findByRole("switch", { name: /dapat dipublikasikan/i });
     expect(toggle).toBeChecked();
-  });
-
-  it("renders a not-found state for a non-admin, with no toggle", async () => {
-    mockRole = "editor";
-    await renderPage();
-
-    expect(await screen.findByText("Halaman tidak ditemukan")).toBeInTheDocument();
-    expect(screen.queryByRole("switch")).not.toBeInTheDocument();
   });
 
   it("turns publishing on immediately, without a confirmation step", async () => {
@@ -133,5 +129,16 @@ describe("SpaceSettingsPage", () => {
 
     await user.type(nameInput, "Something new");
     expect(screen.getByRole("button", { name: "Simpan" })).toBeEnabled();
+  });
+
+  it("deletes the Space on confirm and navigates back to the workspace home", async () => {
+    await renderPage();
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "Hapus Space" }));
+    await user.click(await screen.findByRole("button", { name: "Hapus Space" }));
+
+    expect(mockDeleteSpace).toHaveBeenCalledWith("space-1");
+    await vi.waitFor(() => expect(mockPush).toHaveBeenCalledWith("/"));
   });
 });

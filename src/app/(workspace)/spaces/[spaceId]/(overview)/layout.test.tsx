@@ -3,13 +3,18 @@ import { Suspense, type ReactNode } from "react";
 import { render, screen, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
-import SpacePage from "./page";
+import SpaceOverviewLayout from "./layout";
 import type { Organization, Space } from "@/lib/types";
 
 const paramsPromise = Promise.resolve({ spaceId: "space-1" });
 
+let mockPathname = "/spaces/space-1";
+const mockPush = vi.fn();
 vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }) }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => mockPathname,
+  useRouter: () => ({ push: mockPush }),
+}));
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
     <a href={href} {...rest}>
@@ -24,11 +29,11 @@ let mockSpace: Space | undefined;
 vi.mock("@/hooks/use-spaces", () => ({
   useSpace: () => mockSpace,
   useSpaceRole: () => mockRole,
-  useDeleteSpace: () => vi.fn(),
 }));
+
+const mockCreatePage = vi.fn();
 vi.mock("@/hooks/use-pages", () => ({
-  useChildPages: () => [],
-  useCreatePage: () => vi.fn(),
+  useCreatePage: () => mockCreatePage,
 }));
 
 let mockOrganization: Organization | undefined;
@@ -57,20 +62,68 @@ const baseOrganization: Organization = {
   createdAt: "2026-01-01T00:00:00.000Z",
 };
 
-async function renderPage() {
+async function renderLayout() {
   let utils!: ReturnType<typeof render>;
   // `use(params)` suspends; the async act flush lets the boundary resume.
   await act(async () => {
     utils = render(
       <Suspense fallback={null}>
-        <SpacePage params={paramsPromise} />
+        <SpaceOverviewLayout params={paramsPromise}>
+          <div>Tab content</div>
+        </SpaceOverviewLayout>
       </Suspense>,
     );
   });
   return utils;
 }
 
-describe("SpacePage settings entry point", () => {
+describe("SpaceOverviewLayout tabs", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPathname = "/spaces/space-1";
+    mockRole = "admin";
+    mockSpace = { ...baseSpace };
+    mockOrganization = { ...baseOrganization };
+  });
+
+  it("shows an admin a Pengaturan tab pointing at the Space settings page", async () => {
+    await renderLayout();
+    const link = await screen.findByRole("link", { name: /pengaturan/i });
+    expect(link).toHaveAttribute("href", "/spaces/space-1/settings");
+  });
+
+  it("hides the Anggota and Pengaturan tabs from a non-admin", async () => {
+    mockRole = "editor";
+    await renderLayout();
+    await screen.findByRole("heading", { name: "Aplikasi Mobile" });
+    expect(screen.queryByRole("link", { name: /pengaturan/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /^anggota$/i })).not.toBeInTheDocument();
+  });
+
+  it("still renders the Halaman tab's children for a non-admin", async () => {
+    mockRole = "editor";
+    await renderLayout();
+    expect(await screen.findByText("Tab content")).toBeInTheDocument();
+  });
+
+  it("creates a new Page and navigates to it when the header's Halaman baru is clicked", async () => {
+    mockCreatePage.mockResolvedValue({ id: "new-page" });
+    await renderLayout();
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: /halaman baru/i }));
+
+    expect(mockCreatePage).toHaveBeenCalledWith({
+      spaceId: "space-1",
+      parentPageId: null,
+      title: "Halaman tanpa judul",
+      createdByUserId: "user-1",
+    });
+    await vi.waitFor(() => expect(mockPush).toHaveBeenCalledWith("/spaces/space-1/pages/new-page"));
+  });
+});
+
+describe("SpaceOverviewLayout role gate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRole = "admin";
@@ -78,43 +131,48 @@ describe("SpacePage settings entry point", () => {
     mockOrganization = { ...baseOrganization };
   });
 
-  it("shows an admin a link to the Space settings page", async () => {
-    await renderPage();
-    const link = await screen.findByRole("link", { name: /pengaturan/i });
-    expect(link).toHaveAttribute("href", "/spaces/space-1/settings");
+  it("renders a not-found state for a non-admin visiting the Anggota route", async () => {
+    mockPathname = "/spaces/space-1/members";
+    mockRole = "editor";
+    await renderLayout();
+
+    expect(await screen.findByText("Halaman tidak ditemukan")).toBeInTheDocument();
+    expect(screen.queryByText("Tab content")).not.toBeInTheDocument();
   });
 
-  it("hides the settings link from a non-admin", async () => {
+  it("renders a not-found state for a non-admin visiting the Pengaturan route", async () => {
+    mockPathname = "/spaces/space-1/settings";
     mockRole = "editor";
-    await renderPage();
-    await screen.findByRole("heading", { name: "Aplikasi Mobile" });
-    expect(screen.queryByRole("link", { name: /pengaturan/i })).not.toBeInTheDocument();
+    await renderLayout();
+
+    expect(await screen.findByText("Halaman tidak ditemukan")).toBeInTheDocument();
   });
 });
 
-describe("SpacePage public URL sharing", () => {
+describe("SpaceOverviewLayout public URL sharing", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPathname = "/spaces/space-1";
     mockRole = "editor";
     mockSpace = { ...baseSpace, isPublishable: true };
     mockOrganization = { ...baseOrganization };
   });
 
   it("shows a share public URL button to any member when the Space is publishable", async () => {
-    await renderPage();
+    await renderLayout();
     expect(await screen.findByRole("button", { name: /salin link publik/i })).toBeInTheDocument();
   });
 
   it("hides the share button when the Space is not publishable", async () => {
     mockSpace = { ...baseSpace, isPublishable: false };
-    await renderPage();
+    await renderLayout();
     await screen.findByRole("heading", { name: "Aplikasi Mobile" });
     expect(screen.queryByRole("button", { name: /salin link publik/i })).not.toBeInTheDocument();
   });
 
   it("copies the public URL to the clipboard and confirms with a toast when clicked", async () => {
     const user = userEvent.setup();
-    await renderPage();
+    await renderLayout();
     const button = await screen.findByRole("button", { name: /salin link publik/i });
     const mockWriteText = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue(undefined);
 
