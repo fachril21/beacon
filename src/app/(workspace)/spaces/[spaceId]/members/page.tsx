@@ -2,9 +2,11 @@
 
 import { use, useState } from "react";
 import { toast } from "sonner";
-import { UserPlus, Trash2 } from "lucide-react";
+import { UserPlus, Trash2, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { NotFoundState } from "@/components/beacon/not-found-state";
 import { DeleteConfirmDialog } from "@/components/workspace/delete-confirm-dialog";
 import { useSession } from "@/hooks/use-session";
@@ -28,6 +30,7 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
   const allUsers = useUsers();
   const [pickedUserId, setPickedUserId] = useState("");
   const [addRole, setAddRole] = useState<SpaceRole>("viewer");
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<{ permissionId: string; name: string } | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
 
@@ -44,6 +47,8 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
     .filter((m) => !permissions.some((p) => p.userId === m.userId))
     .map((m) => allUsers.find((u) => u.id === m.userId))
     .filter((u): u is NonNullable<typeof u> => !!u);
+
+  const pickedMember = addableMembers.find((u) => u.id === pickedUserId);
 
   async function handleRoleChange(userId: string, newRole: SpaceRole) {
     try {
@@ -86,25 +91,52 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
         <p className="mt-1.5 text-body text-muted-foreground">{space.name}</p>
 
         <div className="mt-8 flex gap-2">
-          <Select value={pickedUserId} onValueChange={(v) => v && setPickedUserId(v)}>
-            <SelectTrigger className="flex-1">
-              <SelectValue placeholder="Pilih anggota Organisasi…">
-                {addableMembers.find((u) => u.id === pickedUserId)?.name}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {addableMembers.length === 0 && (
-                <div className="px-2 py-1.5 text-caption text-muted-foreground">
-                  Semua anggota Organisasi sudah memiliki akses.
-                </div>
-              )}
-              {addableMembers.map((member) => (
-                <SelectItem key={member.id} value={member.id}>
-                  {member.name} — {member.email}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Popover open={isPickerOpen} onOpenChange={setIsPickerOpen}>
+            <PopoverTrigger
+              render={
+                <button
+                  type="button"
+                  disabled={addableMembers.length === 0}
+                  className="flex h-8 flex-1 items-center justify-between gap-1.5 rounded-lg border border-input bg-transparent px-2.5 text-sm whitespace-nowrap transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30 dark:hover:bg-input/50"
+                />
+              }
+            >
+              <span className={pickedMember ? "truncate text-left" : "truncate text-left text-muted-foreground"}>
+                {pickedMember
+                  ? pickedMember.name
+                  : addableMembers.length === 0
+                    ? "Semua anggota Organisasi sudah memiliki akses."
+                    : "Pilih anggota Organisasi…"}
+              </span>
+              <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-80 p-0">
+              <Command>
+                <CommandInput placeholder="Cari nama atau email…" />
+                <CommandList>
+                  <CommandEmpty>Tidak ditemukan.</CommandEmpty>
+                  <CommandGroup>
+                    {addableMembers.map((member) => (
+                      <CommandItem
+                        key={member.id}
+                        value={`${member.name} ${member.email}`}
+                        data-checked={member.id === pickedUserId}
+                        onSelect={() => {
+                          setPickedUserId(member.id);
+                          setIsPickerOpen(false);
+                        }}
+                      >
+                        <span className="flex min-w-0 flex-col">
+                          <span className="truncate text-body-sm">{member.name}</span>
+                          <span className="truncate text-caption text-muted-foreground">{member.email}</span>
+                        </span>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
           <Select value={addRole} onValueChange={(v) => v && setAddRole(v as SpaceRole)}>
             <SelectTrigger className="w-32">
               <SelectValue>{ROLE_LABELS[addRole]}</SelectValue>

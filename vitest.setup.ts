@@ -8,3 +8,17 @@ import "fake-indexeddb/auto";
 // every server-only module (Supabase server/admin clients, S3 presign) would
 // fail to import in tests without this.
 vi.mock("server-only", () => ({}));
+
+// jsdom has no ResizeObserver; cmdk (the Command palette/combobox primitive)
+// observes its list element to recalculate height, which throws without this.
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+vi.stubGlobal("ResizeObserver", ResizeObserverStub);
+
+// jsdom also has no scrollIntoView; cmdk calls it on the active item.
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}
