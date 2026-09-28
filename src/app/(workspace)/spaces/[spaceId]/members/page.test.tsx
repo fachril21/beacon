@@ -150,4 +150,16 @@ describe("SpaceMembersPage member picker", () => {
 
     expect(mockAddOrgMemberToSpace).toHaveBeenCalledWith("space-1", "budi-id", "viewer");
   });
+
+  it("falls back to the member's email on the trigger when they have no display name set", async () => {
+    const noName = { ...budi, name: "" };
+    mockAllUsers = [admin, alice, noName, citra];
+    await renderPage();
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "Pilih anggota Organisasi…" }));
+    await user.click(await screen.findByRole("option", { name: /budi@corp\.id/i }));
+
+    expect(await screen.findByRole("button", { name: "budi@corp.id" })).toBeInTheDocument();
+  });
 });

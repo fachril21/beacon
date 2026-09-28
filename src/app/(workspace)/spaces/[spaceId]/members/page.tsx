@@ -103,7 +103,7 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
             >
               <span className={pickedMember ? "truncate text-left" : "truncate text-left text-muted-foreground"}>
                 {pickedMember
-                  ? pickedMember.name
+                  ? pickedMember.name || pickedMember.email
                   : addableMembers.length === 0
                     ? "Semua anggota Organisasi sudah memiliki akses."
                     : "Pilih anggota Organisasi…"}
@@ -127,7 +127,7 @@ export default function SpaceMembersPage({ params }: { params: Promise<{ spaceId
                         }}
                       >
                         <span className="flex min-w-0 flex-col">
-                          <span className="truncate text-body-sm">{member.name}</span>
+                          {member.name && <span className="truncate text-body-sm">{member.name}</span>}
                           <span className="truncate text-caption text-muted-foreground">{member.email}</span>
                         </span>
                       </CommandItem>
