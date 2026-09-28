@@ -24,8 +24,8 @@ export function PublicSpaceView() {
   const rows = flattenPageTree(pages).filter(({ page }) => page.slug);
 
   return (
-    <main className="flex-1 px-8 py-12">
-      <div className="mx-auto max-w-reading-column">
+    <main className="flex-1 px-6 py-12 lg:px-8">
+      <div className="mx-auto max-w-(--width-reading-column)">
         {space.category && (
           <p className="mb-1.5 text-caption font-semibold tracking-[0.04em] text-muted-foreground uppercase">
             {space.category}

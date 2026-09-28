@@ -9,14 +9,15 @@ import type { ScreenshotBlock } from "@/lib/types";
 vi.mock("./comment-thread-panel", () => ({ CommentThreadPanel: () => null }));
 
 const mockUseScreenshotBlock = vi.fn();
-const mockUpdateAnnotations = vi.fn();
-const mockPatchAnnotationsLocal = vi.fn();
 vi.mock("@/hooks/use-screenshot-blocks", () => ({
   useScreenshotBlock: (id?: string) => mockUseScreenshotBlock(id),
   useUploadScreenshot: () => vi.fn(),
   useUpdateScreenshotDescription: () => vi.fn(),
-  useUpdateScreenshotAnnotations: () => mockUpdateAnnotations,
-  usePatchScreenshotAnnotationsLocal: () => mockPatchAnnotationsLocal,
+}));
+
+const mockOpenAnnotationFocus = vi.fn();
+vi.mock("@/lib/annotation-focus-store", () => ({
+  openAnnotationFocus: (blockId: string) => mockOpenAnnotationFocus(blockId),
 }));
 
 const mockBlock: ScreenshotBlock = {
@@ -74,45 +75,17 @@ describe("screenshot block render", () => {
     expect(document.querySelector("svg circle")).toBeInTheDocument();
   });
 
-  it("enters annotate mode with the tool palette when the thumbnail is clicked in edit mode", () => {
+  it("opens the full-screen annotation focus mode when the thumbnail is clicked in edit mode", () => {
     mockUseScreenshotBlock.mockReturnValue(mockBlock);
     render(<TestEditor editable={true} screenshotBlockId="shot-1" />);
     fireEvent.click(screen.getByRole("img"));
-    expect(screen.getByRole("button", { name: /Kotak/i })).toBeInTheDocument();
+    expect(mockOpenAnnotationFocus).toHaveBeenCalledWith("shot-1");
   });
 
-  it("exits annotate mode back to the plain thumbnail when 'Selesai' is clicked", () => {
+  it("opens the focus mode from the Edit anotasi pill too", () => {
     mockUseScreenshotBlock.mockReturnValue(mockBlock);
     render(<TestEditor editable={true} screenshotBlockId="shot-1" />);
-    fireEvent.click(screen.getByRole("img"));
-    fireEvent.click(screen.getByRole("button", { name: /Selesai/i }));
-    expect(screen.queryByRole("button", { name: /Kotak/i })).not.toBeInTheDocument();
-  });
-
-  it("patches annotations locally immediately, then debounce-saves to Supabase after placing a marker", () => {
-    vi.useFakeTimers();
-    Object.defineProperty(SVGSVGElement.prototype, "getBoundingClientRect", {
-      configurable: true,
-      value: () => ({ left: 0, top: 0, width: 400, height: 300, right: 400, bottom: 300, x: 0, y: 0, toJSON: () => ({}) }),
-    });
-    mockUseScreenshotBlock.mockReturnValue(mockBlock);
-    mockUpdateAnnotations.mockReset().mockResolvedValue(undefined);
-    mockPatchAnnotationsLocal.mockClear();
-
-    render(<TestEditor editable={true} screenshotBlockId="shot-1" />);
-    fireEvent.click(screen.getByRole("img"));
-    fireEvent.click(screen.getByRole("button", { name: /Penanda Bernomor/i }));
-
-    const canvas = document.querySelector('[data-testid="annotation-editor-canvas"]') as SVGSVGElement;
-    fireEvent.pointerDown(canvas, { clientX: 40, clientY: 30, pointerId: 1 });
-    fireEvent.pointerUp(window, { clientX: 40, clientY: 30, pointerId: 1 });
-
-    expect(mockPatchAnnotationsLocal).toHaveBeenCalledWith("shot-1", [expect.objectContaining({ type: "marker" })]);
-    expect(mockUpdateAnnotations).not.toHaveBeenCalled();
-
-    vi.advanceTimersByTime(500);
-    expect(mockUpdateAnnotations).toHaveBeenCalledWith("shot-1", [expect.objectContaining({ type: "marker" })]);
-
-    vi.useRealTimers();
+    fireEvent.click(screen.getByRole("button", { name: /edit anotasi/i }));
+    expect(mockOpenAnnotationFocus).toHaveBeenCalledWith("shot-1");
   });
 });

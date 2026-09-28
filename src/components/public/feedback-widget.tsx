@@ -46,7 +46,7 @@ export function FeedbackWidget({ pageId }: { pageId: string }) {
 
   if (submitted) {
     return (
-      <Card className="mx-auto mt-8 flex max-w-reading-column items-center justify-center gap-2 p-6">
+      <Card className="mx-auto mt-8 flex max-w-(--width-reading-column) items-center justify-center gap-2 p-6">
         <Check className="size-4 text-success" />
         <span className="text-body-sm text-muted-foreground">Terima kasih atas masukan Anda</span>
       </Card>
@@ -54,12 +54,12 @@ export function FeedbackWidget({ pageId }: { pageId: string }) {
   }
 
   return (
-    <Card className="mx-auto mt-8 max-w-reading-column p-8 text-center">
+    <Card className="mx-auto mt-8 max-w-(--width-reading-column) p-8 text-center">
       <h3 className="text-h4 font-semibold text-foreground">Apakah halaman ini membantu?</h3>
       <div className="mt-4 flex items-center justify-center gap-3">
         <Button
           variant={choice === "yes" ? undefined : "secondary"}
-          className={choice === "yes" ? "bg-primary-muted text-primary-muted-foreground hover:bg-primary-muted" : undefined}
+          className={cn("h-11 px-5", choice === "yes" && "bg-primary-muted text-primary-muted-foreground hover:bg-primary-muted")}
           onClick={() => void handleChoice("yes")}
           disabled={choice === "no" || isSubmitting}
         >
@@ -68,7 +68,7 @@ export function FeedbackWidget({ pageId }: { pageId: string }) {
         </Button>
         <Button
           variant="secondary"
-          className={cn(choice === "no" && "bg-primary-muted text-primary-muted-foreground hover:bg-primary-muted", choice === "yes" && "opacity-40")}
+          className={cn("h-11 px-5", choice === "no" && "bg-primary-muted text-primary-muted-foreground hover:bg-primary-muted", choice === "yes" && "opacity-40")}
           onClick={() => void handleChoice("no")}
           disabled={choice === "yes" || isSubmitting}
         >
@@ -84,7 +84,7 @@ export function FeedbackWidget({ pageId }: { pageId: string }) {
             placeholder="Apa yang bisa diperbaiki?"
             className="min-h-20"
           />
-          <Button variant="secondary" onClick={() => void handleSubmitComment()} className="self-end" disabled={isSubmitting}>
+          <Button variant="secondary" onClick={() => void handleSubmitComment()} className="h-11 self-end px-5" disabled={isSubmitting}>
             Kirim
           </Button>
         </div>

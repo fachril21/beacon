@@ -21,8 +21,16 @@ import type { BlockNoteEditor } from "@blocknote/core";
  *    BlockNote props only support string/number/boolean (@blocknote/core's
  *    PropSchema), so nesting is the only mechanism that can hold "arbitrary
  *    nested blocks" — and it's rendered automatically outside this file's
- *    `render` functions (see globals.css for the numbering/connector-line
- *    CSS that reaches into that auto-rendered nested DOM).
+ *    `render` functions.
+ *
+ *    The numbered circle and the vertical connector line (wireframe v2
+ *    §3.3) both live entirely in this file's own JSX/Tailwind classes, not
+ *    in globals.css — there is no separate stepper stylesheet anywhere in
+ *    the project (verified: globals.css has zero "step" references). The
+ *    connector is a `bg-border` line absolutely positioned inside each
+ *    step's (relatively positioned) circle column, running from just below
+ *    the circle to past the block's own bottom edge so it visually bridges
+ *    into the next step; it's only rendered when a step isn't the last one.
  */
 
 export const stepBlockConfig = {
@@ -63,13 +71,13 @@ function StepBlockRender({ block, editor }: StepRenderProps) {
   // siblings, so they need `useEditorState`'s editor-wide transaction
   // subscription to stay current — the same pattern BlockNote's own
   // ToggleWrapper uses for its reactive child count.
-  const { number, canRemove } = useEditorState({
+  const { number, canRemove, isLast } = useEditorState({
     editor: editor as AnyBlockNoteEditor,
     selector: () => {
       const parent = (editor as AnyBlockNoteEditor).getParentBlock(block.id);
       const siblingSteps = parent && parent.type === "stepper" ? parent.children.filter((child: { type: string }) => child.type === "step") : [];
       const index = siblingSteps.findIndex((sibling: { id: string }) => sibling.id === block.id);
-      return { number: index === -1 ? 1 : index + 1, canRemove: siblingSteps.length > 1 };
+      return { number: index === -1 ? 1 : index + 1, canRemove: siblingSteps.length > 1, isLast: index === -1 || index === siblingSteps.length - 1 };
     },
   });
 
@@ -88,10 +96,11 @@ function StepBlockRender({ block, editor }: StepRenderProps) {
 
   return (
     <div className="group/step flex w-full gap-3">
-      <div className="flex flex-col items-center pt-0.5">
+      <div className="relative flex flex-col items-center pt-0.5">
+        {!isLast && <span aria-hidden className="absolute top-6 -bottom-6 left-1/2 w-px -translate-x-1/2 bg-border" />}
         <span
           aria-label={`Langkah ${number}`}
-          className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-caption font-semibold text-primary-foreground"
+          className="relative flex size-6 shrink-0 items-center justify-center rounded-full bg-primary-muted text-caption font-semibold text-primary-muted-foreground"
         >
           {number}
         </span>
@@ -100,7 +109,7 @@ function StepBlockRender({ block, editor }: StepRenderProps) {
             type="button"
             aria-label={`Tambah langkah setelah langkah ${number}`}
             onClick={handleInsertAfter}
-            className="mt-1 flex size-4 shrink-0 items-center justify-center rounded-full text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground group-hover/step:opacity-100"
+            className="relative z-10 mt-1 flex size-4 shrink-0 items-center justify-center rounded-full bg-background text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground group-hover/step:opacity-100"
           >
             <Plus className="size-3" />
           </button>

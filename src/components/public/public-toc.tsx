@@ -11,9 +11,11 @@ import { cn } from "@/lib/utils";
 /**
  * Sidebar for the public site — scoped to the ONE Space the visitor is in
  * (resolved by the layout shell into PublicSpaceContext), never a merged list
- * across Spaces. Renders nothing on the Space directory (org home).
+ * across Spaces. Renders nothing on the Space directory (org home). Reused
+ * as-is inside the mobile nav's sheet (PublicNav) — `onNavigate` closes that
+ * sheet after a link is picked; unused on desktop.
  */
-export function PublicToc() {
+export function PublicToc({ onNavigate }: { onNavigate?: () => void }) {
   const current = usePublicSpace();
   const { basePath } = usePublicOrgContext();
   const pathname = usePathname();
@@ -24,9 +26,10 @@ export function PublicToc() {
   const rows = flattenPageTree(pages).filter(({ page }) => page.slug);
 
   return (
-    <nav className="flex flex-col gap-4 px-4 py-6">
+    <nav aria-label="Daftar halaman Space" className="flex flex-col gap-4 px-4 py-6">
       <Link
         href={basePath}
+        onClick={onNavigate}
         className="flex items-center gap-1.5 px-2 text-caption font-medium text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="size-3" />
@@ -45,11 +48,13 @@ export function PublicToc() {
               <Link
                 key={page.id}
                 href={href}
+                onClick={onNavigate}
                 data-depth={depth}
                 style={{ paddingLeft: `${8 + depth * 16}px` }}
                 className={cn(
-                  "rounded-sm py-1.5 pr-2 text-body-sm text-muted-foreground hover:bg-accent hover:text-foreground",
-                  isActive && "bg-accent text-foreground font-medium",
+                  "relative rounded-sm py-1.5 pr-2 text-body-sm text-muted-foreground hover:bg-accent hover:text-foreground",
+                  isActive &&
+                    "bg-accent font-medium text-primary-muted-foreground before:absolute before:inset-y-1 before:left-0 before:w-0.5 before:rounded-full before:bg-primary",
                 )}
               >
                 {page.title || "Halaman tanpa judul"}

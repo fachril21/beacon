@@ -12,6 +12,7 @@ import { codeBlockExitExtension } from "./code-block-exit-extension";
 import { trailingParagraphExtension } from "./trailing-paragraph-extension";
 import { usePageAutosave, type SaveStatus } from "@/hooks/use-page-autosave";
 import { PageIdProvider } from "./page-id-context";
+import { AnnotationFocusMode } from "./annotation-focus-mode";
 import { normalizePageContent } from "@/lib/legacy-lexical-content";
 import type { Page, PageContent } from "@/lib/types";
 
@@ -77,6 +78,7 @@ export function PageEditor({
         <EditorFormattingToolbar />
         <LinkToolbarController />
       </BlockNoteView>
+      <AnnotationFocusMode />
     </PageIdProvider>
   );
 }

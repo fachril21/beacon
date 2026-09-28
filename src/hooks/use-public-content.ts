@@ -7,15 +7,26 @@ import { mapSpaceRow, mapPageRow, type SpaceRow, type PageRow } from "@/lib/supa
 import { buildPageTree, type PageTreeNode } from "@/lib/build-page-tree";
 import type { Page, Space } from "@/lib/types";
 
+export interface PublicRecentPage {
+  title: string;
+  slug: string;
+  publishedAt: string;
+}
+
 /**
  * The publishable Spaces of an Organization that have at least one published
  * Page — the public site home is a directory of these (per-Space publishing,
- * not one merged page list). Explicitly scoped by organizationId at the query
+ * not one merged page list) — plus the 4 most recently published page titles
+ * across all of them, for the home hero's "Terbaru:" chip row (wireframe v2
+ * §3.5; explicitly not called "Populer" since it's recency, not traffic).
+ * Both are derived from the same published-pages query, so this doesn't add
+ * a second round trip. Explicitly scoped by organizationId at the query
  * level, same as every other hook here, since Epic 14a's Host-header
  * middleware only sets a header and does not yet filter queries.
  */
 export function usePublicSpaces(organizationId: string | undefined) {
   const [spaces, setSpaces] = useState<{ space: Space; publishedPageCount: number }[]>([]);
+  const [recentPages, setRecentPages] = useState<PublicRecentPage[]>([]);
 
   useEffect(() => {
     if (!organizationId) return;
@@ -34,13 +45,16 @@ export function usePublicSpaces(organizationId: string | undefined) {
       }
       const allSpaces = ((spaceRows ?? []) as SpaceRow[]).map(mapSpaceRow);
       if (allSpaces.length === 0) {
-        if (!cancelled) setSpaces([]);
+        if (!cancelled) {
+          setSpaces([]);
+          setRecentPages([]);
+        }
         return;
       }
 
       const { data: pageRows, error: pageError } = await supabase
         .from("pages")
-        .select("space_id")
+        .select("space_id, title, slug, published_at")
         .in(
           "space_id",
           allSpaces.map((s) => s.id),
@@ -51,8 +65,10 @@ export function usePublicSpaces(organizationId: string | undefined) {
         return;
       }
 
+      const publishedPages = (pageRows ?? []) as { space_id: string; title: string; slug: string | null; published_at: string | null }[];
+
       const countBySpaceId = new Map<string, number>();
-      for (const row of (pageRows ?? []) as { space_id: string }[]) {
+      for (const row of publishedPages) {
         countBySpaceId.set(row.space_id, (countBySpaceId.get(row.space_id) ?? 0) + 1);
       }
 
@@ -60,7 +76,16 @@ export function usePublicSpaces(organizationId: string | undefined) {
         .map((space) => ({ space, publishedPageCount: countBySpaceId.get(space.id) ?? 0 }))
         .filter((entry) => entry.publishedPageCount > 0);
 
-      if (!cancelled) setSpaces(result);
+      const recent = publishedPages
+        .filter((row): row is { space_id: string; title: string; slug: string; published_at: string } => Boolean(row.slug && row.published_at))
+        .sort((a, b) => (a.published_at < b.published_at ? 1 : -1))
+        .slice(0, 4)
+        .map((row) => ({ title: row.title, slug: row.slug, publishedAt: row.published_at }));
+
+      if (!cancelled) {
+        setSpaces(result);
+        setRecentPages(recent);
+      }
     })();
 
     return () => {
@@ -68,7 +93,7 @@ export function usePublicSpaces(organizationId: string | undefined) {
     };
   }, [organizationId]);
 
-  return organizationId ? spaces : [];
+  return { spaces: organizationId ? spaces : [], recentPages: organizationId ? recentPages : [] };
 }
 
 /**

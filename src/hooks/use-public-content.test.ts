@@ -71,18 +71,47 @@ describe("usePublicSpaces", () => {
   it("returns publishable Spaces of the Organization that have at least one published Page, with a page count", async () => {
     mockFrom({
       spaces: [{ data: [spaceRow(), spaceRow({ id: "space-2", slug: "empty-space" })], error: null }],
-      pages: [{ data: [{ space_id: "space-1" }, { space_id: "space-1" }], error: null }],
+      pages: [
+        {
+          data: [
+            { space_id: "space-1", title: "Getting started", slug: "getting-started", published_at: "2026-01-01T00:00:00.000Z" },
+            { space_id: "space-1", title: "Advanced setup", slug: "advanced-setup", published_at: "2026-01-02T00:00:00.000Z" },
+          ],
+          error: null,
+        },
+      ],
     });
 
     const { result } = renderHook(() => usePublicSpaces("org-1"));
-    await waitFor(() => expect(result.current).toHaveLength(1));
+    await waitFor(() => expect(result.current.spaces).toHaveLength(1));
 
-    expect(result.current[0]).toMatchObject({ space: { id: "space-1", slug: "mobile-app" }, publishedPageCount: 2 });
+    expect(result.current.spaces[0]).toMatchObject({ space: { id: "space-1", slug: "mobile-app" }, publishedPageCount: 2 });
   });
 
-  it("returns an empty array without querying when organizationId is undefined", () => {
+  it("returns the 4 most recently published page titles across Spaces, newest first", async () => {
+    mockFrom({
+      spaces: [{ data: [spaceRow()], error: null }],
+      pages: [
+        {
+          data: [
+            { space_id: "space-1", title: "Oldest", slug: "oldest", published_at: "2026-01-01T00:00:00.000Z" },
+            { space_id: "space-1", title: "Newest", slug: "newest", published_at: "2026-01-04T00:00:00.000Z" },
+            { space_id: "space-1", title: "Middle", slug: "middle", published_at: "2026-01-02T00:00:00.000Z" },
+          ],
+          error: null,
+        },
+      ],
+    });
+
+    const { result } = renderHook(() => usePublicSpaces("org-1"));
+    await waitFor(() => expect(result.current.recentPages).toHaveLength(3));
+
+    expect(result.current.recentPages.map((p) => p.title)).toEqual(["Newest", "Middle", "Oldest"]);
+  });
+
+  it("returns empty spaces and recentPages without querying when organizationId is undefined", () => {
     const { result } = renderHook(() => usePublicSpaces(undefined));
-    expect(result.current).toEqual([]);
+    expect(result.current).toEqual({ spaces: [], recentPages: [] });
     expect(mockSupabase.from).not.toHaveBeenCalled();
   });
 });

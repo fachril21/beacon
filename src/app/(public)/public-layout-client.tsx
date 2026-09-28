@@ -24,7 +24,7 @@ export function PublicLayoutClient({ children }: { children: React.ReactNode }) 
         <PublicNav organization={organization} />
         <div className="mx-auto flex w-full max-w-[90rem] flex-1">
           {isInsideSpace && (
-            <aside className="hidden w-toc-rail shrink-0 border-r border-border lg:block">
+            <aside className="hidden w-public-tree shrink-0 border-r border-border lg:block">
               <PublicToc />
             </aside>
           )}

@@ -208,6 +208,8 @@ export interface Annotation {
   height?: number;
   /** Free text — only set for type "label". */
   text?: string;
+  /** Absolute SVG stroke width in the image's own pixel space. Undefined for annotations drawn before this field existed — renders at AnnotationOverlay's own computed default (see annotationStrokeWidth). */
+  strokeWidth?: number;
 }
 
 // ---------------------------------------------------------------------------

@@ -19,8 +19,6 @@ export function AnnotationOverlay({
 }) {
   if (!annotations.length) return null;
 
-  const strokeWidth = annotationStrokeWidth(imageWidth);
-
   return (
     <svg viewBox={`0 0 ${imageWidth} ${imageHeight}`} className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden>
       <defs>
@@ -33,7 +31,13 @@ export function AnnotationOverlay({
           ))}
       </defs>
       {annotations.map((a) => (
-        <AnnotationShape key={a.id} annotation={a} imageWidth={imageWidth} imageHeight={imageHeight} strokeWidth={strokeWidth} />
+        <AnnotationShape
+          key={a.id}
+          annotation={a}
+          imageWidth={imageWidth}
+          imageHeight={imageHeight}
+          strokeWidth={a.strokeWidth ?? annotationStrokeWidth(imageWidth)}
+        />
       ))}
     </svg>
   );

@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useState } from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { AnnotationEditorOverlay } from "./annotation-editor-overlay";
+import { AnnotationEditorOverlay, SWATCHES } from "./annotation-editor-overlay";
+import { annotationStrokeWidth } from "./annotation-overlay";
 import type { Annotation, AnnotationShapeType } from "@/lib/types";
 
 // jsdom never computes real layout, so the SVG's bounding rect is all zeros
@@ -14,13 +15,15 @@ beforeEach(() => {
   });
 });
 
-// A stateful wrapper: mirrors how the real screenshot-block.tsx parent wires
-// this component (annotations flow back in through props once the caller's
-// store patches), so DOM assertions about "what got created" work the same
-// way they would in the app, not just spy-call assertions.
+// A stateful wrapper mirroring how the real caller (AnnotationFocusMode)
+// wires this component: tool/color/selection are all controlled from
+// outside, annotations flow back in through props once the caller's store
+// patches — so DOM assertions about "what got created" work the same way
+// they would in the app, not just spy-call assertions.
 function renderOverlay(overrides: {
   annotations?: Annotation[];
   activeTool?: AnnotationShapeType | null;
+  activeColor?: string;
   imageWidth?: number;
   imageHeight?: number;
 } = {}) {
@@ -30,24 +33,37 @@ function renderOverlay(overrides: {
   function Harness() {
     const [annotations, setAnnotations] = useState<Annotation[]>(overrides.annotations ?? []);
     const [activeTool, setActiveTool] = useState<AnnotationShapeType | null>(overrides.activeTool ?? null);
+    const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [activeColor, setActiveColor] = useState(overrides.activeColor ?? SWATCHES[2]);
+    const imageWidth = overrides.imageWidth ?? 800;
     return (
-      <AnnotationEditorOverlay
-        annotations={annotations}
-        imageWidth={overrides.imageWidth ?? 800}
-        imageHeight={overrides.imageHeight ?? 600}
-        activeTool={activeTool}
-        onActiveToolChange={(tool) => {
-          onActiveToolChange(tool);
-          setActiveTool(tool);
-        }}
-        onAnnotationsChange={(next) => {
-          onAnnotationsChange(next);
-          setAnnotations(next);
-        }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element -- test stand-in for the real next/image the caller provides */}
-        <img src="shot.png" alt="" />
-      </AnnotationEditorOverlay>
+      <>
+        {/* Stands in for the focus mode's properties bar — a real <button> per swatch, same as the app. */}
+        {SWATCHES.map((color) => (
+          <button key={color} type="button" aria-label={`Warna ${color}`} onClick={() => setActiveColor(color)} />
+        ))}
+        <AnnotationEditorOverlay
+          annotations={annotations}
+          imageWidth={imageWidth}
+          imageHeight={overrides.imageHeight ?? 600}
+          activeTool={activeTool}
+          onActiveToolChange={(tool) => {
+            onActiveToolChange(tool);
+            setActiveTool(tool);
+          }}
+          activeColor={activeColor}
+          activeStrokeWidth={annotationStrokeWidth(imageWidth)}
+          selectedId={selectedId}
+          onSelectedIdChange={setSelectedId}
+          onAnnotationsChange={(next) => {
+            onAnnotationsChange(next);
+            setAnnotations(next);
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- test stand-in for the real next/image the caller provides */}
+          <img src="shot.png" alt="" />
+        </AnnotationEditorOverlay>
+      </>
     );
   }
 
@@ -56,22 +72,8 @@ function renderOverlay(overrides: {
   return { ...utils, canvas, onAnnotationsChange, onActiveToolChange };
 }
 
-describe("AnnotationEditorOverlay toolbar", () => {
-  it("renders a button for each of the four required annotation tools", () => {
-    renderOverlay();
-    expect(screen.getByRole("button", { name: /Penanda Bernomor/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Panah/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Kotak/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Label Teks/i })).toBeInTheDocument();
-  });
-
-  it("selects a tool when its button is clicked", async () => {
-    const { onActiveToolChange } = renderOverlay();
-    fireEvent.click(screen.getByRole("button", { name: /Kotak/i }));
-    expect(onActiveToolChange).toHaveBeenCalledWith("box");
-  });
-
-  it("uses the chosen swatch color for the next placed shape", () => {
+describe("AnnotationEditorOverlay — color prop", () => {
+  it("uses the caller's activeColor for the next placed shape", () => {
     const { canvas, onAnnotationsChange } = renderOverlay({ activeTool: "marker" });
     fireEvent.click(screen.getByRole("button", { name: /Warna oklch\(0.680 0.190 25\)/i }));
 
@@ -83,7 +85,7 @@ describe("AnnotationEditorOverlay toolbar", () => {
 });
 
 describe("AnnotationEditorOverlay — placing shapes", () => {
-  it("places a numbered marker at the clicked point and returns the tool to select mode", () => {
+  it("places a numbered marker at the clicked point (no drag) and returns the tool to select mode", () => {
     const { canvas, onAnnotationsChange, onActiveToolChange } = renderOverlay({ activeTool: "marker" });
 
     fireEvent.pointerDown(canvas, { clientX: 80, clientY: 60, pointerId: 1 });
@@ -95,8 +97,36 @@ describe("AnnotationEditorOverlay — placing shapes", () => {
     expect(onActiveToolChange).toHaveBeenCalledWith(null);
   });
 
-  it("numbers sequential markers using the highest existing order + 1", () => {
-    const existing: Annotation[] = [{ id: "a1", type: "marker", order: 1, color: "#fff", x: 0.2, y: 0.2 }];
+  it("dragging the marker tool beyond the threshold adds a linked arrow from the badge to the release point", () => {
+    const { canvas, onAnnotationsChange, onActiveToolChange } = renderOverlay({ activeTool: "marker" });
+
+    fireEvent.pointerDown(canvas, { clientX: 80, clientY: 60, pointerId: 1 });
+    fireEvent.pointerMove(window, { clientX: 240, clientY: 60, pointerId: 1 });
+    fireEvent.pointerUp(window, { clientX: 240, clientY: 60, pointerId: 1 });
+
+    expect(onAnnotationsChange).toHaveBeenLastCalledWith([
+      expect.objectContaining({ type: "marker", order: 1, x: 0.1, y: 0.1 }),
+      expect.objectContaining({ type: "arrow", order: 1, x: 0.1, y: 0.1, x2: 0.3, y2: 0.1 }),
+    ]);
+    expect(onActiveToolChange).toHaveBeenCalledWith(null);
+  });
+
+  it("a marker drag that never crosses the threshold leaves only the badge, no arrow", () => {
+    const { canvas, onAnnotationsChange } = renderOverlay({ activeTool: "marker" });
+
+    fireEvent.pointerDown(canvas, { clientX: 80, clientY: 60, pointerId: 1 });
+    fireEvent.pointerMove(window, { clientX: 82, clientY: 60, pointerId: 1 }); // 2px ~ well under the 1.5% threshold
+    fireEvent.pointerUp(window, { clientX: 82, clientY: 60, pointerId: 1 });
+
+    expect(onAnnotationsChange).toHaveBeenLastCalledWith([expect.objectContaining({ type: "marker" })]);
+    expect(onAnnotationsChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("numbers sequential markers using the highest existing order + 1, without the linked arrow consuming a number", () => {
+    const existing: Annotation[] = [
+      { id: "a1", type: "marker", order: 1, color: "#fff", x: 0.2, y: 0.2 },
+      { id: "a1-arrow", type: "arrow", order: 1, color: "#fff", x: 0.2, y: 0.2, x2: 0.4, y2: 0.2 },
+    ];
     const { canvas, onAnnotationsChange } = renderOverlay({ activeTool: "marker", annotations: existing });
 
     fireEvent.pointerDown(canvas, { clientX: 400, clientY: 300, pointerId: 1 });
@@ -104,6 +134,7 @@ describe("AnnotationEditorOverlay — placing shapes", () => {
 
     expect(onAnnotationsChange).toHaveBeenCalledWith([
       existing[0],
+      existing[1],
       expect.objectContaining({ type: "marker", order: 2 }),
     ]);
   });
