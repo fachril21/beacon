@@ -91,8 +91,7 @@ export default function PageEditorPage({ params }: { params: Promise<{ spaceId: 
       <div className="flex min-h-0 flex-1">
         {/* md:px-14 + the column's px-6 = 80px, exactly BlockNote's side-menu gutter ("+" and drag handle), which would otherwise be clipped by this scroll container when the column is squeezed (e.g. 1280px with the panel open). */}
         <main ref={scrollRootRef} className="min-w-0 flex-1 overflow-y-auto md:px-14">
-          {/* max-w-(--width-editor-column), not max-w-editor-column: Tailwind 4's max-w-* reads the --container-* namespace, so the bare token name resolves to nothing. */}
-          <div className="mx-auto w-full max-w-(--width-editor-column) px-6 pt-11 pb-24">
+          <div className="mx-auto w-full max-w-editor-column px-6 pt-11 pb-24">
             <input
               id="page-title"
               name="page-title"

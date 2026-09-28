@@ -39,14 +39,14 @@ Dokumen ini menerjemahkan wireframe v2 ke pekerjaan konkret di repo `fachril21/b
 
 ## 1. Delta token
 
-Token lebar ada di `src/app/globals.css` (blok `--width-*`). Perubahan:
+Token lebar ada di `src/app/globals.css` (blok `--width-*`; batas kolom konten memakai `--container-*` karena `max-w-*` Tailwind 4 hanya membaca namespace `--container-*`). Perubahan:
 
 | Token | Sekarang | Wireframe v2 | Catatan |
 |---|---|---|---|
 | `--width-sidebar` | 17rem (272px) | **16rem (256px)** | Ubah nilai. |
-| `--width-editor-column` | 47.5rem (760px) | 47.5rem | Tetap. |
-| `--width-reading-column` | 45rem (720px) | 45rem | Tetap. |
-| `--width-screenshot-breakout` | 60rem (960px) | 60rem | Tetap, tapi selalu di-clamp ke lebar container (lihat 3.3). |
+| `--container-editor-column` | 47.5rem (760px) | 47.5rem | Tetap. |
+| `--container-reading-column` | 45rem (720px) | 45rem | Tetap. |
+| `--container-screenshot-breakout` | 60rem (960px) | 60rem | Tetap, tapi selalu di-clamp ke lebar container (lihat 3.3). |
 | `--width-toc-rail` | 15rem (240px) | **13.75rem (220px)** | Dipakai untuk kolom "Di halaman ini" publik. |
 | `--width-right-panel` | (baru) | **20rem (320px)** | Panel kanan editor. |
 | `--width-public-tree` | (baru) | **16.25rem (260px)** | Sidebar tema publik. |
