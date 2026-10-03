@@ -99,12 +99,15 @@ export function EditorSidePanel({
   onTabChange,
   onClose,
   scrollRootRef,
+  canRestore,
 }: {
   page: Page;
   tab: EditorSidePanelTab;
   onTabChange: (tab: EditorSidePanelTab) => void;
   onClose: () => void;
   scrollRootRef: RefObject<HTMLElement | null>;
+  /** Editors/admins only — RLS rejects a Viewer's restore, so the action is hidden for them. */
+  canRestore: boolean;
 }) {
   const commentCount = usePageComments(page.id).length;
 
@@ -149,7 +152,7 @@ export function EditorSidePanel({
           <PageCommentList page={page} scrollRootRef={scrollRootRef} />
         </TabsContent>
         <TabsContent value="history" className="flex min-h-0 flex-col">
-          <VersionHistoryPanel page={page} onRestored={onClose} />
+          <VersionHistoryPanel page={page} canRestore={canRestore} onRestored={onClose} />
         </TabsContent>
       </Tabs>
     </aside>

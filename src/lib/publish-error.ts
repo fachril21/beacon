@@ -18,7 +18,7 @@ function readCode(error: unknown): string | null {
  */
 export function describePublishError(error: unknown): string {
   const code = readCode(error);
-  if (code === "42501") return "Anda tidak memiliki izin untuk memublikasikan halaman ini.";
+  if (code === "42501") return "Anda tidak memiliki izin untuk melakukan tindakan ini pada halaman ini.";
   if (code === "23505") return "Slug halaman bentrok dengan halaman lain di organisasi ini.";
   if (code && MISSING_MIGRATION_CODES.has(code)) {
     return "Database belum diperbarui (migrasi belum dijalankan). Hubungi admin.";

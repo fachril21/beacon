@@ -5,6 +5,7 @@ import { pagesStore } from "@/lib/supabase/stores";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { mapPageRow, type PageRow } from "@/lib/supabase/mappers";
 import { emptyDoc } from "@/lib/mock/blocknote-content";
+import { contentFingerprint } from "@/lib/content-fingerprint";
 import { extractPlainText } from "@/lib/extract-text";
 import type { Page, PageContent } from "@/lib/types";
 
@@ -204,9 +205,12 @@ export function usePublishActions() {
 /** Whether a Page's draft has diverged from its last published snapshot (Flow 4 step 4). */
 export function hasUnpublishedChanges(page: Page): boolean {
   if (!page.isPublished || !page.publishedContentSnapshot) return false;
+  // Fingerprint, not raw JSON: block ids and a trailing empty line differ
+  // without the user changing anything, and typing then deleting text must
+  // count as "no change" (see content-fingerprint.ts).
   return (
     page.title !== page.publishedContentSnapshot.title ||
-    JSON.stringify(page.content) !== JSON.stringify(page.publishedContentSnapshot.content)
+    contentFingerprint(page.content) !== contentFingerprint(page.publishedContentSnapshot.content)
   );
 }
 

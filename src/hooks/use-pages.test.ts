@@ -6,7 +6,7 @@ import { emptyDoc, doc, paragraph } from "@/lib/mock/blocknote-content";
 const mockSupabase = { from: vi.fn(), rpc: vi.fn() };
 vi.mock("@/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => mockSupabase }));
 
-const { useCreatePage, useUpdatePageContent, useReorderPages, usePublishActions, useDeletePage } = await import("./use-pages");
+const { useCreatePage, useUpdatePageContent, useReorderPages, usePublishActions, useDeletePage, hasUnpublishedChanges } = await import("./use-pages");
 
 function resetStore() {
   pagesStore.setState([]);
@@ -320,5 +320,44 @@ describe("useDeletePage", () => {
     const { result } = renderHook(() => useDeletePage());
     await expect(result.current("page-1")).rejects.toEqual({ message: "permission denied" });
     expect(pagesStore.getState().map((p) => p.id)).toEqual(["page-1"]);
+  });
+});
+
+describe("hasUnpublishedChanges", () => {
+  const text = (value: string) => [{ type: "text", text: value, styles: {} }];
+  const block = (value: string, id = "b1") => ({ id, type: "paragraph", props: {}, content: value ? text(value) : [], children: [] });
+  const publishedPage = (content: unknown[], snapshotContent: unknown[], title = "Judul", snapshotTitle = "Judul") =>
+    ({
+      id: "page-1",
+      isPublished: true,
+      title,
+      content,
+      publishedContentSnapshot: { title: snapshotTitle, content: snapshotContent, publishedAt: "t", screenshotBlocks: {} },
+    }) as unknown as Parameters<typeof hasUnpublishedChanges>[0];
+
+  it("is false for a draft (never published) page", () => {
+    expect(hasUnpublishedChanges({ ...publishedPage([], []), isPublished: false } as never)).toBe(false);
+  });
+
+  it("is true when the text differs from the published snapshot", () => {
+    expect(hasUnpublishedChanges(publishedPage([block("Halo dunia")], [block("Halo")]))).toBe(true);
+  });
+
+  it("is true when only the title differs", () => {
+    expect(hasUnpublishedChanges(publishedPage([block("Halo")], [block("Halo")], "Judul baru", "Judul"))).toBe(true);
+  });
+
+  it("is false when the only difference is a trailing empty line (click on a new line)", () => {
+    expect(hasUnpublishedChanges(publishedPage([block("Halo"), block("", "b2")], [block("Halo")]))).toBe(false);
+  });
+
+  it("is false when only block ids differ", () => {
+    expect(hasUnpublishedChanges(publishedPage([block("Halo", "x")], [block("Halo", "y")]))).toBe(false);
+  });
+
+  it("is false again after text is added and then removed (undo back to the published content)", () => {
+    const published = [block("Halo")];
+    expect(hasUnpublishedChanges(publishedPage([block("Halo some text")], published))).toBe(true);
+    expect(hasUnpublishedChanges(publishedPage([block("Halo")], published))).toBe(false);
   });
 });

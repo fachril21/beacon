@@ -16,12 +16,14 @@ const RETRY_DELAY_MS = 4000;
  * crash/reload and is retried automatically — Flow 3's failure path, for
  * real (Epic 11 US11.1), not simulated.
  */
-export function usePageAutosave(pageId: string, simulateFailure = false) {
+export function usePageAutosave(pageId: string, simulateFailure = false, onSaved?: (content: PageContent) => void) {
   const updateContent = useUpdatePageContent();
   const [status, setStatus] = useState<SaveStatus>("idle");
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Latest callback without re-creating persistNow (and its pending retry) on every render.
+  const onSavedRef = useRef(onSaved);
   const [isOnline, setIsOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
 
   // A retry needs to call "whatever persistNow is on the next render," not
@@ -40,6 +42,7 @@ export function usePageAutosave(pageId: string, simulateFailure = false) {
         await updateContent(pageId, content);
         await clearPendingEdit(pageId);
         setStatus("saved");
+        onSavedRef.current?.(content);
         savedFadeRef.current = setTimeout(() => setStatus("idle"), 2000);
       } catch {
         await savePendingEdit(pageId, content);
@@ -52,7 +55,8 @@ export function usePageAutosave(pageId: string, simulateFailure = false) {
 
   useEffect(() => {
     persistNowRef.current = persistNow;
-  }, [persistNow]);
+    onSavedRef.current = onSaved;
+  }, [persistNow, onSaved]);
 
   // Crash/reload recovery: a buffered edit from before this mount means the
   // last session ended without a confirmed save — flush it immediately.
@@ -113,6 +117,14 @@ export function usePageAutosave(pageId: string, simulateFailure = false) {
     [isOnline, pageId, persistNow],
   );
 
+  /** Drops a debounced save that has not fired yet — the edit that scheduled it was undone. */
+  const cancelScheduledSave = useCallback(() => {
+    if (!timeoutRef.current) return;
+    clearTimeout(timeoutRef.current);
+    timeoutRef.current = null;
+    setStatus("idle");
+  }, []);
+
   useEffect(() => {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -121,5 +133,5 @@ export function usePageAutosave(pageId: string, simulateFailure = false) {
     };
   }, []);
 
-  return { status, scheduleSave };
+  return { status, scheduleSave, cancelScheduledSave };
 }

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useUpdatePageTitle } from "@/hooks/use-pages";
+import { useEditorRevision } from "@/lib/editor-revision-store";
 
 const TITLE_AUTOSAVE_DEBOUNCE_MS = 800;
 
@@ -27,16 +28,26 @@ const TITLE_AUTOSAVE_DEBOUNCE_MS = 800;
 export function useTitleAutosave(pageId: string, loadedTitle: string | undefined, onError?: (error: unknown) => void) {
   const updateTitle = useUpdatePageTitle();
   const [title, setTitle] = useState(loadedTitle ?? "");
-  const syncedForPageIdRef = useRef<string | null>(null);
+  const syncedForRef = useRef<string | null>(null);
+  // A Version restore replaces the title from outside; it bumps this revision.
+  const revision = useEditorRevision(pageId);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (loadedTitle !== undefined && syncedForPageIdRef.current !== pageId) {
+    const syncKey = `${pageId}:${revision}`;
+    if (loadedTitle !== undefined && syncedForRef.current !== syncKey) {
+      // Drop an unsaved keystroke buffer: it predates the title being adopted
+      // and would otherwise overwrite a just-restored title.
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+      pendingRef.current = null;
       setTitle(loadedTitle);
-      syncedForPageIdRef.current = pageId;
+      syncedForRef.current = syncKey;
     }
-  }, [pageId, loadedTitle]);
+  }, [pageId, loadedTitle, revision]);
 
   const persist = useCallback(
     async (id: string, value: string) => {

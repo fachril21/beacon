@@ -8,6 +8,9 @@ import { useSpace, useSpaceRole } from "@/hooks/use-spaces";
 import { usePage } from "@/hooks/use-pages";
 import { useTitleAutosave } from "@/hooks/use-title-autosave";
 import { useSession } from "@/hooks/use-session";
+import { useEditorRevision } from "@/lib/editor-revision-store";
+import { useVersionPreview } from "@/lib/version-preview-store";
+import { VersionPreview } from "@/components/editor/version-preview";
 import { PageEditor } from "@/components/editor/page-editor";
 import { PageEditorToolbar } from "@/components/editor/page-editor-toolbar";
 import { PageMetaRow } from "@/components/editor/page-meta-row";
@@ -40,6 +43,9 @@ export default function PageEditorPage({ params }: { params: Promise<{ spaceId: 
   const parentPage = usePage(page?.parentPageId ?? undefined);
   const role = useSpaceRole(spaceId, user?.id);
   const canEdit = role === "editor" || role === "admin";
+  const editorRevision = useEditorRevision(pageId);
+  const previewedVersion = useVersionPreview(pageId);
+  const isPreviewingVersion = previewedVersion !== null;
   const handleTitleSaveError = useCallback(() => {
     toast.error("Judul gagal disimpan, silakan coba lagi.");
   }, []);
@@ -96,19 +102,23 @@ export default function PageEditorPage({ params }: { params: Promise<{ spaceId: 
             <input
               id="page-title"
               name="page-title"
-              value={title}
+              value={previewedVersion ? previewedVersion.title : title}
               onChange={(e) => scheduleTitleSave(e.target.value)}
               onBlur={() => void flushTitleSave()}
-              readOnly={!canEdit}
+              readOnly={!canEdit || isPreviewingVersion}
               placeholder="Halaman tanpa judul"
               autoFocus={!page.title}
               className="w-full border-none bg-transparent text-h1 font-bold text-foreground outline-none placeholder:text-muted-foreground read-only:cursor-default"
             />
             <div className="mt-3.5">
-              <PageMetaRow page={page} canEdit={canEdit} />
+              {!isPreviewingVersion && <PageMetaRow page={page} canEdit={canEdit} />}
             </div>
             <div className="mt-6">
-              <PageEditor key={pageId} page={page} onStatusChange={setSaveStatus} editable={canEdit} />
+              {/* The live editor stays mounted (just hidden) while an old version is shown, so an edit that has not autosaved yet is never lost. */}
+              <div hidden={isPreviewingVersion}>
+                <PageEditor key={`${pageId}:${editorRevision}`} page={page} onStatusChange={setSaveStatus} editable={canEdit} />
+              </div>
+              {previewedVersion && <VersionPreview key={previewedVersion.id} version={previewedVersion} />}
             </div>
           </div>
         </main>
@@ -119,6 +129,7 @@ export default function PageEditorPage({ params }: { params: Promise<{ spaceId: 
             onTabChange={openPanelTab}
             onClose={closePanel}
             scrollRootRef={scrollRootRef}
+            canRestore={canEdit}
           />
         )}
       </div>

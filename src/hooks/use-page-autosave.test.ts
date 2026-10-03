@@ -44,6 +44,35 @@ describe("usePageAutosave", () => {
     expect(await loadPendingEdit("page-1")).toBeNull();
   }, 10000);
 
+  it("calls onSaved with the saved content after a successful save, and not after a failed one", async () => {
+    const onSaved = vi.fn();
+    updateContent.mockResolvedValueOnce(undefined);
+    const { result } = renderHook(() => usePageAutosave("page-1", false, onSaved));
+    const content = emptyDoc();
+
+    act(() => result.current.scheduleSave(content));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(content), { timeout: WAIT_TIMEOUT });
+
+    onSaved.mockClear();
+    updateContent.mockRejectedValue(new Error("network down"));
+    act(() => result.current.scheduleSave(content));
+    await waitFor(() => expect(result.current.status).toBe("error"), { timeout: WAIT_TIMEOUT });
+    expect(onSaved).not.toHaveBeenCalled();
+  }, 15000);
+
+  it("cancelScheduledSave drops a pending save and returns the status to idle", async () => {
+    updateContent.mockResolvedValue(undefined);
+    const { result } = renderHook(() => usePageAutosave("page-1"));
+
+    act(() => result.current.scheduleSave(emptyDoc()));
+    expect(result.current.status).toBe("saving");
+    act(() => result.current.cancelScheduledSave());
+    expect(result.current.status).toBe("idle");
+
+    await new Promise((resolve) => setTimeout(resolve, 3000)); // longer than the 2.5s debounce
+    expect(updateContent).not.toHaveBeenCalled();
+  }, 10000);
+
   it("flushes a pre-existing buffered edit on mount (crash/reload recovery)", async () => {
     const buffered = emptyDoc();
     await savePendingEdit("page-1", buffered);

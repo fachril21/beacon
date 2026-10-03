@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { filterSuggestionItems } from "@blocknote/core";
 import { en } from "@blocknote/core/locales";
 import { useCreateBlockNote, SuggestionMenuController, LinkToolbarController, type DefaultReactSuggestionItem } from "@blocknote/react";
@@ -11,6 +11,9 @@ import { EditorFormattingToolbar } from "./formatting-toolbar";
 import { codeBlockExitExtension } from "./code-block-exit-extension";
 import { trailingParagraphExtension } from "./trailing-paragraph-extension";
 import { usePageAutosave, type SaveStatus } from "@/hooks/use-page-autosave";
+import { contentFingerprint } from "@/lib/content-fingerprint";
+import { useVersionSnapshots } from "@/hooks/use-versions";
+import { useIsVersionPreviewing } from "@/lib/version-preview-store";
 import { PageIdProvider } from "./page-id-context";
 import { AnnotationFocusMode } from "./annotation-focus-mode";
 import { normalizePageContent } from "@/lib/legacy-lexical-content";
@@ -35,7 +38,31 @@ export function PageEditor({
   /** Viewer-role Users (US17.2) get a read-only editor — RLS already rejects the write. */
   editable?: boolean;
 }) {
-  const { status, scheduleSave } = usePageAutosave(page.id);
+  // Locked read-only while a Version History preview is open.
+  const isPreviewingVersion = useIsVersionPreviewing(page.id);
+  // First history entry = the page as loaded, before any edit (captured once, at mount).
+  const snapshotVersion = useVersionSnapshots(page.id, { title: page.title, content: page.content });
+  // The title is saved independently of content; read its latest value at snapshot time.
+  const titleRef = useRef(page.title);
+  useEffect(() => {
+    titleRef.current = page.title;
+  }, [page.title]);
+  const handleSaved = useCallback(
+    (content: PageContent) => {
+      void snapshotVersion(titleRef.current, content);
+    },
+    [snapshotVersion],
+  );
+  const { status, scheduleSave, cancelScheduledSave } = usePageAutosave(page.id, false, handleSaved);
+  // The last content known to be saved, to tell real edits from editor noise.
+  const savedContentRef = useRef(page.content);
+  useEffect(() => {
+    savedContentRef.current = page.content;
+  }, [page.content]);
+  const isPreviewingRef = useRef(isPreviewingVersion);
+  useEffect(() => {
+    isPreviewingRef.current = isPreviewingVersion;
+  }, [isPreviewingVersion]);
 
   useEffect(() => {
     onStatusChange?.(status);
@@ -53,17 +80,25 @@ export function PageEditor({
   });
 
   const handleChange = useCallback(() => {
+    // Locking the editor for a version preview must never count as an edit.
+    if (isPreviewingRef.current) return;
+    // Clicking a new line, or typing text and deleting it again, leaves the
+    // document unchanged: save nothing, and drop a save the typing scheduled.
+    if (contentFingerprint(editor.document) === contentFingerprint(savedContentRef.current)) {
+      cancelScheduledSave();
+      return;
+    }
     // editor.document is a full Block[]; TS can't always see this satisfies
     // the looser PartialBlock[] shape through BlockNote's deeply generic
     // schema union, though it always does at runtime.
     scheduleSave(editor.document as PageContent);
-  }, [editor, scheduleSave]);
+  }, [editor, scheduleSave, cancelScheduledSave]);
 
   return (
     <PageIdProvider pageId={page.id}>
       <BlockNoteView
         editor={editor}
-        editable={editable}
+        editable={editable && !isPreviewingVersion}
         onChange={handleChange}
         formattingToolbar={false}
         linkToolbar={false}

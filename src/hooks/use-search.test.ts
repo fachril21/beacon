@@ -146,7 +146,6 @@ describe("usePublicSearch", () => {
     mockSupabase.from.mockReturnValue({ select: vi.fn(() => ({ textSearch })) });
 
     const { result } = renderHook(() => usePublicSearch("space", "org-1", "space-1"));
-    await waitFor(() => expect(textSearch).toHaveBeenCalled());
-    expect(result.current.map((r) => r.pageId)).toEqual(["page-1"]);
+    await waitFor(() => expect(result.current.map((r) => r.pageId)).toEqual(["page-1"]));
   });
 });

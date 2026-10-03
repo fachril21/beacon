@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { RotateCcw } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { usePageVersions, useRestoreVersion } from "@/hooks/use-versions";
 import { useUser } from "@/hooks/use-users";
 import { useSession } from "@/hooks/use-session";
-import { extractPlainText } from "@/lib/extract-text";
+import { setVersionPreview } from "@/lib/version-preview-store";
+import { describePublishError } from "@/lib/publish-error";
 import { cn } from "@/lib/utils";
 import type { Page } from "@/lib/types";
 
@@ -26,64 +29,100 @@ function VersionAuthor({ userId }: { userId: string }) {
  * right after a restore is kicked off, exactly where the standalone panel
  * used to close itself.
  */
-export function VersionHistoryPanel({ page, onRestored }: { page: Page; onRestored: () => void }) {
+export function VersionHistoryPanel({ page, canRestore, onRestored }: { page: Page; canRestore: boolean; onRestored: () => void }) {
   const versions = usePageVersions(page.id);
   const restoreVersion = useRestoreVersion();
   const { user } = useSession();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
 
   const selected = versions.find((v) => v.id === selectedId) ?? null;
 
-  function handleRestore() {
+  // Show the selected version in the main editor (and lock the live one) for exactly as long as it is selected; the
+  // cleanup also covers the panel closing or switching tabs mid-preview.
+  useEffect(() => {
+    setVersionPreview(page.id, selected);
+    return () => setVersionPreview(page.id, null);
+  }, [page.id, selected]);
+
+  async function handleRestore() {
     if (!selected || !user) return;
-    restoreVersion(page.id, selected.id, user.id);
+    setIsRestoring(true);
+    try {
+      await restoreVersion(page.id, selected.id, user.id);
+    } catch (error) {
+      console.error("[beacon] failed to restore version:", error);
+      toast.error("Gagal memulihkan versi, silakan coba lagi.", { description: describePublishError(error) });
+      setIsRestoring(false);
+      return;
+    }
+    setIsRestoring(false);
+    setConfirmOpen(false);
     setSelectedId(null);
+    toast.success("Versi berhasil dipulihkan.");
     onRestored();
   }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {selected ? (
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <div className="border-b border-warning/30 bg-warning-muted px-4 py-2.5 text-caption text-warning-muted-foreground">
-            Pratinjau versi — bukan draf yang sedang aktif
-          </div>
-          <div className="flex-1 overflow-y-auto p-4">
-            <p className="text-caption text-muted-foreground">{formatTimestamp(selected.createdAt)}</p>
-            <h3 className="mt-1 text-h4 font-semibold text-foreground">{selected.title || "Halaman tanpa judul"}</h3>
-            <p className="mt-3 text-body-sm whitespace-pre-wrap text-muted-foreground">{extractPlainText(selected.content).slice(0, 600)}</p>
-          </div>
-          <div className="flex gap-2 border-t border-border p-4">
-            <Button variant="secondary" className="flex-1" onClick={() => setSelectedId(null)}>
-              Kembali
-            </Button>
-            <Button className="flex-1" onClick={handleRestore}>
+      <div className="flex-1 overflow-y-auto p-2">
+        {versions.length === 0 ? (
+          <p className="px-2 py-6 text-center text-body-sm text-muted-foreground">Belum ada riwayat versi.</p>
+        ) : (
+          versions.map((version) => (
+            <button
+              key={version.id}
+              type="button"
+              aria-current={version.id === selectedId ? "true" : undefined}
+              onClick={() => setSelectedId(version.id)}
+              className={cn(
+                "flex w-full flex-col gap-0.5 rounded-md px-3 py-2.5 text-left hover:bg-accent",
+                version.id === selectedId && "bg-accent",
+              )}
+            >
+              <span className="text-body-sm text-foreground">{formatTimestamp(version.createdAt)}</span>
+              <span className="text-caption text-muted-foreground">
+                <VersionAuthor userId={version.createdByUserId} />
+                {version.isRestoreOf && " · Dipulihkan dari versi sebelumnya"}
+              </span>
+            </button>
+          ))
+        )}
+      </div>
+      {selected && (
+        <div className="flex gap-2 border-t border-border p-4">
+          <Button variant="secondary" className="flex-1" onClick={() => setSelectedId(null)}>
+            Kembali
+          </Button>
+          {canRestore && (
+            <Button className="flex-1" onClick={() => setConfirmOpen(true)}>
               <RotateCcw className="size-3.5" />
               Pulihkan versi ini
             </Button>
-          </div>
-        </div>
-      ) : (
-        <div className="flex-1 overflow-y-auto p-2">
-          {versions.length === 0 ? (
-            <p className="px-2 py-6 text-center text-body-sm text-muted-foreground">Belum ada riwayat versi.</p>
-          ) : (
-            versions.map((version) => (
-              <button
-                key={version.id}
-                type="button"
-                onClick={() => setSelectedId(version.id)}
-                className={cn("flex w-full flex-col gap-0.5 rounded-md px-3 py-2.5 text-left hover:bg-accent")}
-              >
-                <span className="text-body-sm text-foreground">{formatTimestamp(version.createdAt)}</span>
-                <span className="text-caption text-muted-foreground">
-                  <VersionAuthor userId={version.createdByUserId} />
-                  {version.isRestoreOf && " · Dipulihkan dari versi sebelumnya"}
-                </span>
-              </button>
-            ))
           )}
         </div>
+      )}
+      {selected && (
+        <Dialog open={confirmOpen} onOpenChange={(open) => !isRestoring && setConfirmOpen(open)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Pulihkan versi ini?</DialogTitle>
+              <DialogDescription>
+                Draf saat ini akan diganti dengan versi {formatTimestamp(selected.createdAt)}. Draf saat ini tetap tersimpan di riwayat
+                sehingga dapat dipulihkan kembali.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="secondary" onClick={() => setConfirmOpen(false)} disabled={isRestoring}>
+                Batal
+              </Button>
+              <Button onClick={() => void handleRestore()} disabled={isRestoring}>
+                Pulihkan
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

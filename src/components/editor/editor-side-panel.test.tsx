@@ -3,6 +3,8 @@ import { createRef } from "react";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { EditorSidePanel } from "./editor-side-panel";
+import { renderHook } from "@testing-library/react";
+import { useVersionPreview } from "@/lib/version-preview-store";
 import type { EditorSidePanelTab } from "./editor-side-panel-tab";
 import type { Comment, Page, PageContent, Version } from "@/lib/types";
 
@@ -24,6 +26,9 @@ vi.mock("@/hooks/use-users", () => ({
 vi.mock("@/hooks/use-session", () => ({
   useSession: () => ({ user: { id: "user-1" } }),
 }));
+
+const mockToastError = vi.fn();
+vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: (...args: unknown[]) => mockToastError(...args) }) }));
 
 const mockRestoreVersion = vi.fn();
 const versions: Version[] = [
@@ -64,10 +69,22 @@ const page: Page = {
   updatedAt: "2026-01-01T00:00:00.000Z",
 };
 
-function renderPanel(tab: EditorSidePanelTab, overrides: { onTabChange?: () => void; onClose?: () => void } = {}) {
+function renderPanel(
+  tab: EditorSidePanelTab,
+  overrides: { onTabChange?: () => void; onClose?: () => void; canRestore?: boolean } = {},
+) {
   const onTabChange = overrides.onTabChange ?? vi.fn();
   const onClose = overrides.onClose ?? vi.fn();
-  render(<EditorSidePanel page={page} tab={tab} onTabChange={onTabChange} onClose={onClose} scrollRootRef={createRef()} />);
+  render(
+    <EditorSidePanel
+      page={page}
+      tab={tab}
+      onTabChange={onTabChange}
+      onClose={onClose}
+      scrollRootRef={createRef()}
+      canRestore={overrides.canRestore ?? true}
+    />,
+  );
   return { onTabChange, onClose };
 }
 
@@ -127,14 +144,88 @@ describe("EditorSidePanel", () => {
     expect(onTabChange).toHaveBeenCalledWith("history");
   });
 
-  it("Riwayat keeps preview + restore semantics, closing the panel after a restore", async () => {
+  it("Riwayat previews a version, asks for confirmation, restores, then closes the panel", async () => {
     const user = userEvent.setup();
     const { onClose } = renderPanel("history");
     await user.click(screen.getByRole("button", { name: /Fachril/ }));
-    expect(screen.getByText("Pratinjau versi — bukan draf yang sedang aktif")).toBeInTheDocument();
+
     await user.click(screen.getByRole("button", { name: "Pulihkan versi ini" }));
-    expect(mockRestoreVersion).toHaveBeenCalledWith("page-1", "v-1", "user-1");
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(mockRestoreVersion).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Pulihkan" }));
+
+    await vi.waitFor(() => expect(mockRestoreVersion).toHaveBeenCalledWith("page-1", "v-1", "user-1"));
+    await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it("Riwayat cancelling the confirmation restores nothing", async () => {
+    const user = userEvent.setup();
+    const { onClose } = renderPanel("history");
+    await user.click(screen.getByRole("button", { name: /Fachril/ }));
+    await user.click(screen.getByRole("button", { name: "Pulihkan versi ini" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Batal" }));
+
+    expect(mockRestoreVersion).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("Riwayat keeps the panel open and shows an error toast when the restore fails", async () => {
+    mockToastError.mockClear();
+    mockRestoreVersion.mockRejectedValueOnce({ code: "42501", message: "denied" });
+    const user = userEvent.setup();
+    const { onClose } = renderPanel("history");
+    await user.click(screen.getByRole("button", { name: /Fachril/ }));
+    await user.click(screen.getByRole("button", { name: "Pulihkan versi ini" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Pulihkan" }));
+
+    await vi.waitFor(() => expect(mockToastError).toHaveBeenCalled());
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("Riwayat hides the restore action for a user who cannot edit, but still allows previewing", async () => {
+    const user = userEvent.setup();
+    renderPanel("history", { canRestore: false });
+    await user.click(screen.getByRole("button", { name: /Fachril/ }));
+    expect(screen.getByRole("button", { name: "Kembali" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Pulihkan versi ini" })).not.toBeInTheDocument();
+  });
+
+  it("Riwayat shows the selected version in the editor (preview store), not in the panel, and clears on Kembali", async () => {
+    const user = userEvent.setup();
+    const preview = renderHook(() => useVersionPreview("page-1"));
+    renderPanel("history");
+    expect(preview.result.current).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: /Fachril/ }));
+    expect(preview.result.current).toMatchObject({ id: "v-1" });
+    // The panel no longer renders the version body itself.
+    expect(screen.queryByText("Pratinjau versi — bukan draf yang sedang aktif")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Kembali" }));
+    expect(preview.result.current).toBeNull();
+  });
+
+  it("Riwayat keeps the version list visible and marks the selected one while previewing", async () => {
+    const user = userEvent.setup();
+    renderPanel("history");
+    const entry = screen.getByRole("button", { name: /Fachril/ });
+    await user.click(entry);
+    expect(screen.getByRole("button", { name: /Fachril/ })).toHaveAttribute("aria-current", "true");
+  });
+
+  it("Riwayat releases the preview when the panel goes away mid-preview", async () => {
+    const user = userEvent.setup();
+    const preview = renderHook(() => useVersionPreview("page-1"));
+    const { unmount } = render(
+      <EditorSidePanel page={page} tab="history" onTabChange={vi.fn()} onClose={vi.fn()} scrollRootRef={createRef()} canRestore />,
+    );
+    await user.click(screen.getByRole("button", { name: /Fachril/ }));
+    expect(preview.result.current).not.toBeNull();
+
+    unmount();
+    expect(preview.result.current).toBeNull();
   });
 
   it("closes from the X button and from Esc inside the panel", async () => {

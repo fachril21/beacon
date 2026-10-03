@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
+import { bumpEditorRevision } from "@/lib/editor-revision-store";
 
 const updateTitle = vi.fn();
 vi.mock("@/hooks/use-pages", () => ({
@@ -30,6 +31,23 @@ describe("useTitleAutosave", () => {
 
       rerender({ loadedTitle: "Existing Title From DB" });
       expect(result.current.title).toBe("Existing Title From DB");
+    });
+
+    it("re-syncs the title (and drops a pending save) when a version restore bumps the editor revision", () => {
+      const { result, rerender } = renderHook(({ loadedTitle }) => useTitleAutosave("page-restore", loadedTitle), {
+        initialProps: { loadedTitle: "Judul sekarang" },
+      });
+      act(() => result.current.scheduleTitleSave("Ketikan yang belum tersimpan"));
+
+      // useRestoreVersion patches the store's title, then bumps the revision.
+      rerender({ loadedTitle: "Judul dipulihkan" });
+      act(() => bumpEditorRevision("page-restore"));
+
+      expect(result.current.title).toBe("Judul dipulihkan");
+      act(() => {
+        vi.advanceTimersByTime(2000);
+      });
+      expect(updateTitle).not.toHaveBeenCalledWith("page-restore", "Ketikan yang belum tersimpan");
     });
 
     it("re-syncs when navigating to a different Page", () => {

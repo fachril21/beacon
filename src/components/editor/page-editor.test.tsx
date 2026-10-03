@@ -1,12 +1,27 @@
 import { describe, it, expect, vi } from "vitest";
-import { render } from "@testing-library/react";
+import { render, act } from "@testing-library/react";
+import { setVersionPreview } from "@/lib/version-preview-store";
 import { PageEditor } from "./page-editor";
 import { emptyDoc } from "@/lib/mock/blocknote-content";
 import type { Page } from "@/lib/types";
 
 vi.mock("@/hooks/use-page-autosave", () => ({
-  usePageAutosave: () => ({ status: "idle", scheduleSave: vi.fn() }),
+  usePageAutosave: () => ({ status: "idle", scheduleSave: vi.fn(), cancelScheduledSave: vi.fn() }),
 }));
+
+vi.mock("@/hooks/use-versions", () => ({
+  useVersionSnapshots: () => vi.fn(),
+}));
+
+const previewed = {
+  id: "v-1",
+  pageId: "page-1",
+  title: "Lama",
+  content: [],
+  createdByUserId: "user-1",
+  createdAt: "2026-01-01T00:00:00.000Z",
+  isRestoreOf: null,
+};
 
 const page: Page = {
   id: "page-1",
@@ -34,6 +49,18 @@ describe("PageEditor editable prop", () => {
     expect(editableRoot).toHaveAttribute("contenteditable", "false");
 
     rerender(<PageEditor page={page} editable={true} />);
+    expect(editableRoot).toHaveAttribute("contenteditable", "true");
+  });
+
+  it("is locked read-only while a version preview is open, even for an editor, and unlocks after", () => {
+    const { container } = render(<PageEditor page={page} editable={true} />);
+    const editableRoot = container.querySelector(".bn-editor");
+    expect(editableRoot).toHaveAttribute("contenteditable", "true");
+
+    act(() => setVersionPreview(page.id, previewed));
+    expect(editableRoot).toHaveAttribute("contenteditable", "false");
+
+    act(() => setVersionPreview(page.id, null));
     expect(editableRoot).toHaveAttribute("contenteditable", "true");
   });
 });
