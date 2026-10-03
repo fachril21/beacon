@@ -197,6 +197,25 @@ describe("usePublishActions", () => {
     expect(pagesStore.getState()[0].publishedContentSnapshot).not.toBeNull();
   });
 
+  it("publish throws (and leaves the store untouched) when the RPC affected no row", async () => {
+    // SECURITY INVOKER + RLS: a non-editor's UPDATE matches zero rows, which
+    // PostgREST returns as a composite of all-null fields, not as an error.
+    mockSupabase.rpc.mockResolvedValue({ data: { id: null, space_id: null, title: null }, error: null });
+
+    const { result } = renderHook(() => usePublishActions());
+    await expect(result.current.publish("page-1")).rejects.toThrow(/tidak ada baris|no row/i);
+
+    expect(pagesStore.getState()[0].isPublished).toBe(false);
+  });
+
+  it("publish rethrows the Supabase error unchanged so callers can map its code", async () => {
+    const rpcError = { code: "42501", message: "permission denied" };
+    mockSupabase.rpc.mockResolvedValue({ data: null, error: rpcError });
+
+    const { result } = renderHook(() => usePublishActions());
+    await expect(result.current.publish("page-1")).rejects.toBe(rpcError);
+  });
+
   it("unpublish calls the unpublish_page RPC and patches the store", async () => {
     pagesStore.setState((prev) => prev.map((p) => ({ ...p, isPublished: true })));
     const unpublishedRow = {

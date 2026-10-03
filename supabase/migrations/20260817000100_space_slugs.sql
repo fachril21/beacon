@@ -1,3 +1,9 @@
+-- NOTE: originally targeted public.spaces / public.slugify (wrong schema — every
+-- Beacon object lives in `beacon`); retargeted and made idempotent, and renamed
+-- from 20260817000000 to avoid colliding with 20260817000000_beacon_schema_grants.sql.
+-- If an earlier run altered public.spaces (the shared project may host another
+-- app) check that table and drop the stray "slug" column / trigger there.
+
 -- Per-Space public site (documentation-publishing feature): the public site
 -- is now organised per Space — an Organization's public home is a directory
 -- of its publishable Spaces, and each Space has its own page at
@@ -18,9 +24,9 @@
 -- handed out, stays stable).
 -- ---------------------------------------------------------------------------
 
-alter table public.spaces add column slug text;
+alter table beacon.spaces add column if not exists slug text;
 
-create function public.spaces_set_slug()
+create or replace function beacon.spaces_set_slug()
 returns trigger
 language plpgsql
 as $$
@@ -33,10 +39,10 @@ begin
     return new;
   end if;
 
-  base_slug := public.slugify(new.name);
+  base_slug := beacon.slugify(new.name);
   candidate := base_slug;
   while exists (
-    select 1 from public.spaces
+    select 1 from beacon.spaces
     where organization_id = new.organization_id and slug = candidate and id <> new.id
   ) loop
     n := n + 1;
@@ -47,9 +53,10 @@ begin
 end;
 $$;
 
+drop trigger if exists spaces_set_slug_trigger on beacon.spaces;
 create trigger spaces_set_slug_trigger
-before insert on public.spaces
-for each row execute function public.spaces_set_slug();
+before insert on beacon.spaces
+for each row execute function beacon.spaces_set_slug();
 
 -- Backfill existing Spaces — the trigger only fires on INSERT.
 do $$
@@ -59,25 +66,25 @@ declare
   candidate text;
   n int;
 begin
-  for r in select id, name, organization_id from public.spaces where slug is null order by created_at loop
-    base_slug := public.slugify(r.name);
+  for r in select id, name, organization_id from beacon.spaces where slug is null order by created_at loop
+    base_slug := beacon.slugify(r.name);
     candidate := base_slug;
     n := 1;
     while exists (
-      select 1 from public.spaces
+      select 1 from beacon.spaces
       where organization_id = r.organization_id and slug = candidate and id <> r.id
     ) loop
       n := n + 1;
       candidate := base_slug || '-' || n;
     end loop;
-    update public.spaces set slug = candidate where id = r.id;
+    update beacon.spaces set slug = candidate where id = r.id;
   end loop;
 end $$;
 
-alter table public.spaces alter column slug set not null;
+alter table beacon.spaces alter column slug set not null;
 
-create unique index spaces_organization_id_slug_unique
-  on public.spaces (organization_id, slug);
+create unique index if not exists spaces_organization_id_slug_unique
+  on beacon.spaces (organization_id, slug);
 
-comment on column public.spaces.slug is
+comment on column beacon.spaces.slug is
   'Public URL slug (/public/{orgSlug}/spaces/{slug}) — assigned from the name by spaces_set_slug() on INSERT, unique per Organization, stable for the life of the Space. Publicly readable via the existing spaces_select_public_publishable policy.';

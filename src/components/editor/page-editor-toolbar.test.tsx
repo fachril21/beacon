@@ -10,8 +10,12 @@ vi.mock("next/navigation", () => ({
 }));
 
 const mockToastSuccess = vi.fn();
+const mockToastError = vi.fn();
 vi.mock("sonner", () => ({
-  toast: Object.assign(vi.fn(), { success: (...args: unknown[]) => mockToastSuccess(...args), error: vi.fn() }),
+  toast: Object.assign(vi.fn(), {
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+    error: (...args: unknown[]) => mockToastError(...args),
+  }),
 }));
 
 vi.mock("@/hooks/use-organizations", () => ({
@@ -101,6 +105,38 @@ describe("PageEditorToolbar publish gate (platform-domain publishing)", () => {
     const [, options] = mockToastSuccess.mock.calls[0] as [string, { action: { label: string; onClick: () => void } }];
     options.action.onClick();
     expect(mockPush).toHaveBeenCalledWith("/public/test-org/pages/untitled");
+  });
+
+  it("shows the real failure reason in the error toast when publishing fails", async () => {
+    mockToastError.mockClear();
+    mockPublish.mockRejectedValueOnce({ code: "42501", message: "permission denied" });
+    const user = userEvent.setup();
+    renderToolbar("editor");
+
+    await user.click(screen.getByRole("button", { name: "Publikasikan" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Publikasikan" }));
+
+    await vi.waitFor(() => expect(mockToastError).toHaveBeenCalled());
+    const [message, options] = mockToastError.mock.calls[0] as [string, { description?: string }];
+    expect(message).toMatch(/gagal memublikasikan/i);
+    expect(options?.description).toMatch(/izin/i);
+  });
+
+  it("never sends the user to the private workspace when the published page has no slug", async () => {
+    mockToastSuccess.mockClear();
+    mockPush.mockClear();
+    mockPublish.mockResolvedValueOnce({ id: "page-1", slug: null, isPublished: true } as Partial<Page> as Page);
+    const user = userEvent.setup();
+    renderToolbar("editor");
+
+    await user.click(screen.getByRole("button", { name: "Publikasikan" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Publikasikan" }));
+
+    await vi.waitFor(() => expect(mockToastSuccess).toHaveBeenCalled());
+    const [, options] = mockToastSuccess.mock.calls[0] as [string, { action?: unknown } | undefined];
+    expect(options?.action).toBeUndefined();
   });
 });
 

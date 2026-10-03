@@ -183,6 +183,11 @@ export function usePublishActions() {
     const supabase = getSupabaseBrowserClient();
     const { data, error } = await supabase.rpc(name, { p_page_id: id });
     if (error) throw error;
+    // SECURITY INVOKER + RLS: a caller who can't edit the Page updates zero
+    // rows, which PostgREST returns as an all-null composite, not an error.
+    if (!data || !(data as PageRow).id) {
+      throw new Error("Tidak ada baris yang diubah (no row updated) — izin atau halaman tidak ditemukan.");
+    }
 
     const page = mapPageRow(data as PageRow);
     pagesStore.setState((prev) => prev.map((p) => (p.id === id ? page : p)));

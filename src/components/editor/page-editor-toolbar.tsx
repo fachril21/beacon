@@ -14,6 +14,8 @@ import { SaveStatusIndicator } from "./save-status-indicator";
 import { useOrganization } from "@/hooks/use-organizations";
 import { usePublishActions, useDeletePage, hasUnpublishedChanges, getPageStatus } from "@/hooks/use-pages";
 import { isPageNearlyEmpty } from "@/lib/content-empty";
+import { buildPublicPageUrl } from "@/lib/public-url";
+import { describePublishError } from "@/lib/publish-error";
 import { StatusBadge } from "@/components/beacon/status-badge";
 import { cn } from "@/lib/utils";
 import { EDITOR_PANEL_TOGGLE_ID, EDITOR_SIDE_PANEL_ID, type EditorSidePanelTab } from "./editor-side-panel-tab";
@@ -74,7 +76,12 @@ export function PageEditorToolbar({
 
   const pendingChanges = hasUnpublishedChanges(page);
   const status = getPageStatus(page);
-  const publicUrl = organization && page.slug ? `/public/${organization.slug}/pages/${page.slug}` : null;
+  const publicUrl = buildPublicPageUrl(organization?.slug, page.slug);
+
+  function reportFailure(headline: string, error: unknown) {
+    console.error("[beacon] publish action failed:", error);
+    toast.error(headline, { description: describePublishError(error) });
+  }
 
   async function doPublish() {
     if (typeof navigator !== "undefined" && !navigator.onLine) {
@@ -84,13 +91,13 @@ export function PageEditorToolbar({
     }
     try {
       const publishedPage = await publish(page.id);
-      const publicUrl =
-        organization && publishedPage?.slug ? `/public/${organization.slug}/pages/${publishedPage.slug}` : `/spaces/${space.id}`;
-      toast.success("Halaman berhasil dipublikasikan", {
-        action: { label: "Lihat halaman publik", onClick: () => router.push(publicUrl) },
-      });
-    } catch {
-      toast.error("Gagal memublikasikan halaman, silakan coba lagi.");
+      const publishedUrl = buildPublicPageUrl(organization?.slug, publishedPage.slug);
+      toast.success(
+        "Halaman berhasil dipublikasikan",
+        publishedUrl ? { action: { label: "Lihat halaman publik", onClick: () => router.push(publishedUrl) } } : undefined,
+      );
+    } catch (error) {
+      reportFailure("Gagal memublikasikan halaman, silakan coba lagi.", error);
     }
   }
 
@@ -107,8 +114,8 @@ export function PageEditorToolbar({
     try {
       await update(page.id);
       toast.success("Pembaruan telah dipublikasikan.");
-    } catch {
-      toast.error("Gagal memublikasikan pembaruan, silakan coba lagi.");
+    } catch (error) {
+      reportFailure("Gagal memublikasikan pembaruan, silakan coba lagi.", error);
     }
   }
 
@@ -351,7 +358,7 @@ export function PageEditorToolbar({
                 setUnpublishOpen(false);
                 unpublish(page.id)
                   .then(() => toast("Halaman telah dibatalkan publikasinya."))
-                  .catch(() => toast.error("Gagal membatalkan publikasi, silakan coba lagi."));
+                  .catch((error: unknown) => reportFailure("Gagal membatalkan publikasi, silakan coba lagi.", error));
               }}
             >
               Batalkan Publikasi
