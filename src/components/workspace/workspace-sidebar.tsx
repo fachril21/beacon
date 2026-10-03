@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { ChevronRight, ChevronsUpDown, Home, Lock, LogOut, Plus, Search, Settings } from "lucide-react";
+import { ChevronRight, Home, Lock, Plus, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSession } from "@/hooks/use-session";
 import { useOrganizationSpaces } from "@/hooks/use-spaces";
@@ -13,9 +13,9 @@ import { useCurrentOrganization } from "@/hooks/use-organizations";
 import { useChildPages, usePages, useReorderPages } from "@/hooks/use-pages";
 import { PageTreeItem } from "./page-tree-item";
 import { NewSpaceDialog } from "./new-space-dialog";
+import { AccountMenu } from "./account-menu";
 import { NotificationBell } from "./notification-bell";
 import { OrganizationSwitcher } from "./organization-switcher";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { sidebarNavIconClass, sidebarNavRowClass } from "./sidebar-row";
 import type { Space } from "@/lib/types";
 
@@ -62,8 +62,7 @@ function SpaceSection({ space, defaultExpanded }: { space: Space; defaultExpande
 
 export function WorkspaceSidebar({ onOpenSearch }: { onOpenSearch: () => void }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const { user, signOut } = useSession();
+  const { user } = useSession();
   const currentOrganization = useCurrentOrganization();
   const spaces = useOrganizationSpaces(user?.id, currentOrganization?.id);
   const allPages = usePages();
@@ -148,33 +147,7 @@ export function WorkspaceSidebar({ onOpenSearch }: { onOpenSearch: () => void })
         )}
       </div>
 
-      {/* Account menu — identity row doubles as a dropdown trigger for org settings + sign out */}
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <button
-              type="button"
-              className="flex w-full items-center gap-2.5 border-t border-sidebar-border px-3 py-3 text-left hover:bg-sidebar-accent"
-            />
-          }
-        >
-          <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-secondary text-caption font-semibold text-secondary-foreground">
-            {user?.name?.[0]?.toUpperCase() ?? "?"}
-          </div>
-          <p className="min-w-0 flex-1 truncate text-body-sm text-sidebar-foreground/70">{user?.name}</p>
-          <ChevronsUpDown className="size-3.5 shrink-0 text-sidebar-foreground/50" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" side="top" className="w-56">
-          <DropdownMenuItem onClick={() => router.push("/settings/organization")}>
-            <Settings className="size-3.5" />
-            Pengaturan Organisasi
-          </DropdownMenuItem>
-          <DropdownMenuItem variant="destructive" onClick={signOut}>
-            <LogOut className="size-3.5" />
-            Keluar
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <AccountMenu />
 
       <NewSpaceDialog open={isNewSpaceOpen} onOpenChange={setIsNewSpaceOpen} />
     </aside>

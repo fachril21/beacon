@@ -1,5 +1,6 @@
 "use client";
 
+import { BeaconLogo } from "@/components/brand/beacon-logo";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -71,11 +72,7 @@ export function OrganizationSwitcher() {
               type="button"
               className="flex w-full items-center gap-2.5 rounded-md px-1.5 py-2 hover:bg-sidebar-accent"
             >
-              <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-                <svg viewBox="0 0 24 24" fill="none" className="size-4" aria-hidden>
-                  <path d="M12 2 4 6v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V6l-8-4Z" fill="currentColor" />
-                </svg>
-              </div>
+              <BeaconLogo decorative className="size-7 shrink-0" />
               <span className="min-w-0 flex-1 truncate text-left text-body-sm font-semibold text-sidebar-accent-foreground">
                 {currentOrganization.name}
               </span>

@@ -1,5 +1,6 @@
 "use client";
 
+import { BeaconLogo } from "@/components/brand/beacon-logo";
 import Link from "next/link";
 import { useState } from "react";
 import { Search, Menu } from "lucide-react";
@@ -39,11 +40,7 @@ export function PublicNav({ organization }: { organization: Organization }) {
           </button>
         )}
         <Link href={basePath} className="flex min-w-0 items-center gap-2.5">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <svg viewBox="0 0 24 24" fill="none" className="size-4.5" aria-hidden>
-              <path d="M12 2 4 6v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V6l-8-4Z" fill="currentColor" />
-            </svg>
-          </div>
+          <BeaconLogo decorative className="size-8 shrink-0" />
           <span className="truncate text-body-sm font-semibold text-foreground lg:text-h4">{organization.name} Docs</span>
         </Link>
       </div>
