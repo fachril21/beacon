@@ -7,6 +7,8 @@ import { useSession } from "@/hooks/use-session";
 import { useNotifications, useMarkNotificationRead, useUnreadNotificationCount } from "@/hooks/use-notifications";
 import { useUser } from "@/hooks/use-users";
 import { usePage } from "@/hooks/use-pages";
+import { displayName } from "@/lib/display-name";
+import { commentSnippet, notificationHref } from "@/lib/notification-link";
 import { sidebarNavIconClass, sidebarNavRowClass } from "./sidebar-row";
 import type { Notification } from "@/lib/types";
 
@@ -17,18 +19,26 @@ function formatTimestamp(iso: string) {
 function NotificationRow({ notification, onOpen }: { notification: Notification; onOpen: (id: string) => void }) {
   const actor = useUser(notification.actorUserId);
   const page = usePage(notification.pageId);
+  const href = notificationHref(page ? { spaceId: page.spaceId, pageId: page.id } : undefined, notification.commentId) ?? "#";
+  const snippet = commentSnippet(notification.commentBody);
 
   return (
     <Link
-      href={page ? `/spaces/${page.spaceId}/pages/${page.id}` : "#"}
+      href={href}
       onClick={() => onOpen(notification.id)}
-      className="flex flex-col gap-0.5 rounded-sm px-2 py-2 hover:bg-accent"
+      className="flex items-start gap-2 rounded-sm px-2 py-2 hover:bg-accent"
     >
-      <p className="text-body-sm text-foreground">
-        <span className="font-medium">{actor?.name ?? "Seseorang"}</span> menyebut Anda di{" "}
-        <span className="font-medium">{page?.title || "Halaman tanpa judul"}</span>
-      </p>
-      <span className="text-caption text-muted-foreground">{formatTimestamp(notification.createdAt)}</span>
+      <span className="mt-1.5 flex size-2 shrink-0">
+        {!notification.isRead && <span aria-label="Belum dibaca" className="size-2 rounded-full bg-primary" />}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="text-body-sm text-foreground">
+          <span className="font-medium break-all">{actor ? displayName(actor) : "Seseorang"}</span> menyebut Anda di{" "}
+          <span className="font-medium">{page?.title || "Halaman tanpa judul"}</span>
+        </span>
+        {snippet && <span className="line-clamp-2 text-caption text-muted-foreground">{snippet}</span>}
+        <span className="text-caption text-muted-foreground">{formatTimestamp(notification.createdAt)}</span>
+      </span>
     </Link>
   );
 }

@@ -16,6 +16,8 @@ import { useVersionSnapshots } from "@/hooks/use-versions";
 import { useIsVersionPreviewing } from "@/lib/version-preview-store";
 import { PageIdProvider } from "./page-id-context";
 import { AnnotationFocusMode } from "./annotation-focus-mode";
+import { CommentSideMenu } from "./comment-side-menu";
+import { CommentedBlockCues } from "./commented-block-cues";
 import { normalizePageContent } from "@/lib/legacy-lexical-content";
 import type { Page, PageContent } from "@/lib/types";
 
@@ -103,6 +105,7 @@ export function PageEditor({
         formattingToolbar={false}
         linkToolbar={false}
         slashMenu={false}
+        sideMenu={false}
         theme="dark"
         className="min-h-[60vh]"
       >
@@ -112,7 +115,9 @@ export function PageEditor({
         />
         <EditorFormattingToolbar />
         <LinkToolbarController />
+        <CommentSideMenu />
       </BlockNoteView>
+      <CommentedBlockCues page={page} />
       <AnnotationFocusMode />
     </PageIdProvider>
   );

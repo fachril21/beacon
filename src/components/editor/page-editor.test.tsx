@@ -9,6 +9,8 @@ vi.mock("@/hooks/use-page-autosave", () => ({
   usePageAutosave: () => ({ status: "idle", scheduleSave: vi.fn(), cancelScheduledSave: vi.fn() }),
 }));
 
+vi.mock("@/hooks/use-session", () => ({ useSession: () => ({ user: { id: "user-1" } }) }));
+vi.mock("@/hooks/use-comments", () => ({ usePageComments: () => [], useBlockComments: () => [] }));
 vi.mock("@/hooks/use-versions", () => ({
   useVersionSnapshots: () => vi.fn(),
 }));

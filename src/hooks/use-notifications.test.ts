@@ -41,6 +41,34 @@ describe("useNotifications", () => {
     await waitFor(() => expect(result.current.map((n) => n.id)).toEqual(["n-2", "n-1"]));
   });
 
+  it("also loads the tagging comment's text and block, and maps them onto the notification", async () => {
+    const select = vi.fn(() => ({
+      eq: () =>
+        Promise.resolve({
+          data: [
+            {
+              id: "n-1",
+              recipient_user_id: "user-1",
+              actor_user_id: "user-2",
+              page_id: "page-1",
+              comment_id: "c-1",
+              is_read: false,
+              created_at: "2026-01-01T00:00:00Z",
+              comments: { body: "Tolong cek @user-1", block_id: "block-5" },
+            },
+          ],
+          error: null,
+        }),
+    }));
+    mockSupabase.from.mockReturnValue({ select });
+
+    const { result } = renderHook(() => useNotifications("user-1"));
+    await waitFor(() => expect(result.current).toHaveLength(1));
+
+    expect(select).toHaveBeenCalledWith(expect.stringContaining("comments("));
+    expect(result.current[0]).toMatchObject({ commentBody: "Tolong cek @user-1", commentBlockId: "block-5" });
+  });
+
   it("returns an empty array for an undefined userId without querying Supabase", () => {
     const { result } = renderHook(() => useNotifications(undefined));
     expect(result.current).toEqual([]);

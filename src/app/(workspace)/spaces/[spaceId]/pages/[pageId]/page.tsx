@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useCallback, useRef, useState, useSyncExternalStore } from "react";
+import { use, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { FileText } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/beacon/empty-state";
@@ -8,7 +8,9 @@ import { useSpace, useSpaceRole } from "@/hooks/use-spaces";
 import { usePage } from "@/hooks/use-pages";
 import { useTitleAutosave } from "@/hooks/use-title-autosave";
 import { useSession } from "@/hooks/use-session";
+import { useFocusCommentFromUrl } from "@/hooks/use-focus-comment-from-url";
 import { useEditorRevision } from "@/lib/editor-revision-store";
+import { clearBlockCommentFocus, useCommentFocus } from "@/lib/comment-focus-store";
 import { useVersionPreview } from "@/lib/version-preview-store";
 import { VersionPreview } from "@/components/editor/version-preview";
 import { PageEditor } from "@/components/editor/page-editor";
@@ -44,6 +46,7 @@ export default function PageEditorPage({ params }: { params: Promise<{ spaceId: 
   const role = useSpaceRole(spaceId, user?.id);
   const canEdit = role === "editor" || role === "admin";
   const editorRevision = useEditorRevision(pageId);
+  useFocusCommentFromUrl(pageId);
   const previewedVersion = useVersionPreview(pageId);
   const isPreviewingVersion = previewedVersion !== null;
   const handleTitleSaveError = useCallback(() => {
@@ -65,6 +68,19 @@ export default function PageEditorPage({ params }: { params: Promise<{ spaceId: 
     setPanelChoice(tab);
     setLastPanelTab(tab);
   }
+
+  // The editor's block side menu asks for a block's comments: open the Komentar tab.
+  const commentFocusNonce = useCommentFocus(pageId).nonce;
+  const seenCommentFocusNonceRef = useRef(commentFocusNonce);
+  useEffect(() => {
+    // Only a request made while this page is open counts, not one left over from an earlier visit.
+    if (commentFocusNonce === seenCommentFocusNonceRef.current) return;
+    seenCommentFocusNonceRef.current = commentFocusNonce;
+    openPanelTab("comments");
+    // openPanelTab only calls state setters; the nonce is the sole trigger.
+  }, [commentFocusNonce]);
+  // Leaving the page drops its block filter, so the next visit starts on all comments.
+  useEffect(() => () => clearBlockCommentFocus(pageId), [pageId]);
 
   function closePanel() {
     setPanelChoice(null);

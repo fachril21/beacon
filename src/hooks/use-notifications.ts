@@ -11,7 +11,10 @@ const NOTIFICATION_POLL_INTERVAL_MS = 20_000;
 
 async function loadNotifications(userId: string) {
   const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase.from("notifications").select("*").eq("recipient_user_id", userId);
+  const { data, error } = await supabase
+    .from("notifications")
+    .select("*, comments(body, block_id)")
+    .eq("recipient_user_id", userId);
   if (error) throw error;
   return ((data ?? []) as NotificationRow[]).map(mapNotificationRow);
 }

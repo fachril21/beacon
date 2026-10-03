@@ -1,5 +1,6 @@
 "use client";
 
+import { displayName } from "@/lib/display-name";
 import { useEffect, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { toast } from "sonner";
@@ -19,7 +20,7 @@ function formatTimestamp(iso: string) {
 
 function VersionAuthor({ userId }: { userId: string }) {
   const user = useUser(userId);
-  return <>{user?.name ?? "Pengguna"}</>;
+  return <>{displayName(user)}</>;
 }
 
 /**

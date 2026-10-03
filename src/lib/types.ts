@@ -289,6 +289,9 @@ export interface Notification {
   commentId: ID;
   isRead: boolean;
   createdAt: ISODateString;
+  /** The tagging comment's text and block, joined in when notifications are loaded (absent if not readable). */
+  commentBody?: string | null;
+  commentBlockId?: string | null;
 }
 
 // ---------------------------------------------------------------------------

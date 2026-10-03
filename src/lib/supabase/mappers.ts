@@ -287,6 +287,8 @@ export interface NotificationRow {
   comment_id: string;
   is_read: boolean;
   created_at: string;
+  /** PostgREST embed of the related comment (select("*, comments(body, block_id)")). */
+  comments?: { body: string; block_id: string } | null;
 }
 
 export function mapNotificationRow(row: NotificationRow): Notification {
@@ -298,5 +300,7 @@ export function mapNotificationRow(row: NotificationRow): Notification {
     commentId: row.comment_id,
     isRead: row.is_read,
     createdAt: row.created_at,
+    commentBody: row.comments?.body ?? null,
+    commentBlockId: row.comments?.block_id ?? null,
   };
 }
