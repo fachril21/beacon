@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChevronDown, ChevronRight, ExternalLink, History, MessageSquare, PanelRight, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink, EyeOff, History, MessageSquare, PanelRight, Trash2 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { ButtonGroup, ButtonGroupSeparator } from "@/components/ui/button-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -74,6 +75,7 @@ export function PageEditorToolbar({
     ? "Minta admin Space untuk menandai Space ini sebagai dapat dipublikasikan."
     : null;
 
+  const isPrimaryPublish = canEdit && !page.isPublished && !disabledReason;
   const pendingChanges = hasUnpublishedChanges(page);
   const status = getPageStatus(page);
   const publicUrl = buildPublicPageUrl(organization?.slug, page.slug);
@@ -220,57 +222,63 @@ export function PageEditorToolbar({
           <span aria-hidden className="mx-1.5 h-5 w-px bg-border" />
           <StatusBadge status={status} className="mr-1.5" />
 
-          <div data-slot="button-group" className="flex items-stretch overflow-hidden rounded-md">
+          <ButtonGroup>
             {!canEdit ? null : page.isPublished ? (
-              <Button size="sm" variant="secondary" onClick={handleUpdate} disabled={!pendingChanges} className="h-8 rounded-r-none">
+              <Button size="sm" variant="outline" onClick={handleUpdate} disabled={!pendingChanges} className="h-8">
                 Perbarui
               </Button>
             ) : disabledReason ? (
               <Tooltip>
-                <TooltipTrigger render={<span tabIndex={0} />}>
-                  <Button
-                    size="sm"
-                    disabled
-                    className="pointer-events-none h-8 rounded-r-none bg-secondary text-muted-foreground opacity-100 hover:bg-secondary"
-                  >
+                <TooltipTrigger render={<span tabIndex={0} data-slot="button-wrapper" className="inline-flex" />}>
+                  <Button size="sm" variant="outline" disabled className="pointer-events-none h-8 rounded-r-none">
                     Publikasikan
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent className={!space.isPublishable ? "" : "border-t-2 border-t-warning"}>{disabledReason}</TooltipContent>
               </Tooltip>
             ) : (
-              <Button size="sm" onClick={handlePublishClick} className="h-8 rounded-r-none">
+              <Button size="sm" onClick={handlePublishClick} className="h-8">
                 Publikasikan
               </Button>
             )}
+            {isPrimaryPublish && <ButtonGroupSeparator className="bg-primary-foreground/25" />}
 
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
                   <Button
                     size="icon"
-                    variant={!canEdit ? "ghost" : canEdit && !page.isPublished && !disabledReason ? "default" : "secondary"}
+                    variant={!canEdit ? "ghost" : isPrimaryPublish ? "default" : "outline"}
                     aria-label="Menu lainnya"
-                    className={canEdit ? "rounded-l-none border-l border-l-background/20" : ""}
+                    className="size-8"
                   />
                 }
               >
                 <ChevronDown className="size-3.5" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => onOpenVersionHistory?.()}>
+              <DropdownMenuContent align="end" className="w-auto min-w-52">
+                <DropdownMenuItem className="whitespace-nowrap px-2 py-1.5" onClick={() => onOpenVersionHistory?.()}>
                   <History className="size-3.5" />
                   Riwayat Versi
                 </DropdownMenuItem>
                 {canEdit && page.isPublished && (
-                  <DropdownMenuItem variant="destructive" onClick={() => setUnpublishOpen(true)}>
+                  <DropdownMenuItem
+                    variant="destructive"
+                    className="whitespace-nowrap px-2 py-1.5"
+                    onClick={() => setUnpublishOpen(true)}
+                  >
+                    <EyeOff className="size-3.5" />
                     Batalkan Publikasi
                   </DropdownMenuItem>
                 )}
                 {canEdit && (
                   <>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem variant="destructive" onClick={() => setDeletePageOpen(true)}>
+                    <DropdownMenuItem
+                      variant="destructive"
+                      className="whitespace-nowrap px-2 py-1.5"
+                      onClick={() => setDeletePageOpen(true)}
+                    >
                       <Trash2 className="size-3.5" />
                       Hapus Halaman
                     </DropdownMenuItem>
@@ -278,7 +286,7 @@ export function PageEditorToolbar({
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
-          </div>
+          </ButtonGroup>
         </div>
       </div>
 
