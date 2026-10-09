@@ -4,7 +4,7 @@ import { use, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Copy, FileText, Plus, UserPlus } from "lucide-react";
+import { Copy, FileText, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +17,6 @@ import { useCreatePage } from "@/hooks/use-pages";
 
 const TABS: { label: string; segment: string | null; adminOnly: boolean }[] = [
   { label: "Halaman", segment: null, adminOnly: false },
-  { label: "Anggota", segment: "members", adminOnly: true },
   { label: "Pengaturan", segment: "settings", adminOnly: true },
 ];
 
@@ -46,7 +45,7 @@ export default function SpaceOverviewLayout({
   const [isCreating, setIsCreating] = useState(false);
 
   const isAdmin = role === "admin";
-  const activeSegment = pathname === `/spaces/${spaceId}/members` ? "members" : pathname === `/spaces/${spaceId}/settings` ? "settings" : null;
+  const activeSegment = pathname === `/spaces/${spaceId}/settings` ? "settings" : null;
 
   if (!space) {
     return (
@@ -101,14 +100,6 @@ export default function SpaceOverviewLayout({
               <Button variant="secondary" size="icon-sm" aria-label="Salin link publik" onClick={() => void handleCopyPublicUrl()}>
                 <Copy className="size-3.5" />
               </Button>
-            )}
-            {isAdmin && (
-              <Link href={`/spaces/${spaceId}/members`}>
-                <Button variant="secondary" size="sm">
-                  <UserPlus className="size-3.5" />
-                  Undang
-                </Button>
-              </Link>
             )}
             <Button size="sm" onClick={() => void handleNewPage()} disabled={isCreating}>
               <Plus className="size-3.5" />
