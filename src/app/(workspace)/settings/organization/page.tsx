@@ -110,7 +110,8 @@ function MembersTab({
           description: "Beri tahu orang tersebut secara langsung untuk mendaftar.",
         });
       }
-    } catch {
+    } catch (err: unknown) {
+      console.error("[beacon] invite failed:", err);
       toast.error("Tidak dapat mengirim undangan, silakan coba lagi.");
     }
   }
