@@ -24,4 +24,36 @@ describe("getSupabaseBrowserClient", () => {
       expect.objectContaining({ auth: expect.objectContaining({ flowType: "implicit" }) }),
     );
   });
+
+  it("consumes an invite/recovery email link's #access_token fragment via setSession, then strips the tokens from the URL", async () => {
+    vi.resetModules();
+    const fragmentClient = {
+      auth: { setSession: vi.fn().mockResolvedValue({ data: {}, error: null }) },
+    };
+    mockCreateBrowserClient.mockReturnValue(fragmentClient);
+    window.location.hash = "#access_token=at-1&refresh_token=rt-1&expires_in=3600&token_type=bearer&type=invite";
+
+    const { getSupabaseBrowserClient: fresh } = await import("./client");
+    fresh();
+
+    await vi.waitFor(() =>
+      expect(fragmentClient.auth.setSession).toHaveBeenCalledWith({ access_token: "at-1", refresh_token: "rt-1" }),
+    );
+    await vi.waitFor(() => expect(window.location.hash).toBe(""));
+  });
+
+  it("leaves the URL alone when there is no auth fragment (normal navigation)", async () => {
+    vi.resetModules();
+    const plainClient = {
+      auth: { setSession: vi.fn().mockResolvedValue({ data: {}, error: null }) },
+    };
+    mockCreateBrowserClient.mockReturnValue(plainClient);
+    window.location.hash = "";
+
+    const { getSupabaseBrowserClient: fresh } = await import("./client");
+    fresh();
+
+    expect(plainClient.auth.setSession).not.toHaveBeenCalled();
+    expect(window.location.hash).toBe("");
+  });
 });

@@ -1,25 +1,27 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import { spacesStore, permissionsStore, pagesStore } from "@/lib/supabase/stores";
+import { spacesStore, permissionsStore, pagesStore, organizationMembershipsStore } from "@/lib/supabase/stores";
 import { emptyDoc } from "@/lib/mock/blocknote-content";
 
 const mockSupabase = { from: vi.fn() };
 vi.mock("@/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => mockSupabase }));
 
-const { useCreateSpace, useUpdateSpace, useUpdateSpaceRole, useAddOrgMemberToSpace, useDeleteSpace, useOrganizationSpaces } = await import("./use-spaces");
+const { useCreateSpace, useUpdateSpace, useDeleteSpace, useOrganizationSpaces, useSpaceRole } = await import("./use-spaces");
 
 function resetStores() {
   spacesStore.setState([]);
   spacesStore.invalidate("all");
   permissionsStore.setState([]);
   permissionsStore.invalidate("all");
-  // useUserSpaces/useOrganizationSpaces key their permissions fetch per user
-  // ("user:<id>"), not "all" — invalidate the fixture ids this file actually
-  // uses so a second test in the same describe block re-fetches instead of
-  // silently reusing the first test's already-settled (now-cleared) cache.
-  permissionsStore.invalidate("user:user-1");
-  permissionsStore.invalidate("user:user-2");
+  organizationMembershipsStore.setState([]);
+  organizationMembershipsStore.invalidate("all");
   pagesStore.setState([]);
+}
+
+async function markSpacesLoaded() {
+  await act(async () => {
+    spacesStore.ensureLoaded("all", async () => []);
+  });
 }
 
 describe("useCreateSpace", () => {
@@ -170,101 +172,6 @@ describe("useUpdateSpace", () => {
   });
 });
 
-describe("useUpdateSpaceRole", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    resetStores();
-  });
-
-  it("upserts on (space_id, user_id) so it works whether or not a permission row already exists", async () => {
-    const upsert = vi.fn(() => Promise.resolve({ error: null }));
-    mockSupabase.from.mockReturnValue({ upsert });
-
-    const { result } = renderHook(() => useUpdateSpaceRole());
-    await act(async () => {
-      await result.current("space-1", "user-2", "editor");
-    });
-
-    expect(upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ space_id: "space-1", user_id: "user-2", role: "editor" }),
-      expect.objectContaining({ onConflict: "space_id,user_id" }),
-    );
-  });
-});
-
-describe("useAddOrgMemberToSpace", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    resetStores();
-  });
-
-  it("grants an existing Organization member Space access via a plain permissions insert (no email path)", async () => {
-    const permissionRow = { id: "perm-9", space_id: "space-1", user_id: "user-9", role: "editor" };
-    const insert = vi.fn(() => ({ select: () => ({ single: () => Promise.resolve({ data: permissionRow, error: null }) }) }));
-    mockSupabase.from.mockReturnValue({ insert });
-
-    const { result } = renderHook(() => useAddOrgMemberToSpace());
-    let outcome: unknown;
-    await act(async () => {
-      outcome = await result.current("space-1", "user-9", "editor");
-    });
-
-    expect(insert).toHaveBeenCalledWith(
-      expect.objectContaining({ space_id: "space-1", user_id: "user-9", role: "editor" }),
-    );
-    expect(outcome).toMatchObject({ id: "perm-9", spaceId: "space-1", userId: "user-9", role: "editor" });
-    expect(permissionsStore.getState()).toEqual([
-      expect.objectContaining({ id: "perm-9", spaceId: "space-1", userId: "user-9", role: "editor" }),
-    ]);
-  });
-
-  it("throws the DB's NOT_ORGANIZATION_MEMBER error without touching the store when the target isn't an org member", async () => {
-    const dbError = { message: "NOT_ORGANIZATION_MEMBER: user is not a member of this Space's Organization" };
-    const insert = vi.fn(() => ({ select: () => ({ single: () => Promise.resolve({ data: null, error: dbError }) }) }));
-    mockSupabase.from.mockReturnValue({ insert });
-
-    const { result } = renderHook(() => useAddOrgMemberToSpace());
-    await expect(result.current("space-1", "user-9", "editor")).rejects.toEqual(dbError);
-    expect(permissionsStore.getState()).toEqual([]);
-  });
-});
-
-describe("useRemoveMember", () => {
-  const mockDeleteEq = vi.fn();
-  beforeEach(() => {
-    vi.clearAllMocks();
-    resetStores();
-    mockDeleteEq.mockResolvedValue({ error: null });
-    mockSupabase.from.mockReturnValue({ delete: () => ({ eq: mockDeleteEq }) });
-  });
-
-  it("deletes the permissions row and removes it from the local store", async () => {
-    permissionsStore.setState([
-      { id: "perm-1", spaceId: "space-1", userId: "user-1", role: "admin" },
-      { id: "perm-2", spaceId: "space-1", userId: "user-2", role: "viewer" },
-    ]);
-
-    const { useRemoveMember } = await import("./use-spaces");
-    const { result } = renderHook(() => useRemoveMember());
-    await act(async () => {
-      await result.current("perm-2");
-    });
-
-    expect(mockDeleteEq).toHaveBeenCalledWith("id", "perm-2");
-    expect(permissionsStore.getState().map((p) => p.id)).toEqual(["perm-1"]);
-  });
-
-  it("throws when Supabase returns an error, without touching the local store", async () => {
-    permissionsStore.setState([{ id: "perm-1", spaceId: "space-1", userId: "user-1", role: "admin" }]);
-    mockDeleteEq.mockResolvedValue({ error: { message: "permission denied" } });
-
-    const { useRemoveMember } = await import("./use-spaces");
-    const { result } = renderHook(() => useRemoveMember());
-    await expect(result.current("perm-1")).rejects.toEqual({ message: "permission denied" });
-    expect(permissionsStore.getState().map((p) => p.id)).toEqual(["perm-1"]);
-  });
-});
-
 describe("useDeleteSpace", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -321,17 +228,16 @@ describe("useOrganizationSpaces", () => {
   });
 
   it("returns only the Spaces belonging to the given Organization, even when the caller has access to Spaces in other Organizations too", async () => {
+    organizationMembershipsStore.setState([
+      { id: "mem-1", organizationId: "org-1", userId: "user-1", role: "admin", createdAt: "t" },
+      { id: "mem-2", organizationId: "org-2", userId: "user-1", role: "admin", createdAt: "t" },
+    ]);
     const spaceRows: import("@/lib/supabase/mappers").SpaceRow[] = [
       { id: "space-1", organization_id: "org-1", name: "Org 1 Space", slug: "sp", category: null, is_publishable: false, created_by_user_id: "user-1", created_at: "t" },
       { id: "space-2", organization_id: "org-2", name: "Org 2 Space", slug: "sp", category: null, is_publishable: false, created_by_user_id: "user-1", created_at: "t" },
     ];
-    const permissionRows = [
-      { id: "perm-1", space_id: "space-1", user_id: "user-1", role: "admin" },
-      { id: "perm-2", space_id: "space-2", user_id: "user-1", role: "admin" },
-    ];
     mockSupabase.from.mockImplementation((table: string) => {
       if (table === "spaces") return { select: () => Promise.resolve({ data: spaceRows, error: null }) };
-      if (table === "permissions") return { select: () => ({ eq: () => Promise.resolve({ data: permissionRows, error: null }) }) };
       throw new Error(`unexpected table ${table}`);
     });
 
@@ -340,21 +246,80 @@ describe("useOrganizationSpaces", () => {
   });
 
   it("returns every accessible Space when organizationId is undefined (backward compatible)", async () => {
+    organizationMembershipsStore.setState([
+      { id: "mem-1", organizationId: "org-1", userId: "user-1", role: "admin", createdAt: "t" },
+      { id: "mem-2", organizationId: "org-2", userId: "user-1", role: "admin", createdAt: "t" },
+    ]);
     const spaceRows: import("@/lib/supabase/mappers").SpaceRow[] = [
       { id: "space-1", organization_id: "org-1", name: "Org 1 Space", slug: "sp", category: null, is_publishable: false, created_by_user_id: "user-1", created_at: "t" },
       { id: "space-2", organization_id: "org-2", name: "Org 2 Space", slug: "sp", category: null, is_publishable: false, created_by_user_id: "user-1", created_at: "t" },
     ];
-    const permissionRows = [
-      { id: "perm-1", space_id: "space-1", user_id: "user-1", role: "admin" },
-      { id: "perm-2", space_id: "space-2", user_id: "user-1", role: "admin" },
-    ];
     mockSupabase.from.mockImplementation((table: string) => {
       if (table === "spaces") return { select: () => Promise.resolve({ data: spaceRows, error: null }) };
-      if (table === "permissions") return { select: () => ({ eq: () => Promise.resolve({ data: permissionRows, error: null }) }) };
       throw new Error(`unexpected table ${table}`);
     });
 
     const { result } = renderHook(() => useOrganizationSpaces("user-1", undefined));
     await waitFor(() => expect(result.current).toHaveLength(2));
+  });
+
+  it("does not expose a Space from a stale permission after Organization membership is removed", async () => {
+    await markSpacesLoaded();
+    spacesStore.setState([
+      { id: "space-1", organizationId: "org-1", name: "Former Org Space", slug: "sp", category: null, isPublishable: true, createdByUserId: "user-2", createdAt: "t" },
+    ]);
+    permissionsStore.setState([
+      { id: "perm-1", spaceId: "space-1", userId: "user-1", role: "admin" },
+    ]);
+
+    const { result } = renderHook(() => useOrganizationSpaces("user-1", undefined));
+
+    expect(result.current).toEqual([]);
+  });
+});
+
+describe("Organization-level automatic space access", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetStores();
+  });
+
+  it("automatically grants access to all Spaces in an Organization when user is an org member with no explicit permissions row", async () => {
+    await markSpacesLoaded();
+    organizationMembershipsStore.setState([
+      { id: "mem-1", organizationId: "org-1", userId: "user-member", role: "member", createdAt: "t" },
+    ]);
+    spacesStore.setState([
+      { id: "space-1", organizationId: "org-1", name: "Space 1", slug: "s1", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
+      { id: "space-2", organizationId: "org-1", name: "Space 2", slug: "s2", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
+      { id: "space-3", organizationId: "org-2", name: "Other Org Space", slug: "s3", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
+    ]);
+    permissionsStore.setState([
+      { id: "stale-perm", spaceId: "space-1", userId: "user-stranger", role: "admin" },
+    ]);
+
+    const { result } = renderHook(() => useOrganizationSpaces("user-member", "org-1"));
+    expect(result.current.map((s) => s.id)).toEqual(["space-1", "space-2"]);
+  });
+
+  it("derives space role automatically from organization role: admin for owner/admin, editor for member", async () => {
+    await markSpacesLoaded();
+    organizationMembershipsStore.setState([
+      { id: "mem-admin", organizationId: "org-1", userId: "user-admin", role: "admin", createdAt: "t" },
+      { id: "mem-member", organizationId: "org-1", userId: "user-member", role: "member", createdAt: "t" },
+    ]);
+    spacesStore.setState([
+      { id: "space-1", organizationId: "org-1", name: "Space 1", slug: "s1", category: null, isPublishable: false, createdByUserId: "user-1", createdAt: "t" },
+    ]);
+    permissionsStore.setState([]);
+
+    const { result: adminRole } = renderHook(() => useSpaceRole("space-1", "user-admin"));
+    expect(adminRole.current).toBe("admin");
+
+    const { result: memberRole } = renderHook(() => useSpaceRole("space-1", "user-member"));
+    expect(memberRole.current).toBe("editor");
+
+    const { result: strangerRole } = renderHook(() => useSpaceRole("space-1", "user-stranger"));
+    expect(strangerRole.current).toBeNull();
   });
 });
