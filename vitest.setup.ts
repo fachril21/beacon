@@ -22,3 +22,12 @@ vi.stubGlobal("ResizeObserver", ResizeObserverStub);
 if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};
 }
+
+// jsdom has no elementsFromPoint either; BlockNote's side-menu extension calls
+// it on the EDITOR DOCUMENT (TipTap's editor.root = ownerDocument) on every
+// mouse move, and each throw surfaces as an unhandled error that fails the
+// whole run even when the test itself passed.
+const documentProto = Document.prototype as Document & { elementsFromPoint?: () => Element[] };
+if (!documentProto.elementsFromPoint) {
+  documentProto.elementsFromPoint = () => [];
+}
