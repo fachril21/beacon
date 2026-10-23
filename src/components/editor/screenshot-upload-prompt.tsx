@@ -4,15 +4,7 @@ import { useCallback, useState } from "react";
 import { ImagePlus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { requestImageFile } from "@/lib/file-select-singleton";
-
-function readImageDimensions(url: string): Promise<{ width: number; height: number }> {
-  return new Promise((resolve, reject) => {
-    const img = new window.Image();
-    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-    img.onerror = reject;
-    img.src = url;
-  });
-}
+import { readImageDimensions } from "@/lib/image-dimensions";
 
 export function ScreenshotUploadPrompt({
   onUpload,
@@ -41,6 +33,9 @@ export function ScreenshotUploadPrompt({
 
   return (
     <div
+      // Marks the editor-level paste handler to stand down: this prompt owns
+      // its own paste/drop so the same image isn't uploaded twice.
+      data-screenshot-dropzone=""
       onDragOver={(e) => {
         e.preventDefault();
         setIsDragging(true);
