@@ -90,9 +90,11 @@ describe("SpaceOverviewLayout tabs", () => {
     await renderLayout();
     const link = await screen.findByRole("link", { name: /pengaturan/i });
     expect(link).toHaveAttribute("href", "/spaces/space-1/settings");
+    expect(screen.queryByRole("link", { name: /^anggota$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /undang/i })).not.toBeInTheDocument();
   });
 
-  it("hides the Anggota and Pengaturan tabs from a non-admin", async () => {
+  it("hides the Pengaturan tab from a non-admin", async () => {
     mockRole = "editor";
     await renderLayout();
     await screen.findByRole("heading", { name: "Aplikasi Mobile" });
@@ -129,15 +131,6 @@ describe("SpaceOverviewLayout role gate", () => {
     mockRole = "admin";
     mockSpace = { ...baseSpace };
     mockOrganization = { ...baseOrganization };
-  });
-
-  it("renders a not-found state for a non-admin visiting the Anggota route", async () => {
-    mockPathname = "/spaces/space-1/members";
-    mockRole = "editor";
-    await renderLayout();
-
-    expect(await screen.findByText("Halaman tidak ditemukan")).toBeInTheDocument();
-    expect(screen.queryByText("Tab content")).not.toBeInTheDocument();
   });
 
   it("renders a not-found state for a non-admin visiting the Pengaturan route", async () => {

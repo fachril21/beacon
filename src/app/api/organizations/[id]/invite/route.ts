@@ -45,6 +45,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (error.message.includes("INVALID_ROLE")) {
       return NextResponse.json({ error: "INVALID_ROLE" }, { status: 400 });
     }
+    // Owner protection (20261007000000): an invite must never silently demote
+    // the Organization's single owner — surface the real cause instead of the
+    // generic INVITE_FAILED below.
+    if (error.message.includes("CANNOT_CHANGE_OWNER")) {
+      return NextResponse.json({ error: "CANNOT_CHANGE_OWNER" }, { status: 409 });
+    }
     return NextResponse.json({ error: "INVITE_FAILED" }, { status: 500 });
   }
 
@@ -60,6 +66,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const siteUrl = new URL(request.url).origin;
   const redirectTo = `${siteUrl}/accept-invite?token=${result.invite.token}`;
   const { error: emailError } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo });
+  // Surface the real reason (typically SMTP not configured on the Supabase
+  // project) — emailSent:false alone tells the inviting admin nothing
+  // actionable, and without this log there is no trace server-side either.
+  if (emailError) console.error("[beacon] invite email failed:", emailError);
 
   // Mirrors the Space-invite route's fallback: inviteUserByEmail fails
   // outright when an auth.users row for this email already exists (e.g. a
@@ -69,6 +79,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   let emailSent = !emailError;
   if (emailError && isAlreadyRegisteredAuthError(emailError)) {
     const { error: resendError } = await admin.auth.resetPasswordForEmail(email, { redirectTo });
+    if (resendError) console.error("[beacon] invite email resend failed:", resendError);
     emailSent = !resendError;
   }
 

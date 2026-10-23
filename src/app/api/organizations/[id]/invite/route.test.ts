@@ -107,6 +107,20 @@ describe("POST /api/organizations/[id]/invite", () => {
     expect(await response.json()).toEqual({ error: "NOT_AUTHORIZED" });
   });
 
+  it("maps CANNOT_CHANGE_OWNER to a 409 so re-inviting the owner's email surfaces the real cause, not INVITE_FAILED", async () => {
+    mockServerClient.rpc.mockResolvedValue({
+      data: null,
+      error: { message: "CANNOT_CHANGE_OWNER: the owner's role can only change via ownership transfer" },
+    });
+
+    const response = await POST(makeRequest({ email: "owner@dibimbing.id", role: "member" }), {
+      params: Promise.resolve({ id: "org-1" }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "CANNOT_CHANGE_OWNER" });
+  });
+
   it("returns 401 when there is no signed-in user", async () => {
     mockServerClient.auth.getUser.mockResolvedValue({ data: { user: null } });
 

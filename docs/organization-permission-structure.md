@@ -30,7 +30,7 @@ Practical effect: a Space's `permissions` row is now meaningless without a match
 | Who can send | OWNER, ADMIN | ~~Space admin~~ |
 | Grants | Org membership only | — |
 
-Bringing a brand-new person into Beacon now goes exclusively through an Organization invite (`invite_to_organization` RPC → `/api/organizations/[id]/invite` for the real email send). Once someone is an Organization member, an OWNER/ADMIN grants Space-level access separately via a roster picker (no email involved — `useAddOrgMemberToSpace`).
+Bringing a brand-new person into Beacon now goes exclusively through an Organization invite (`invite_to_organization` RPC → `/api/organizations/[id]/invite` for the real email send). Organization membership is itself the Space grant: every member automatically has access to every Space in the Organization — org `owner`/`admin` count as Space `admin`, plain `member` is floored at Space `editor` (`beacon.user_space_role`, 20261007000000). There is no per-Space roster picker or Space-level role management UI.
 
 ### Flow
 
@@ -53,4 +53,4 @@ Any authenticated user can create an Organization (`useCreateOrganization`): ins
 ## Data migration
 
 - Every existing `profiles.organization_id`/`organization_role` row was backfilled into `organization_memberships` before those columns were dropped (`20260815000000`).
-- Any still-PENDING `pending_invites` row was migrated forward into `organization_invitations` (`20260815000300`) — with one unavoidable scope narrowing: a Space-level invite carried a `SpaceRole` (viewer/editor/admin scoped to one Space), which has no Organization-level equivalent. Every migrated row became `role = 'member'`; the actual Space-level role is granted separately post-join via the roster picker.
+- Any still-PENDING `pending_invites` row was migrated forward into `organization_invitations` (`20260815000300`) — with one unavoidable scope narrowing: a Space-level invite carried a `SpaceRole` (viewer/editor/admin scoped to one Space), which has no Organization-level equivalent. Every migrated row became `role = 'member'`. No per-Space role is assigned post-join anymore: Organization membership alone determines Space access.

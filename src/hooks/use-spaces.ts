@@ -1,10 +1,10 @@
 "use client";
 
 import { useSyncExternalStore, useCallback, useEffect } from "react";
-import { spacesStore, permissionsStore, pagesStore } from "@/lib/supabase/stores";
+import { spacesStore, permissionsStore, pagesStore, organizationMembershipsStore } from "@/lib/supabase/stores";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { mapSpaceRow, mapPermissionRow, type SpaceRow, type PermissionRow } from "@/lib/supabase/mappers";
-import type { Space, SpaceRole } from "@/lib/types";
+import type { OrganizationRole, Space, SpaceRole } from "@/lib/types";
 
 export function useSpaces(organizationId?: string) {
   const spaces = useSyncExternalStore(spacesStore.subscribe, spacesStore.getState, spacesStore.getState);
@@ -30,10 +30,18 @@ export function useSpace(id: string | undefined) {
   return id ? spaces.find((s) => s.id === id) : undefined;
 }
 
-/** Spaces a given User has an explicit Permission row in (Workspace Home sidebar, Flow 2 step 1). */
+/**
+ * Spaces accessible to a user.
+ * Access rule: Any member of an Organization automatically has access to all
+ * Spaces belonging to that Organization.
+ */
 export function useUserSpaces(userId: string | undefined) {
   const spaces = useSyncExternalStore(spacesStore.subscribe, spacesStore.getState, spacesStore.getState);
-  const permissions = useSyncExternalStore(permissionsStore.subscribe, permissionsStore.getState, permissionsStore.getState);
+  const memberships = useSyncExternalStore(
+    organizationMembershipsStore.subscribe,
+    organizationMembershipsStore.getState,
+    organizationMembershipsStore.getState,
+  );
 
   useEffect(() => {
     spacesStore.ensureLoaded("all", async () => {
@@ -44,19 +52,9 @@ export function useUserSpaces(userId: string | undefined) {
     });
   }, []);
 
-  useEffect(() => {
-    if (!userId) return;
-    permissionsStore.ensureLoaded(`user:${userId}`, async () => {
-      const supabase = getSupabaseBrowserClient();
-      const { data, error } = await supabase.from("permissions").select("*").eq("user_id", userId);
-      if (error) throw error;
-      return ((data ?? []) as PermissionRow[]).map(mapPermissionRow);
-    });
-  }, [userId]);
-
   if (!userId) return [];
-  const accessibleIds = new Set(permissions.filter((p) => p.userId === userId).map((p) => p.spaceId));
-  return spaces.filter((s) => accessibleIds.has(s.id));
+  const myOrgIds = new Set(memberships.filter((m) => m.userId === userId).map((m) => m.organizationId));
+  return spaces.filter((s) => myOrgIds.has(s.organizationId));
 }
 
 /**
@@ -191,64 +189,46 @@ export function useSpacePermissions(spaceId: string | undefined) {
   return spaceId ? permissions.filter((p) => p.spaceId === spaceId) : [];
 }
 
-/** The current user's role in a Space, or null if they have no explicit permission row. */
-export function useSpaceRole(spaceId: string | undefined, userId: string | undefined): SpaceRole | null {
-  const permissions = useSpacePermissions(spaceId);
-  if (!userId) return null;
-  return permissions.find((p) => p.userId === userId)?.role ?? null;
+const SPACE_ROLE_RANK: Record<SpaceRole, number> = { viewer: 0, editor: 1, admin: 2 };
+
+/** Org owner/admin -> Space admin; Org member -> Space editor. Mirrors beacon.user_space_role in SQL. */
+function spaceRoleFromOrgRole(orgRole: OrganizationRole): SpaceRole {
+  return orgRole === "owner" || orgRole === "admin" ? "admin" : "editor";
 }
 
-export function useUpdateSpaceRole() {
-  return useCallback(async (spaceId: string, userId: string, role: SpaceRole) => {
-    const supabase = getSupabaseBrowserClient();
-    const { error } = await supabase
-      .from("permissions")
-      .upsert({ space_id: spaceId, user_id: userId, role }, { onConflict: "space_id,user_id" });
-    if (error) throw error;
-
-    permissionsStore.setState((prev) => {
-      const exists = prev.some((p) => p.spaceId === spaceId && p.userId === userId);
-      if (exists) return prev.map((p) => (p.spaceId === spaceId && p.userId === userId ? { ...p, role } : p));
-      return [...prev, { id: `${spaceId}:${userId}`, spaceId, userId, role }];
-    });
-  }, []);
+function highestSpaceRole(a: SpaceRole | undefined, b: SpaceRole | undefined): SpaceRole | null {
+  if (!a) return b ?? null;
+  if (!b) return a;
+  return SPACE_ROLE_RANK[a] >= SPACE_ROLE_RANK[b] ? a : b;
 }
 
 /**
- * Grants an existing Organization member access to a Space. Space-level
- * access is no longer its own independent invite path — bringing a brand
- * new person into Beacon at all goes exclusively through an Organization
- * invite first (useInviteToOrganization, use-organizations.ts); this just
- * inserts a Permission row for someone already picked from the org roster.
- * RLS (permissions_insert_admin_or_bootstrap + permissions_require_org_membership_trigger)
- * enforces both "caller is a Space admin" and "target is an org member".
+ * The user's effective role in a Space: the HIGHEST of
+ *  - the role derived from their Organization role (owner/admin -> 'admin',
+ *    member -> 'editor'), and
+ *  - any explicit Permission row.
+ * Organization membership is therefore a floor — a stale 'viewer' row can
+ * never lock an Org admin out. Not in the Org -> null, even with a stale row.
+ * Must stay in sync with beacon.user_space_role
+ * (supabase/migrations/20261007000000_org_members_full_space_access.sql).
  */
-export function useAddOrgMemberToSpace() {
-  return useCallback(async (spaceId: string, userId: string, role: SpaceRole) => {
-    const supabase = getSupabaseBrowserClient();
-    const { data, error } = await supabase
-      .from("permissions")
-      .insert({ space_id: spaceId, user_id: userId, role })
-      .select()
-      .single();
-    if (error) throw error;
+export function useSpaceRole(spaceId: string | undefined, userId: string | undefined): SpaceRole | null {
+  const permissions = useSpacePermissions(spaceId);
+  const spaces = useSyncExternalStore(spacesStore.subscribe, spacesStore.getState, spacesStore.getState);
+  const memberships = useSyncExternalStore(
+    organizationMembershipsStore.subscribe,
+    organizationMembershipsStore.getState,
+    organizationMembershipsStore.getState,
+  );
 
-    const permission = mapPermissionRow(data as PermissionRow);
-    permissionsStore.setState((prev) => {
-      const exists = prev.some((p) => p.spaceId === permission.spaceId && p.userId === permission.userId);
-      return exists ? prev.map((p) => (p.id === permission.id ? permission : p)) : [...prev, permission];
-    });
-    return permission;
-  }, []);
-}
+  if (!userId || !spaceId) return null;
 
-/** Removes a Member from a Space (RLS: permissions_delete_admin_only — Space admins only). */
-export function useRemoveMember() {
-  return useCallback(async (permissionId: string) => {
-    const supabase = getSupabaseBrowserClient();
-    const { error } = await supabase.from("permissions").delete().eq("id", permissionId);
-    if (error) throw error;
+  const explicitRole = permissions.find((p) => p.userId === userId)?.role;
+  const space = spaces.find((s) => s.id === spaceId);
+  const orgMembership = space
+    ? memberships.find((m) => m.organizationId === space.organizationId && m.userId === userId)
+    : undefined;
 
-    permissionsStore.setState((prev) => prev.filter((p) => p.id !== permissionId));
-  }, []);
+  if (!orgMembership) return null;
+  return highestSpaceRole(explicitRole, spaceRoleFromOrgRole(orgMembership.role));
 }
