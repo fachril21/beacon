@@ -292,21 +292,15 @@
     accent-color: var(--primary);
   }
 
-  /* Public reading surface (PublicPageContent) — larger body-lg copy with
-     generous line-height/paragraph spacing (DESIGN.md §3.2), matching the
-     prior Lexical publicReadingTheme deltas. Editor-only chrome (checklist
-     hover affordances, drag handles) never mounts here since the editor is
-     read-only, so no exclusion rules are needed. */
+  /* Public reading surface (PublicPageContent) — body-lg copy at the same
+     1.5 line rhythm and default BlockNote block spacing as the admin editor,
+     so sections do not open up with extra paragraph/heading margins on the
+     published page. Reading font size stays slightly larger. Editor-only
+     chrome (checklist hover affordances, drag handles) never mounts here
+     since the editor is read-only, so no exclusion rules are needed. */
   .beacon-reading .bn-block-content[data-content-type="paragraph"],
   .beacon-reading .bn-block-content[data-content-type="quote"] {
     font-size: var(--text-body-lg);
-    line-height: var(--text-body-lg--line-height);
-  }
-  .beacon-reading .bn-block-content[data-content-type="paragraph"] {
-    margin-bottom: 1.25em;
-  }
-  .beacon-reading .bn-block-content[data-content-type="heading"] {
-    margin-top: 2.5rem;
-    margin-bottom: 0.75rem;
+    line-height: 1.5;
   }
 }

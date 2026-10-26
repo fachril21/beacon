@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { PublicSpaceView } from "./public-space-view";
 import type { Page, Space, Organization } from "@/lib/types";
@@ -18,8 +18,10 @@ vi.mock("@/hooks/use-public-org", () => ({
 }));
 
 const mockUsePublicSpace = vi.fn();
+const mockUsePublicSpaceStatus = vi.fn();
 vi.mock("@/hooks/public-space-context", () => ({
   usePublicSpace: () => mockUsePublicSpace(),
+  usePublicSpaceStatus: () => mockUsePublicSpaceStatus(),
 }));
 
 function makePage(overrides: Partial<Page> & Pick<Page, "id" | "title" | "slug">): Page {
@@ -51,10 +53,25 @@ const space: Space = {
 };
 
 describe("PublicSpaceView", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUsePublicSpaceStatus.mockReturnValue("ready");
+  });
+
   it("shows the 'not available' state when the slug resolved to no Space", () => {
     mockUsePublicSpace.mockReturnValue(null);
     render(<PublicSpaceView />);
     expect(screen.getByText(/tidak tersedia|no longer available|tidak ditemukan/i)).toBeInTheDocument();
+  });
+
+  it("shows a loading skeleton instead of the unavailable state while the Space resolves", () => {
+    mockUsePublicSpace.mockReturnValue(null);
+    mockUsePublicSpaceStatus.mockReturnValue("loading");
+
+    render(<PublicSpaceView />);
+
+    expect(screen.getByRole("status")).toHaveTextContent(/memuat space/i);
+    expect(screen.queryByText(/tidak tersedia/i)).not.toBeInTheDocument();
   });
 
   it("renders the Space name as the heading and only that Space's published pages", () => {

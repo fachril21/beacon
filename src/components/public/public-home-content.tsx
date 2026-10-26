@@ -6,6 +6,7 @@ import { BookOpen, Search } from "lucide-react";
 import { usePublicOrgContext } from "@/hooks/use-public-org";
 import { usePublicSpaces } from "@/hooks/use-public-content";
 import { EmptyState } from "@/components/beacon/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PublicSearchCommand } from "./public-search-command";
 
 /**
@@ -17,7 +18,7 @@ import { PublicSearchCommand } from "./public-search-command";
  */
 export function PublicHomeContent() {
   const { organization, basePath } = usePublicOrgContext();
-  const { spaces, recentPages } = usePublicSpaces(organization?.id);
+  const { spaces, recentPages, isLoading } = usePublicSpaces(organization?.id);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   if (!organization) return null;
@@ -55,7 +56,23 @@ export function PublicHomeContent() {
         )}
       </div>
 
-      {spaces.length === 0 ? (
+      {isLoading ? (
+        <div className="mx-auto mt-16 max-w-(--width-app-shell)" aria-busy="true">
+          <Skeleton className="h-7 w-64" />
+          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[0, 1, 2].map((index) => (
+              <div key={index} className="flex flex-col gap-2 rounded-lg border border-border bg-card p-5">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-5 w-2/3" />
+                <Skeleton className="h-3.5 w-24" />
+              </div>
+            ))}
+          </div>
+          <span role="status" className="sr-only">
+            Memuat dokumentasi…
+          </span>
+        </div>
+      ) : spaces.length === 0 ? (
         <EmptyState icon={BookOpen} title="Belum ada panduan yang dipublikasikan" className="mt-16" />
       ) : (
         <div className="mx-auto mt-16 max-w-(--width-app-shell)">

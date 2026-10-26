@@ -13,6 +13,40 @@ export interface PublicRecentPage {
   publishedAt: string;
 }
 
+/** A public lookup's three real states — "not found" must never be inferred from an in-flight request. */
+export type PublicLookupStatus = "loading" | "ready" | "not-found";
+
+export type PublicLookup<T> =
+  | { status: "loading"; data: null }
+  | { status: "not-found"; data: null }
+  | { status: "ready"; data: T };
+
+export interface PublicSpacePageTree {
+  space: Space;
+  pages: PageTreeNode[];
+}
+
+export interface PublicPageResult {
+  page: Page;
+  space: Space;
+}
+
+/**
+ * Keyed resolution state: `key` identifies the request whose result this is.
+ * While the current request's key doesn't match, the caller renders the
+ * loading state — so navigating from one Page/Space to another never flashes
+ * a stale result (or a false "not found") before the new query settles.
+ */
+type ResolvedState<T> =
+  | { key: string; status: "ready"; data: T }
+  | { key: string; status: "not-found"; data: null };
+
+interface PublicSpacesState {
+  key: string;
+  spaces: { space: Space; publishedPageCount: number }[];
+  recentPages: PublicRecentPage[];
+}
+
 /**
  * The publishable Spaces of an Organization that have at least one published
  * Page — the public site home is a directory of these (per-Space publishing,
@@ -25,12 +59,15 @@ export interface PublicRecentPage {
  * middleware only sets a header and does not yet filter queries.
  */
 export function usePublicSpaces(organizationId: string | undefined) {
-  const [spaces, setSpaces] = useState<{ space: Space; publishedPageCount: number }[]>([]);
-  const [recentPages, setRecentPages] = useState<PublicRecentPage[]>([]);
+  const [state, setState] = useState<PublicSpacesState | null>(null);
 
   useEffect(() => {
     if (!organizationId) return;
     let cancelled = false;
+
+    const finish = (spaces: PublicSpacesState["spaces"], recentPages: PublicRecentPage[]) => {
+      if (!cancelled) setState({ key: organizationId, spaces, recentPages });
+    };
 
     (async () => {
       const supabase = getSupabaseBrowserClient();
@@ -41,14 +78,12 @@ export function usePublicSpaces(organizationId: string | undefined) {
         .eq("is_publishable", true);
       if (spaceError) {
         console.error("[beacon] failed to load public spaces:", spaceError);
+        finish([], []);
         return;
       }
       const allSpaces = ((spaceRows ?? []) as SpaceRow[]).map(mapSpaceRow);
       if (allSpaces.length === 0) {
-        if (!cancelled) {
-          setSpaces([]);
-          setRecentPages([]);
-        }
+        finish([], []);
         return;
       }
 
@@ -62,6 +97,7 @@ export function usePublicSpaces(organizationId: string | undefined) {
         .eq("is_published", true);
       if (pageError) {
         console.error("[beacon] failed to count public pages:", pageError);
+        finish([], []);
         return;
       }
 
@@ -82,10 +118,7 @@ export function usePublicSpaces(organizationId: string | undefined) {
         .slice(0, 4)
         .map((row) => ({ title: row.title, slug: row.slug, publishedAt: row.published_at }));
 
-      if (!cancelled) {
-        setSpaces(result);
-        setRecentPages(recent);
-      }
+      finish(result, recent);
     })();
 
     return () => {
@@ -93,7 +126,9 @@ export function usePublicSpaces(organizationId: string | undefined) {
     };
   }, [organizationId]);
 
-  return { spaces: organizationId ? spaces : [], recentPages: organizationId ? recentPages : [] };
+  if (!organizationId) return { spaces: [], recentPages: [], isLoading: false };
+  if (!state || state.key !== organizationId) return { spaces: [], recentPages: [], isLoading: true };
+  return { spaces: state.spaces, recentPages: state.recentPages, isLoading: false };
 }
 
 /**
@@ -106,22 +141,30 @@ export function usePublicSpaces(organizationId: string | undefined) {
  *
  * Resolved here (once, in the layout shell) so the sidebar TOC and the
  * space-scoped search don't each have to re-derive it from whichever child
- * route happens to be mounted. Returns null — never a fallback to another
- * Space — when the slug matches nothing publishable (Flow 5).
+ * route happens to be mounted. Returns "not-found" — never a fallback to
+ * another Space — when the slug matches nothing publishable (Flow 5), and
+ * "loading" while the lookup is still in flight.
  */
-export function usePublicCurrentSpace(organizationId: string | undefined) {
+export function usePublicCurrentSpace(organizationId: string | undefined): PublicLookup<PublicSpacePageTree> {
   const params = useParams<{ spaceSlug?: string; pageSlug?: string }>();
   const spaceSlug = typeof params?.spaceSlug === "string" ? params.spaceSlug : null;
   const pageSlug = typeof params?.pageSlug === "string" ? params.pageSlug : null;
+  const requestKey =
+    organizationId && (spaceSlug || pageSlug)
+      ? `${organizationId}|${spaceSlug ?? ""}|${pageSlug ?? ""}`
+      : null;
 
-  const [result, setResult] = useState<{ space: Space; pages: PageTreeNode[] } | null>(null);
+  const [state, setState] = useState<ResolvedState<PublicSpacePageTree> | null>(null);
 
   useEffect(() => {
     // No current Space on the directory route — the return expression below
-    // already yields null there, so nothing to set (and a synchronous
-    // setState in an effect guard is a lint error / cascading render).
-    if (!organizationId || (!spaceSlug && !pageSlug)) return;
+    // already reports not-found there, so nothing to fetch.
+    if (!requestKey || !organizationId) return;
     let cancelled = false;
+
+    const notFound = () => {
+      if (!cancelled) setState({ key: requestKey, status: "not-found", data: null });
+    };
 
     (async () => {
       const supabase = getSupabaseBrowserClient();
@@ -137,7 +180,7 @@ export function usePublicCurrentSpace(organizationId: string | undefined) {
           .eq("is_publishable", true)
           .single();
         if (error || !data) {
-          if (!cancelled) setResult(null);
+          notFound();
           return;
         }
         spaceRow = data as SpaceRow;
@@ -149,7 +192,7 @@ export function usePublicCurrentSpace(organizationId: string | undefined) {
           .eq("slug", pageSlug)
           .single();
         if (pageLookupError || !pageLookup) {
-          if (!cancelled) setResult(null);
+          notFound();
           return;
         }
         const { data, error } = await supabase
@@ -159,7 +202,7 @@ export function usePublicCurrentSpace(organizationId: string | undefined) {
           .eq("is_publishable", true)
           .single();
         if (error || !data) {
-          if (!cancelled) setResult(null);
+          notFound();
           return;
         }
         spaceRow = data as SpaceRow;
@@ -167,7 +210,7 @@ export function usePublicCurrentSpace(organizationId: string | undefined) {
 
       const space = mapSpaceRow(spaceRow);
       if (space.organizationId !== organizationId) {
-        if (!cancelled) setResult(null);
+        notFound();
         return;
       }
 
@@ -178,33 +221,44 @@ export function usePublicCurrentSpace(organizationId: string | undefined) {
         .eq("is_published", true);
       if (pageError) {
         console.error("[beacon] failed to load public space pages:", pageError);
+        notFound();
         return;
       }
       const pages = buildPageTree(((pageRows ?? []) as PageRow[]).map(mapPageRow));
 
-      if (!cancelled) setResult({ space, pages });
+      if (!cancelled) setState({ key: requestKey, status: "ready", data: { space, pages } });
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [organizationId, spaceSlug, pageSlug]);
+  }, [requestKey, organizationId, spaceSlug, pageSlug]);
 
-  return organizationId && (spaceSlug || pageSlug) ? result : null;
+  if (!requestKey) return { status: "not-found", data: null };
+  if (!state || state.key !== requestKey) return { status: "loading", data: null };
+  return state.status === "ready"
+    ? { status: "ready", data: state.data }
+    : { status: "not-found", data: null };
 }
 
 /**
  * A single published Page, looked up by its slug scoped to its Organization
  * (slugs are unique per-Organization, not globally — see
- * pages_organization_id_slug_unique) — returns null if not published, not
- * found, or belongs to a different Organization (never a fallback).
+ * pages_organization_id_slug_unique) — returns "not-found" if not published,
+ * missing, or owned by a different Organization (never a fallback), and
+ * "loading" while the lookup is in flight.
  */
-export function usePublicPage(pageSlug: string | undefined, organizationId: string | undefined) {
-  const [result, setResult] = useState<{ page: Page; space: Space } | null>(null);
+export function usePublicPage(pageSlug: string | undefined, organizationId: string | undefined): PublicLookup<PublicPageResult> {
+  const requestKey = pageSlug && organizationId ? `${organizationId}|${pageSlug}` : null;
+  const [state, setState] = useState<ResolvedState<PublicPageResult> | null>(null);
 
   useEffect(() => {
-    if (!pageSlug || !organizationId) return;
+    if (!requestKey || !pageSlug || !organizationId) return;
     let cancelled = false;
+
+    const notFound = () => {
+      if (!cancelled) setState({ key: requestKey, status: "not-found", data: null });
+    };
 
     (async () => {
       const supabase = getSupabaseBrowserClient();
@@ -215,12 +269,12 @@ export function usePublicPage(pageSlug: string | undefined, organizationId: stri
         .eq("slug", pageSlug)
         .single();
       if (pageError || !pageRow) {
-        if (!cancelled) setResult(null);
+        notFound();
         return;
       }
       const page = mapPageRow(pageRow as PageRow);
       if (!page.isPublished || !page.publishedContentSnapshot) {
-        if (!cancelled) setResult(null);
+        notFound();
         return;
       }
 
@@ -230,22 +284,26 @@ export function usePublicPage(pageSlug: string | undefined, organizationId: stri
         .eq("id", page.spaceId)
         .single();
       if (spaceError || !spaceRow) {
-        if (!cancelled) setResult(null);
+        notFound();
         return;
       }
       const space = mapSpaceRow(spaceRow as SpaceRow);
       if (space.organizationId !== organizationId || !space.isPublishable) {
-        if (!cancelled) setResult(null);
+        notFound();
         return;
       }
 
-      if (!cancelled) setResult({ page, space });
+      if (!cancelled) setState({ key: requestKey, status: "ready", data: { page, space } });
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [pageSlug, organizationId]);
+  }, [requestKey, pageSlug, organizationId]);
 
-  return pageSlug && organizationId ? result : null;
+  if (!requestKey) return { status: "not-found", data: null };
+  if (!state || state.key !== requestKey) return { status: "loading", data: null };
+  return state.status === "ready"
+    ? { status: "ready", data: state.data }
+    : { status: "not-found", data: null };
 }

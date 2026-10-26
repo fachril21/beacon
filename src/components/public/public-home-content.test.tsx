@@ -44,6 +44,15 @@ describe("PublicHomeContent (Space directory)", () => {
     expect(screen.getByText("Belum ada panduan yang dipublikasikan")).toBeInTheDocument();
   });
 
+  it("shows a loading skeleton instead of the empty state while Spaces are being fetched", () => {
+    mockUsePublicSpaces.mockReturnValue({ spaces: [], recentPages: [], isLoading: true });
+
+    render(<PublicHomeContent />);
+
+    expect(screen.getByRole("status")).toHaveTextContent(/memuat dokumentasi/i);
+    expect(screen.queryByText("Belum ada panduan yang dipublikasikan")).not.toBeInTheDocument();
+  });
+
   it("shows the search box, which opens PublicSearchCommand", () => {
     render(<PublicHomeContent />);
     expect(screen.getByRole("button", { name: /cari dokumentasi/i })).toBeInTheDocument();

@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { usePublicSpace } from "@/hooks/public-space-context";
+import { usePublicSpace, usePublicSpaceStatus } from "@/hooks/public-space-context";
 import { usePublicOrgContext } from "@/hooks/use-public-org";
 import { flattenPageTree } from "@/lib/build-page-tree";
 import { cn } from "@/lib/utils";
+import { PublicTocSkeleton } from "./public-loading";
 
 /**
  * Sidebar for the public site — scoped to the ONE Space the visitor is in
@@ -17,9 +18,11 @@ import { cn } from "@/lib/utils";
  */
 export function PublicToc({ onNavigate }: { onNavigate?: () => void }) {
   const current = usePublicSpace();
+  const status = usePublicSpaceStatus();
   const { basePath } = usePublicOrgContext();
   const pathname = usePathname();
 
+  if (status === "loading") return <PublicTocSkeleton />;
   if (!current) return null;
 
   const { space, pages } = current;

@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { BookOpen } from "lucide-react";
 import { usePublicOrgContext } from "@/hooks/use-public-org";
-import { usePublicSpace } from "@/hooks/public-space-context";
+import { usePublicSpace, usePublicSpaceStatus } from "@/hooks/public-space-context";
 import { EmptyState } from "@/components/beacon/empty-state";
 import { PageNotAvailable } from "./page-not-available";
+import { PublicSpaceSkeleton } from "./public-loading";
 import { flattenPageTree } from "@/lib/build-page-tree";
 
 /**
@@ -16,8 +17,10 @@ import { flattenPageTree } from "@/lib/build-page-tree";
 export function PublicSpaceView() {
   const { organization, basePath } = usePublicOrgContext();
   const current = usePublicSpace();
+  const status = usePublicSpaceStatus();
 
   if (!organization) return null;
+  if (status === "loading") return <PublicSpaceSkeleton />;
   if (!current) return <PageNotAvailable organizationName={organization.name} />;
 
   const { space, pages } = current;

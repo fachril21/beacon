@@ -69,15 +69,25 @@ const headingContent: PageContent = [
 ] as unknown as PageContent;
 
 function makeResult(page: Page) {
-  return { page, space };
+  return { status: "ready" as const, data: { page, space } };
 }
 
 describe("PublicPageView", () => {
   it('shows the "page no longer available" state when the page could not be resolved', () => {
-    mockUsePublicPage.mockReturnValue(null);
+    mockUsePublicPage.mockReturnValue({ status: "not-found", data: null });
     mockUsePublicSpace.mockReturnValue(null);
     render(<PublicPageView pageSlug="missing" />);
     expect(screen.getByText(/tidak tersedia/i)).toBeInTheDocument();
+  });
+
+  it("shows a loading skeleton instead of the unavailable state while the lookup is in flight", () => {
+    mockUsePublicPage.mockReturnValue({ status: "loading", data: null });
+    mockUsePublicSpace.mockReturnValue(null);
+
+    render(<PublicPageView pageSlug="cara-login" />);
+
+    expect(screen.getByRole("status")).toHaveTextContent(/memuat halaman/i);
+    expect(screen.queryByText(/tidak tersedia/i)).not.toBeInTheDocument();
   });
 
   it('renders a breadcrumb, "Diperbarui" date, and never an author name', () => {
