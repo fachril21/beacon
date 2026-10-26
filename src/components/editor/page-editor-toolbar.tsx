@@ -19,6 +19,7 @@ import { buildPublicPageUrl } from "@/lib/public-url";
 import { describePublishError } from "@/lib/publish-error";
 import { StatusBadge } from "@/components/beacon/status-badge";
 import { cn } from "@/lib/utils";
+import { titleOrUntitled } from "@/lib/page-label";
 import { EDITOR_PANEL_TOGGLE_ID, EDITOR_SIDE_PANEL_ID, type EditorSidePanelTab } from "./editor-side-panel-tab";
 import type { Page, Space, SpaceRole } from "@/lib/types";
 import type { SaveStatus } from "@/hooks/use-page-autosave";
@@ -105,6 +106,12 @@ export function PageEditorToolbar({
 
   function handlePublishClick() {
     if (disabledReason) return;
+    // The title is required: an untitled Page never reaches the public site.
+    if (!title.trim()) {
+      toast.error("Judul wajib diisi sebelum halaman dipublikasikan.");
+      document.getElementById("page-title")?.focus();
+      return;
+    }
     if (isPageNearlyEmpty(title, page.content)) {
       setEmptyWarningOpen(true);
       return;
@@ -152,7 +159,7 @@ export function PageEditorToolbar({
                 </li>
                 <li className="min-w-0 truncate">
                   <Link href={`/spaces/${space.id}/pages/${parentPage.id}`} className="rounded-sm hover:text-foreground">
-                    {parentPage.title || "Halaman tanpa judul"}
+                    {titleOrUntitled(parentPage.title)}
                   </Link>
                 </li>
               </>
@@ -161,7 +168,7 @@ export function PageEditorToolbar({
               <ChevronRight className="size-3.5 text-muted-foreground/60" />
             </li>
             <li aria-current="page" className="min-w-0 truncate text-foreground">
-              {title || "Halaman tanpa judul"}
+              {titleOrUntitled(title)}
             </li>
           </ol>
         </nav>

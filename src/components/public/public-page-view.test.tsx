@@ -55,6 +55,8 @@ function makePage(overrides: Partial<Page> & Pick<Page, "id" | "title" | "slug">
     visibility: "publishable",
     isPublished: true,
     publishedContentSnapshot: null,
+    description: "",
+    emoji: null,
     publishedAt: "2026-01-02T00:00:00.000Z",
     createdByUserId: "user-1",
     createdAt: "2026-01-01T00:00:00.000Z",
@@ -107,6 +109,38 @@ describe("PublicPageView", () => {
     expect(breadcrumb).toHaveTextContent("Aplikasi Mobile");
     expect(screen.getByText(/Diperbarui/)).toBeInTheDocument();
     expect(screen.queryByText(/oleh|author|penulis/i)).not.toBeInTheDocument();
+  });
+
+  it("shows the emoji beside the title only when the author set one", () => {
+    const snapshot = {
+      title: "Cara login",
+      content: [],
+      screenshotBlocks: {},
+      publishedAt: "2026-01-02T00:00:00.000Z",
+    };
+    const withEmoji = makePage({
+      id: "page-1",
+      title: "Cara login",
+      slug: "cara-login",
+      emoji: "📘",
+      publishedContentSnapshot: { ...snapshot, screenshotBlocks: {} },
+    });
+    mockUsePublicPage.mockReturnValue(makeResult(withEmoji));
+    mockUsePublicSpace.mockReturnValue({ space, pages: [{ page: withEmoji, children: [] }] });
+    const { unmount } = render(<PublicPageView pageSlug="cara-login" />);
+    expect(screen.getByText("📘")).toBeInTheDocument();
+    unmount();
+
+    const withoutEmoji = makePage({
+      id: "page-1",
+      title: "Cara login",
+      slug: "cara-login",
+      publishedContentSnapshot: { ...snapshot, screenshotBlocks: {} },
+    });
+    mockUsePublicPage.mockReturnValue(makeResult(withoutEmoji));
+    mockUsePublicSpace.mockReturnValue({ space, pages: [{ page: withoutEmoji, children: [] }] });
+    render(<PublicPageView pageSlug="cara-login" />);
+    expect(screen.queryByText(/\p{Extended_Pictographic}/u)).not.toBeInTheDocument();
   });
 
   it('lists headings from the published snapshot under "Di halaman ini"', () => {

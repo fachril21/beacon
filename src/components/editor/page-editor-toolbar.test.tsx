@@ -57,6 +57,8 @@ const draftPage: Page = {
   slug: null,
   isPublished: false,
   publishedContentSnapshot: null,
+  description: "",
+  emoji: null,
   publishedAt: null,
   createdByUserId: "user-1",
   createdAt: "2026-01-01T00:00:00.000Z",
@@ -304,6 +306,24 @@ describe("PageEditorToolbar delete page", () => {
 
     expect(mockDeletePage).toHaveBeenCalledWith("page-1");
     await vi.waitFor(() => expect(mockPush).toHaveBeenCalledWith("/spaces/space-1"));
+  });
+});
+
+describe("PageEditorToolbar required title gate", () => {
+  it("refuses to publish an untitled Page and points the author at the title field", async () => {
+    mockToastError.mockClear();
+    mockPublish.mockClear();
+    const user = userEvent.setup();
+    render(
+      <PageEditorToolbar page={{ ...draftPage, title: "" }} space={space} title="" saveStatus="idle" role="editor" />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Publikasikan" }));
+
+    expect(mockPublish).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    const [message] = mockToastError.mock.calls[0] as [string];
+    expect(message).toMatch(/judul wajib diisi/i);
   });
 });
 

@@ -18,6 +18,7 @@ import { useUsers } from "@/hooks/use-users";
 import { useSession } from "@/hooks/use-session";
 import { buildPageTree, flattenPageTree } from "@/lib/build-page-tree";
 import { formatRelativeTime } from "@/lib/format-relative-time";
+import { titleOrUntitled } from "@/lib/page-label";
 import type { Page } from "@/lib/types";
 
 const STATUS_FILTERS = [
@@ -57,7 +58,7 @@ export default function SpacePage({ params }: { params: Promise<{ spaceId: strin
   async function handleNewPage() {
     if (!user || !space) return;
     try {
-      const page = await createPage({ spaceId: space.id, parentPageId: null, title: "Halaman tanpa judul", createdByUserId: user.id });
+      const page = await createPage({ spaceId: space.id, parentPageId: null, title: "", createdByUserId: user.id });
       router.push(`/spaces/${space.id}/pages/${page.id}`);
     } catch {
       toast.error("Tidak dapat membuat Halaman, silakan coba lagi.");
@@ -145,8 +146,12 @@ export default function SpacePage({ params }: { params: Promise<{ spaceId: strin
                       className="flex items-center gap-2 text-body-sm text-foreground"
                       style={{ paddingLeft: `${depth * 20}px` }}
                     >
-                      <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-                      <span className="truncate">{page.title || "Halaman tanpa judul"}</span>
+                      {page.emoji ? (
+                        <span className="shrink-0 text-[13px] leading-none">{page.emoji}</span>
+                      ) : (
+                        <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+                      )}
+                      <span className="truncate">{titleOrUntitled(page.title)}</span>
                     </Link>
                   </td>
                   <td className="py-2.5 pr-3">
@@ -188,7 +193,7 @@ export default function SpacePage({ params }: { params: Promise<{ spaceId: strin
       <DeleteConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title={`Hapus "${deleteTarget?.title || "Halaman tanpa judul"}"?`}
+        title={`Hapus "${titleOrUntitled(deleteTarget?.title)}"?`}
         description={
           targetHasChildren
             ? "Halaman ini beserta seluruh sub-halaman di dalamnya akan dihapus permanen. Tindakan ini tidak dapat dibatalkan."

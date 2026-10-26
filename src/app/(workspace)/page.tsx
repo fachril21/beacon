@@ -15,6 +15,7 @@ import { SpaceCard } from "@/components/workspace/space-card";
 import { EmptyState } from "@/components/beacon/empty-state";
 import { NewSpaceDialog } from "@/components/workspace/new-space-dialog";
 import { formatRelativeTime } from "@/lib/format-relative-time";
+import { titleOrUntitled } from "@/lib/page-label";
 
 const RECENT_PAGES_LIMIT = 3;
 
@@ -51,7 +52,7 @@ export default function WorkspaceHomePage() {
       const page = await createPage({
         spaceId: targetSpace.id,
         parentPageId: null,
-        title: "Halaman tanpa judul",
+        title: "",
         createdByUserId: user.id,
       });
       router.push(`/spaces/${targetSpace.id}/pages/${page.id}`);
@@ -104,7 +105,7 @@ export default function WorkspaceHomePage() {
                           <Card className="h-full p-4 transition-colors hover:border-input">
                             <FileText className="size-4 text-muted-foreground" />
                             <p className="mt-2 truncate text-body-sm font-medium text-foreground">
-                              {page.title || "Halaman tanpa judul"}
+                              {titleOrUntitled(page.title)}
                             </p>
                             <p className="mt-1 truncate text-caption text-muted-foreground">
                               {pageSpace?.name} · diubah {formatRelativeTime(page.updatedAt)}

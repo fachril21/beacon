@@ -82,6 +82,8 @@ describe("useUpdatePageContent", () => {
         slug: null,
         isPublished: false,
         publishedContentSnapshot: null,
+        description: "",
+        emoji: null,
         publishedAt: null,
         createdByUserId: "user-1",
         createdAt: "2026-01-01T00:00:00Z",
@@ -123,8 +125,8 @@ describe("useReorderPages", () => {
     vi.clearAllMocks();
     resetStore();
     pagesStore.setState([
-      { id: "a", spaceId: "space-1", parentPageId: null, title: "A", order: 0, content: emptyDoc(), visibility: "internal", slug: null, isPublished: false, publishedContentSnapshot: null, publishedAt: null, createdByUserId: "user-1", createdAt: "t", updatedAt: "t" },
-      { id: "b", spaceId: "space-1", parentPageId: null, title: "B", order: 1, content: emptyDoc(), visibility: "internal", slug: null, isPublished: false, publishedContentSnapshot: null, publishedAt: null, createdByUserId: "user-1", createdAt: "t", updatedAt: "t" },
+      { id: "a", spaceId: "space-1", parentPageId: null, title: "A", order: 0, content: emptyDoc(), visibility: "internal", slug: null, isPublished: false, publishedContentSnapshot: null, description: "", emoji: null, publishedAt: null, createdByUserId: "user-1", createdAt: "t", updatedAt: "t" },
+      { id: "b", spaceId: "space-1", parentPageId: null, title: "B", order: 1, content: emptyDoc(), visibility: "internal", slug: null, isPublished: false, publishedContentSnapshot: null, description: "", emoji: null, publishedAt: null, createdByUserId: "user-1", createdAt: "t", updatedAt: "t" },
     ]);
   });
 
@@ -161,6 +163,8 @@ describe("usePublishActions", () => {
         slug: null,
         isPublished: false,
         publishedContentSnapshot: null,
+        description: "",
+        emoji: null,
         publishedAt: null,
         createdByUserId: "user-1",
         createdAt: "t",
@@ -264,6 +268,8 @@ function makePage(overrides: Partial<import("@/lib/types").Page> & { id: string 
     slug: null,
     isPublished: false,
     publishedContentSnapshot: null,
+    description: "",
+    emoji: null,
     publishedAt: null,
     createdByUserId: "user-1",
     createdAt: "t",

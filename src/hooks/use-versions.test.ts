@@ -233,6 +233,8 @@ describe("useRestoreVersion", () => {
         slug: null,
         isPublished: false,
         publishedContentSnapshot: null,
+        description: "",
+        emoji: null,
         publishedAt: null,
         createdByUserId: "user-1",
         createdAt: "t",

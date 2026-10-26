@@ -39,6 +39,8 @@ const page: Page = {
   slug: null,
   isPublished: false,
   publishedContentSnapshot: null,
+  description: "",
+  emoji: null,
   publishedAt: null,
   createdByUserId: "user-1",
   createdAt: "2026-01-01T00:00:00.000Z",
@@ -52,6 +54,23 @@ function renderItem() {
     </DndContext>,
   );
 }
+
+describe("PageTreeItem emoji", () => {
+  it("falls back to the plain page icon when no emoji is set", () => {
+    renderItem();
+    expect(screen.getByText("Panduan Onboarding").previousElementSibling?.tagName).toBe("svg");
+    expect(screen.queryByText(/\p{Extended_Pictographic}/u)).not.toBeInTheDocument();
+  });
+
+  it("shows the emoji instead of the icon when one is set", () => {
+    render(
+      <DndContext>
+        <PageTreeItem page={{ ...page, emoji: "📘" }} spaceId="space-1" depth={1} />
+      </DndContext>,
+    );
+    expect(screen.getByText("📘")).toBeInTheDocument();
+  });
+});
 
 describe("PageTreeItem delete", () => {
   beforeEach(() => {

@@ -27,6 +27,8 @@ function makePage(overrides: Partial<Page> & Pick<Page, "id" | "title" | "slug">
     visibility: "publishable",
     isPublished: true,
     publishedContentSnapshot: null,
+    description: "",
+    emoji: null,
     publishedAt: "2026-01-01T00:00:00.000Z",
     createdByUserId: "user-1",
     createdAt: "2026-01-01T00:00:00.000Z",

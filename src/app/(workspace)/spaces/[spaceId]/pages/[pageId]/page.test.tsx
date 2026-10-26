@@ -38,14 +38,18 @@ const page: Page = {
   slug: null,
   isPublished: false,
   publishedContentSnapshot: null,
+  description: "",
+  emoji: null,
   publishedAt: null,
   createdByUserId: "user-1",
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
 };
 const parentPage: Page = { ...page, id: "page-0", parentPageId: null, title: "Onboarding" };
+const mockUpdateMeta = vi.fn();
 vi.mock("@/hooks/use-pages", () => ({
   usePage: (id: string | undefined) => (id === "page-1" ? page : id === "page-0" ? parentPage : undefined),
+  useUpdatePageMeta: () => mockUpdateMeta,
 }));
 
 vi.mock("@/hooks/use-title-autosave", () => ({
@@ -158,6 +162,12 @@ describe("PageEditorPage side panel", () => {
 });
 
 describe("PageEditorPage writing column", () => {
+  // The viewer test below flips this and never resets it — pin it so each
+  // case starts from an editable Space role.
+  beforeEach(() => {
+    mockRole = "editor";
+  });
+
   it("passes the parent Page to the breadcrumb and renders the meta row instead of the old footer", async () => {
     stubViewport(1280);
     await renderPage();
@@ -171,5 +181,62 @@ describe("PageEditorPage writing column", () => {
     mockRole = "viewer";
     await renderPage();
     expect(screen.getByDisplayValue("Daftar & Masuk")).toHaveAttribute("readonly");
+  });
+
+  it("shows the Untitled page placeholder on a required title and the optional description field", async () => {
+    stubViewport(1280);
+    await renderPage();
+
+    const titleInput = screen.getByPlaceholderText("Untitled page");
+    expect(titleInput).toBeRequired();
+    expect(titleInput).toHaveAttribute("aria-required", "true");
+
+    const descriptionInput = screen.getByPlaceholderText("Page Description (Optional)");
+    expect(descriptionInput).toBeInTheDocument();
+    expect(descriptionInput).not.toBeRequired();
+  });
+
+  it("offers the emoji control beside the title but renders no emoji until one is chosen", async () => {
+    stubViewport(1280);
+    await renderPage();
+
+    const trigger = screen.getByRole("button", { name: "Tambahkan emoji halaman" });
+    expect(trigger.textContent).toBe("");
+    expect(trigger.querySelector("svg")).not.toBeNull();
+  });
+
+  it("keeps the emoji outside the title/description column so it never indents the title", async () => {
+    stubViewport(1280);
+    await renderPage();
+
+    const trigger = screen.getByRole("button", { name: "Tambahkan emoji halaman" });
+    const title = screen.getByPlaceholderText("Untitled page");
+    const description = screen.getByPlaceholderText("Page Description (Optional)");
+
+    // Title and description share one text column — the single left edge that
+    // the body content below (and the emoji-free layout) also uses.
+    const textColumn = title.parentElement as HTMLElement;
+    expect(textColumn.contains(description)).toBe(true);
+
+    // The emoji is a sibling of that column, not part of it, so it cannot
+    // push the title sideways regardless of its size.
+    expect(textColumn.contains(trigger)).toBe(false);
+    expect(trigger.parentElement).toBe(textColumn.parentElement);
+
+    // On md+ it is taken out of flow into the editor's left gutter.
+    expect(trigger.className).toContain("md:absolute");
+    expect(trigger.className).toContain("md:mb-0");
+  });
+
+  it("saves the emoji picked beside the title", async () => {
+    stubViewport(1280);
+    mockUpdateMeta.mockClear();
+    const user = userEvent.setup();
+    await renderPage();
+
+    await user.click(screen.getByRole("button", { name: "Tambahkan emoji halaman" }));
+    await user.click(await screen.findByRole("button", { name: "Pilih emoji 📘" }));
+
+    await vi.waitFor(() => expect(mockUpdateMeta).toHaveBeenCalledWith("page-1", { emoji: "📘" }));
   });
 });

@@ -155,6 +155,8 @@ export interface PageRow {
   space_id: string;
   parent_page_id: string | null;
   title: string;
+  description: string;
+  emoji: string | null;
   order: number;
   content: PageContent;
   visibility: string;
@@ -173,6 +175,11 @@ export function mapPageRow(row: PageRow): Page {
     spaceId: row.space_id,
     parentPageId: row.parent_page_id,
     title: row.title,
+    // `?? ""` / `?? null` guards a code-before-migration deploy: the columns
+    // ship in 20261026000100, and a rows payload fetched before that runs
+    // simply lacks the keys.
+    description: row.description ?? "",
+    emoji: row.emoji ?? null,
     order: row.order,
     content: row.content,
     visibility: row.visibility as Page["visibility"],

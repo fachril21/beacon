@@ -52,6 +52,11 @@ export function useChildPages(spaceId: string, parentPageId: string | null) {
   return pages.filter((p) => p.parentPageId === parentPageId);
 }
 
+export interface PageMetaPatch {
+  description?: string;
+  emoji?: string | null;
+}
+
 export interface CreatePageInput {
   spaceId: string;
   parentPageId: string | null;
@@ -103,6 +108,23 @@ export function useUpdatePageTitle() {
     if (error) throw error;
 
     pagesStore.setState((prev) => prev.map((p) => (p.id === id ? { ...p, title, updatedAt: new Date().toISOString() } : p)));
+  }, []);
+}
+
+/**
+ * Updates the Page's heading meta (description / emoji) — the two scalar
+ * fields edited beside the title. Written as one patch so the emoji picker and
+ * the description input share a single write path and store update.
+ */
+export function useUpdatePageMeta() {
+  return useCallback(async (id: string, patch: PageMetaPatch) => {
+    const supabase = getSupabaseBrowserClient();
+    const { error } = await supabase.from("pages").update(patch).eq("id", id);
+    if (error) throw error;
+
+    pagesStore.setState((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, ...patch, updatedAt: new Date().toISOString() } : p)),
+    );
   }, []);
 }
 

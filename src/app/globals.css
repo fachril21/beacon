@@ -284,6 +284,108 @@
     background: transparent;
     padding: 0;
   }
+
+  /* --- Line hierarchy (GitBook-style row structure) -----------------------
+     Rows must read as a stepped outline: one unmistakable size/weight step
+     per heading level, consistent space between a heading and the rows under
+     it, and body rows that all sit on the same baseline grid. */
+
+  /* Body rows (paragraph, lists, quote, checklist, table cells) on DESIGN.md
+     §3.1's `body` token: 15px/1.6 = a 24px line + BlockNote's 3px block
+     padding = the 30px row height `.bn-side-menu` assumes, so the drag handle
+     stays centred on ordinary rows. `overflow-wrap` keeps long words and URLs
+     inside the column instead of pushing it wide. Scoped out of
+     `.beacon-reading`, which keeps the larger `body-lg` reading size. */
+  .bn-root:not(.beacon-reading) .bn-block-content {
+    font-size: var(--text-body);
+    line-height: 1.6;
+    overflow-wrap: break-word;
+  }
+
+  /* Headings — BlockNote's default is em-based (48/32/21px) with every level
+     at weight 700, which flattened the hierarchy and out-shouted the page
+     title. These are the §3.1 tokens instead: each level steps down in size,
+     700 → 600 in weight, with the token's tracking. Top padding is larger than
+     bottom (§3.2) so a heading belongs to the section it opens, not the one
+     above it; the rhythm is identical for every row in the document. */
+  .bn-root .bn-block-content[data-content-type="heading"][data-level="1"] {
+    font-size: var(--text-h1);
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.025em;
+    padding-top: 2.5rem;
+    padding-bottom: 0.5rem;
+  }
+  .bn-root .bn-block-content[data-content-type="heading"][data-level="2"] {
+    font-size: var(--text-h2);
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: -0.015em;
+    padding-top: 2rem;
+    padding-bottom: 0.5rem;
+  }
+  .bn-root .bn-block-content[data-content-type="heading"][data-level="3"] {
+    font-size: var(--text-h3);
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    padding-top: 1.5rem;
+    padding-bottom: 0.375rem;
+  }
+  .bn-root .bn-block-content[data-content-type="heading"][data-level="4"] {
+    font-size: var(--text-h4);
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: -0.005em;
+    padding-top: 1.25rem;
+    padding-bottom: 0.375rem;
+  }
+  /* Levels 5-6 have no DESIGN.md token (§3.1 stops at h4): they stay at body
+     size but keep the heading weight, so they read as headings without
+     inventing two new steps in the type scale. */
+  .bn-root .bn-block-content[data-content-type="heading"][data-level="5"],
+  .bn-root .bn-block-content[data-content-type="heading"][data-level="6"] {
+    font-size: var(--text-body);
+    font-weight: 600;
+    line-height: 1.4;
+    padding-top: 1rem;
+    padding-bottom: 0.25rem;
+  }
+  /* The first row of the document (or of any nested group) opens with a
+     small pad instead of a full section gap. */
+  .bn-root .bn-block-group > .bn-block-outer:first-child > .bn-block > .bn-block-content[data-content-type="heading"] {
+    padding-top: 0.25rem;
+  }
+
+  /* The drag handle / add-block buttons are centred against a fixed height
+     per block type (see @blocknote/react's own stylesheet) — those heights
+     were derived from BlockNote's heading metrics above, so they move with
+     the scale. Keeping them equal to the rendered row height is what stops
+     the handle sitting low on a heading. */
+  .bn-root .bn-side-menu[data-block-type="heading"][data-level="1"] {
+    height: 87px;
+  }
+  .bn-root .bn-side-menu[data-block-type="heading"][data-level="2"] {
+    height: 70px;
+  }
+  .bn-root .bn-side-menu[data-block-type="heading"][data-level="3"] {
+    height: 56px;
+  }
+  .bn-root .bn-side-menu[data-block-type="heading"][data-level="4"] {
+    height: 49px;
+  }
+  .bn-root .bn-side-menu[data-block-type="heading"][data-level="5"],
+  .bn-root .bn-side-menu[data-block-type="heading"][data-level="6"] {
+    height: 41px;
+  }
+
+  /* List markers recede: the text carries the hierarchy, the marker only
+     says "this row is one of a set" (GitBook's bullet/number treatment). */
+  .bn-root .bn-block-content[data-content-type="bulletListItem"]::before,
+  .bn-root .bn-block-content[data-content-type="numberedListItem"]::before {
+    color: var(--muted-foreground);
+  }
+
   /* checkListItem renders a bare native <input type="checkbox"> with no
      color override in @blocknote/shadcn's stylesheet, so it falls back to
      the browser's default accent (blue). Checkmarks are primary-family
@@ -292,12 +394,177 @@
     accent-color: var(--primary);
   }
 
-  /* Public reading surface (PublicPageContent) — body-lg copy at the same
-     1.5 line rhythm and default BlockNote block spacing as the admin editor,
-     so sections do not open up with extra paragraph/heading margins on the
-     published page. Reading font size stays slightly larger. Editor-only
-     chrome (checklist hover affordances, drag handles) never mounts here
-     since the editor is read-only, so no exclusion rules are needed. */
+  /* --- Stepper (GitBook-style multi-step process) -------------------------
+     A step is a two-column grid: the numbered rail, then the content. The
+     step's body is rendered by BlockNote as a sibling of the node view, so
+     this grid (not padding inside the render function) is what puts
+     paragraphs, images, and nested steppers on the step title's left edge.
+
+     Geometry lives in custom properties so the render function and the grid
+     can't drift apart: the circle fills the rail exactly, and both the title
+     row and the body column start after the same rail + gutter. */
+  .bn-root {
+    --step-rail: 1.75rem; /* 28px circle */
+    --step-gutter: 2rem; /* 32px circle → content */
+    --step-gap-y: 1.5rem; /* space between steps */
+    --step-body-gap: 1rem; /* title → body */
+    --step-line-width: 2px;
+    --step-line-start: 0.25rem; /* line starts just below the circle */
+    --step-line-end: 0.75rem; /* …and stops before the next circle */
+  }
+
+  /* The node view's own padding would offset the circle from the grid's top
+     edge. The stepper container is an empty layout wrapper, so it needs no
+     padding either. */
+  .bn-root .bn-block-content[data-content-type="step"],
+  .bn-root .bn-block-content[data-content-type="stepper"] {
+    padding: 0;
+  }
+
+  .bn-root .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="step"]) {
+    position: relative;
+    display: grid;
+    grid-template-columns: var(--step-rail) minmax(0, 1fr);
+    column-gap: var(--step-gutter);
+    padding-bottom: var(--step-gap-y);
+  }
+
+  /* The render function spans both columns but lays its circle/title out
+     with the same rail + gutter, so the title lines up with the body group
+     placed in column 2 below it. */
+  .bn-root .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="step"]) > .react-renderer {
+    grid-column: 1 / -1;
+  }
+
+  .bn-root .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="step"]) > .bn-block-group {
+    grid-column: 2;
+    min-width: 0;
+    margin-top: var(--step-body-gap);
+    margin-left: 0;
+  }
+
+  /* BlockNote indents nested groups 24px by default; the stepper's own grid
+     already establishes the content edge, so steps and their bodies stay put. */
+  .bn-root .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="stepper"]) > .bn-block-group {
+    margin-left: 0;
+  }
+
+  /* A nested process gets breathing room before the next main step, matching
+     GitBook's sub-step block rhythm. */
+  .bn-root .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="stepper"]) {
+    padding-bottom: var(--step-gap-y);
+  }
+
+  /* Nested-group depth guides would draw a second vertical line beside the
+     connector; only the stepper's numbered connector should be visible. */
+  .bn-root .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="step"]) > .bn-block-group > .bn-block-outer::before,
+  .bn-root .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="stepper"]) > .bn-block-group > .bn-block-outer::before {
+    content: none;
+  }
+
+  /* The connector lives on the block, not the render function: the body is
+     a sibling of the node view, so only the block spans the full step
+     height. It starts below the circle, runs past the body copy, and stops
+     short of the next circle. */
+  .bn-root .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="step"])::after {
+    content: "";
+    position: absolute;
+    top: calc(var(--step-rail) + var(--step-line-start));
+    bottom: var(--step-line-end);
+    left: calc(var(--step-rail) / 2 - var(--step-line-width) / 2);
+    width: var(--step-line-width);
+    border-radius: 999px;
+    background: var(--border);
+    pointer-events: none;
+  }
+
+  /* The final step in a group has nothing to connect to. */
+  .bn-root .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="step"] > .beacon-step[data-last="true"])::after {
+    content: none;
+  }
+
+  .bn-root .beacon-step-title {
+    font-size: var(--text-h2);
+    line-height: 1.25;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: var(--foreground);
+    overflow-wrap: anywhere;
+  }
+
+  /* Sub-steps step down one level and recede in color, matching GitBook's
+     nested process outline without changing the parent's geometry. */
+  .bn-root .beacon-step[data-nested="true"] .beacon-step-title {
+    font-size: var(--text-h3);
+    line-height: 1.3;
+    color: var(--muted-foreground);
+  }
+
+  .bn-root .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="step"] > .beacon-step[data-nested="true"]) > .bn-block-group {
+    color: var(--muted-foreground);
+  }
+
+  /* Edit affordances are hidden by default and revealed on hover/focus. The
+     opacity lives here (not as an `opacity-0` utility): utilities outrank the
+     components layer, so a utility would permanently win over the reveal
+     rules below and make the buttons invisible/unusable. */
+  .bn-root .beacon-step-add {
+    opacity: 0;
+  }
+
+  /* Edit affordances reveal on hover/focus. The block (not just the title
+     row) is the hover target so they stay reachable while editing body copy. */
+  .bn-root .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="step"]):hover > .react-renderer .beacon-step-add,
+  .bn-root .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="step"]):focus-within > .react-renderer .beacon-step-add {
+    opacity: 1;
+  }
+
+  /* The last step's "+" is now the only add-next control, so keep it visible
+     instead of relying on hover discovery; earlier steps reveal theirs on
+     hover for mid-list insertion. */
+  .bn-root .beacon-step[data-last="true"] .beacon-step-add {
+    opacity: 0.7;
+  }
+
+  .bn-root .beacon-step[data-last="true"] .beacon-step-add:hover,
+  .bn-root .beacon-step[data-last="true"] .beacon-step-add:focus-visible {
+    opacity: 1;
+  }
+
+  @media (hover: none) {
+    .bn-root .beacon-step-add {
+      opacity: 0.6;
+    }
+  }
+
+  @media (max-width: 767px) {
+    .bn-root {
+      --step-rail: 1.5rem; /* 24px circle */
+      --step-gutter: 1rem; /* 16px circle → content */
+      --step-gap-y: 1.25rem;
+      --step-body-gap: 0.75rem;
+      --step-line-end: 0.75rem;
+    }
+
+    .bn-root .beacon-step-title {
+      font-size: var(--text-h3);
+    }
+
+    .bn-root .beacon-step[data-nested="true"] .beacon-step-title {
+      font-size: var(--text-h4);
+    }
+  }
+
+  /* Public reading surface (PublicPageContent) — body-lg copy at a generous
+     1.5 line rhythm, and *paragraph* spacing left exactly as BlockNote draws
+     it so sections don't open up with extra margins on the published page.
+     Headings are the deliberate exception: they share the editor's scale and
+     section rhythm above (DESIGN.md principle 3 — one grammar, two
+     audiences), so a published page reads the way it did while being
+     written. The `.bn-root:not(.beacon-reading)` body rule above is what
+     keeps the two body sizes apart. Editor-only chrome (checklist hover
+     affordances, drag handles) never mounts here since the editor is
+     read-only, so no exclusion rules are needed. */
   .beacon-reading .bn-block-content[data-content-type="paragraph"],
   .beacon-reading .bn-block-content[data-content-type="quote"] {
     font-size: var(--text-body-lg);

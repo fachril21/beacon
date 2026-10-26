@@ -7,6 +7,7 @@ import { usePublicOrgContext } from "@/hooks/use-public-org";
 import { usePublicSpaces } from "@/hooks/use-public-content";
 import { EmptyState } from "@/components/beacon/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
+import { titleOrUntitled } from "@/lib/page-label";
 import { PublicSearchCommand } from "./public-search-command";
 
 /**
@@ -49,7 +50,7 @@ export function PublicHomeContent() {
                 href={`${basePath}/pages/${page.slug}`}
                 className="rounded-full border border-border px-3 py-1 text-foreground hover:bg-accent"
               >
-                {page.title || "Halaman tanpa judul"}
+                {titleOrUntitled(page.title)}
               </Link>
             ))}
           </div>
