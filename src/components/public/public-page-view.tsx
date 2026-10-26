@@ -11,6 +11,7 @@ import { collectHeadings } from "@/lib/collect-headings";
 import { PublicPageContent } from "./public-page-content";
 import { FeedbackWidget } from "./feedback-widget";
 import { PageNotAvailable } from "./page-not-available";
+import { PublicPageSkeleton } from "./public-loading";
 
 function formatPublicDate(iso: string) {
   return new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
@@ -34,11 +35,15 @@ export function PublicPageView({ pageSlug }: { pageSlug: string }) {
 
   if (!organization) return null;
 
-  if (!result) {
+  if (result.status === "loading") {
+    return <PublicPageSkeleton />;
+  }
+
+  if (result.status === "not-found") {
     return <PageNotAvailable organizationName={organization.name} />;
   }
 
-  const { page, space } = result;
+  const { page, space } = result.data;
   const snapshot = page.publishedContentSnapshot!;
   const headings = collectHeadings(snapshot.content);
 
@@ -99,7 +104,7 @@ export function PublicPageView({ pageSlug }: { pageSlug: string }) {
             </details>
           )}
 
-          <div className="mt-8">
+          <div className="mt-6">
             <PublicPageContent pageId={page.id} content={snapshot.content} />
           </div>
 

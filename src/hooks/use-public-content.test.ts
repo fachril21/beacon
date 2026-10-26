@@ -111,7 +111,7 @@ describe("usePublicSpaces", () => {
 
   it("returns empty spaces and recentPages without querying when organizationId is undefined", () => {
     const { result } = renderHook(() => usePublicSpaces(undefined));
-    expect(result.current).toEqual({ spaces: [], recentPages: [] });
+    expect(result.current).toEqual({ spaces: [], recentPages: [], isLoading: false });
     expect(mockSupabase.from).not.toHaveBeenCalled();
   });
 });
@@ -122,9 +122,9 @@ describe("usePublicCurrentSpace", () => {
     mockParams = {};
   });
 
-  it("returns null without querying on the directory route (no spaceSlug, no pageSlug)", () => {
+  it("returns not-found without querying on the directory route (no spaceSlug, no pageSlug)", () => {
     const { result } = renderHook(() => usePublicCurrentSpace("org-1"));
-    expect(result.current).toBeNull();
+    expect(result.current).toEqual({ status: "not-found", data: null });
     expect(mockSupabase.from).not.toHaveBeenCalled();
   });
 
@@ -136,12 +136,13 @@ describe("usePublicCurrentSpace", () => {
     });
 
     const { result } = renderHook(() => usePublicCurrentSpace("org-1"));
-    await waitFor(() => expect(result.current).not.toBeNull());
+    expect(result.current.status).toBe("loading");
+    await waitFor(() => expect(result.current.status).toBe("ready"));
 
-    expect(result.current!.space).toMatchObject({ id: "space-1", slug: "mobile-app" });
-    expect(result.current!.pages).toHaveLength(1);
-    expect(result.current!.pages[0].page.id).toBe("page-1");
-    expect(result.current!.pages[0].children[0].page.id).toBe("page-2");
+    expect(result.current.data!.space).toMatchObject({ id: "space-1", slug: "mobile-app" });
+    expect(result.current.data!.pages).toHaveLength(1);
+    expect(result.current.data!.pages[0].page.id).toBe("page-1");
+    expect(result.current.data!.pages[0].children[0].page.id).toBe("page-2");
   });
 
   it("on a page route resolves the current Space from the published Page's own space_id", async () => {
@@ -155,19 +156,19 @@ describe("usePublicCurrentSpace", () => {
     });
 
     const { result } = renderHook(() => usePublicCurrentSpace("org-1"));
-    await waitFor(() => expect(result.current).not.toBeNull());
+    await waitFor(() => expect(result.current.status).toBe("ready"));
 
-    expect(result.current!.space).toMatchObject({ id: "space-1" });
-    expect(result.current!.pages[0].page.id).toBe("page-1");
+    expect(result.current.data!.space).toMatchObject({ id: "space-1" });
+    expect(result.current.data!.pages[0].page.id).toBe("page-1");
   });
 
-  it("returns null when the slug matches no publishable Space (never a fallback)", async () => {
+  it("returns not-found when the slug matches no publishable Space (never a fallback)", async () => {
     mockParams = { orgSlug: "dibimbing", spaceSlug: "does-not-exist" };
     mockFrom({ spaces: [{ data: null, error: { message: "no rows" } }] });
 
     const { result } = renderHook(() => usePublicCurrentSpace("org-1"));
-    await waitFor(() => expect(mockSupabase.from).toHaveBeenCalled());
-    expect(result.current).toBeNull();
+    await waitFor(() => expect(result.current.status).toBe("not-found"));
+    expect(result.current.data).toBeNull();
   });
 });
 
@@ -210,11 +211,12 @@ describe("usePublicPage", () => {
     });
 
     const { result } = renderHook(() => usePublicPage("getting-started", "org-1"));
-    await waitFor(() => expect(result.current).not.toBeNull());
+    expect(result.current.status).toBe("loading");
+    await waitFor(() => expect(result.current.status).toBe("ready"));
 
     expect(pagesEqOrg).toHaveBeenCalledWith("organization_id", "org-1");
     expect(pagesEqSlug).toHaveBeenCalledWith("slug", "getting-started");
-    expect(result.current).toMatchObject({ page: { id: "page-1", slug: "getting-started" }, space: { id: "space-1" } });
+    expect(result.current.data).toMatchObject({ page: { id: "page-1", slug: "getting-started" }, space: { id: "space-1" } });
   });
 
   it("returns null (never a fallback) when the Page's Space belongs to a different Organization than expected", async () => {
@@ -251,6 +253,7 @@ describe("usePublicPage", () => {
     });
 
     const { result } = renderHook(() => usePublicPage("getting-started", "org-1"));
-    await waitFor(() => expect(result.current).toBeNull());
+    await waitFor(() => expect(result.current.status).toBe("not-found"));
+    expect(result.current.data).toBeNull();
   });
 });

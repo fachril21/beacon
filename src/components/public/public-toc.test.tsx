@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { PublicToc } from "./public-toc";
 import type { Page, Space } from "@/lib/types";
@@ -12,8 +12,10 @@ vi.mock("@/hooks/use-public-org", () => ({
 }));
 
 const mockUsePublicSpace = vi.fn();
+const mockUsePublicSpaceStatus = vi.fn();
 vi.mock("@/hooks/public-space-context", () => ({
   usePublicSpace: () => mockUsePublicSpace(),
+  usePublicSpaceStatus: () => mockUsePublicSpaceStatus(),
 }));
 
 function makePage(overrides: Partial<Page> & Pick<Page, "id" | "title" | "slug">): Page {
@@ -45,10 +47,24 @@ const space: Space = {
 };
 
 describe("PublicToc (single Space)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUsePublicSpaceStatus.mockReturnValue("ready");
+  });
+
   it("renders nothing when there is no current Space (directory route)", () => {
     mockUsePublicSpace.mockReturnValue(null);
     const { container } = render(<PublicToc />);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it("shows a loading skeleton while the current Space resolves", () => {
+    mockUsePublicSpace.mockReturnValue(null);
+    mockUsePublicSpaceStatus.mockReturnValue("loading");
+
+    render(<PublicToc />);
+
+    expect(screen.getByRole("status")).toHaveTextContent(/memuat daftar halaman/i);
   });
 
   it("shows a back link to the Space directory", () => {

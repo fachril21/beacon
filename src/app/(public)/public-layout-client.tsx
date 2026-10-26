@@ -10,6 +10,8 @@ import { PublicToc } from "@/components/public/public-toc";
 export function PublicLayoutClient({ children }: { children: React.ReactNode }) {
   const { organization } = usePublicOrgContext();
   const currentSpace = usePublicCurrentSpace(organization?.id);
+  const spaceStatus = currentSpace.status;
+  const spaceValue = currentSpace.data;
   const params = useParams<{ spaceSlug?: string; pageSlug?: string }>();
   // Synchronous: whether this route is *inside* a Space at all (so the rail
   // shows immediately, before currentSpace finishes resolving) vs. the Space
@@ -19,7 +21,7 @@ export function PublicLayoutClient({ children }: { children: React.ReactNode }) 
   if (!organization) return null;
 
   return (
-    <PublicSpaceProvider value={currentSpace}>
+    <PublicSpaceProvider value={spaceValue} status={spaceStatus}>
       <div className="flex min-h-screen flex-col bg-background">
         <PublicNav organization={organization} />
         <div className="mx-auto flex w-full max-w-[90rem] flex-1">

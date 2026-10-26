@@ -25,13 +25,18 @@ values ('b0000000-0000-0000-0000-00000000000b', 'a0000000-0000-0000-0000-0000000
 insert into beacon.pages (id, space_id, title, "order", content, created_by_user_id)
 values ('c0000000-0000-0000-0000-00000000000c', 'b0000000-0000-0000-0000-00000000000b', 'Getting Started', 0, '[]', 'a0000000-0000-0000-0000-00000000000a');
 
--- Editor: first publish assigns a slug. EXPECT: is_published=t, slug='getting-started'.
+-- Editor: first publish assigns a slug AND makes the Page publicly readable.
+-- EXPECT: is_published=t, visibility=publishable, slug='getting-started'.
 select set_config('request.jwt.claims', json_build_object('sub', 'a0000000-0000-0000-0000-00000000000a', 'role', 'authenticated')::text, true);
 set local role authenticated;
-select is_published, slug from beacon.publish_page('c0000000-0000-0000-0000-00000000000c');
+select is_published, visibility, slug from beacon.publish_page('c0000000-0000-0000-0000-00000000000c');
 
--- Republish keeps the slug. EXPECT: slug='getting-started'.
-select slug from beacon.update_published_page('c0000000-0000-0000-0000-00000000000c');
+-- Republish keeps the slug and stays public. EXPECT: visibility=publishable, slug='getting-started'.
+select visibility, slug from beacon.update_published_page('c0000000-0000-0000-0000-00000000000c');
+
+-- Unpublish returns the Page to internal-only but keeps its stable slug.
+-- EXPECT: is_published=f, visibility=internal, slug='getting-started'.
+select is_published, visibility, slug from beacon.unpublish_page('c0000000-0000-0000-0000-00000000000c');
 
 -- Outsider (no Permission on the Space): EXPECT error 42501, NOT an all-null row.
 select set_config('request.jwt.claims', json_build_object('sub', 'a0000000-0000-0000-0000-00000000000b', 'role', 'authenticated')::text, true);
