@@ -118,7 +118,7 @@ describe("SpaceOverviewLayout tabs", () => {
     expect(mockCreatePage).toHaveBeenCalledWith({
       spaceId: "space-1",
       parentPageId: null,
-      title: "Halaman tanpa judul",
+      title: "",
       createdByUserId: "user-1",
     });
     await vi.waitFor(() => expect(mockPush).toHaveBeenCalledWith("/spaces/space-1/pages/new-page"));

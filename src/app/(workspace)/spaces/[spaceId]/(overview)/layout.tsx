@@ -63,7 +63,7 @@ export default function SpaceOverviewLayout({
     if (!user) return;
     setIsCreating(true);
     try {
-      const page = await createPage({ spaceId, parentPageId: null, title: "Halaman tanpa judul", createdByUserId: user.id });
+      const page = await createPage({ spaceId, parentPageId: null, title: "", createdByUserId: user.id });
       router.push(`/spaces/${spaceId}/pages/${page.id}`);
     } catch {
       toast.error("Tidak dapat membuat Halaman, silakan coba lagi.");

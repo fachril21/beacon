@@ -28,6 +28,22 @@ import type { Page, PageContent } from "@/lib/types";
 
 const dictionary = {
   ...en,
+  // Indent/outdent tooltips (Bahasa Indonesia for the authoring UI — BlockNote
+  // ships no "id" locale). The secondary shortcuts stay exactly what the
+  // keymap does: Tab indents, Shift+Tab outdents.
+  formatting_toolbar: {
+    ...en.formatting_toolbar,
+    nest: {
+      ...en.formatting_toolbar.nest,
+      tooltip: "Tambah indentasi",
+      secondary_tooltip: "Tab",
+    },
+    unnest: {
+      ...en.formatting_toolbar.unnest,
+      tooltip: "Kurangi indentasi",
+      secondary_tooltip: "Shift+Tab",
+    },
+  },
   placeholders: {
     ...en.placeholders,
     default: "Mulai menulis, atau ketik “/” untuk menyisipkan blok…",
@@ -84,6 +100,12 @@ export function PageEditor({
     initialContent: normalizePageContent(page.content),
     extensions: [codeBlockExitExtension, trailingParagraphExtension()],
     dictionary,
+    // Tab indents the current row, but never at the cost of keyboard
+    // navigation: while a toolbar/suggestion menu is open, Tab and Shift+Tab
+    // are handed back to it (BlockNote's default "prefer-navigate-ui") so the
+    // user can still tab between editor UI elements. Setting it explicitly
+    // guards the hierarchy behaviour from silently changing with a default.
+    tabBehavior: "prefer-navigate-ui",
   });
 
   const handleChange = useCallback(() => {

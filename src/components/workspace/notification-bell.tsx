@@ -8,6 +8,7 @@ import { useNotifications, useMarkNotificationRead, useUnreadNotificationCount }
 import { useUser } from "@/hooks/use-users";
 import { usePage } from "@/hooks/use-pages";
 import { displayName } from "@/lib/display-name";
+import { titleOrUntitled } from "@/lib/page-label";
 import { commentSnippet, notificationHref } from "@/lib/notification-link";
 import { sidebarNavIconClass, sidebarNavRowClass } from "./sidebar-row";
 import type { Notification } from "@/lib/types";
@@ -34,7 +35,7 @@ function NotificationRow({ notification, onOpen }: { notification: Notification;
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="text-body-sm text-foreground">
           <span className="font-medium break-all">{actor ? displayName(actor) : "Seseorang"}</span> menyebut Anda di{" "}
-          <span className="font-medium">{page?.title || "Halaman tanpa judul"}</span>
+          <span className="font-medium">{titleOrUntitled(page?.title)}</span>
         </span>
         {snippet && <span className="line-clamp-2 text-caption text-muted-foreground">{snippet}</span>}
         <span className="text-caption text-muted-foreground">{formatTimestamp(notification.createdAt)}</span>

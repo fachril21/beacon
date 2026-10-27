@@ -1,18 +1,22 @@
 "use client";
 
+import { useEffect } from "react";
 import { MessageSquare } from "lucide-react";
 import { SideMenuExtension } from "@blocknote/core/extensions";
 import {
   AddBlockButton,
   DragHandleButton,
+  DragHandleMenu,
   SideMenu,
   SideMenuController,
   useBlockNoteEditor,
   useComponentsContext,
+  useExtension,
   useExtensionState,
 } from "@blocknote/react";
 import { useBlockComments } from "@/hooks/use-comments";
 import { focusBlockComments } from "@/lib/comment-focus-store";
+import { removeStepBlock } from "./stepper-block";
 import { usePageId } from "./page-id-context";
 
 /**
@@ -58,6 +62,45 @@ function CommentButton() {
 }
 
 /**
+ * Steps are removed through the six-dot menu instead of a per-step trash
+ * button: the side menu is the one affordance that is already there for every
+ * row, and it keeps the title row clean while typing. Other block types keep
+ * BlockNote's default menu (delete, colors, table headers).
+ */
+function BeaconDragHandleMenu() {
+  const editor = useBlockNoteEditor();
+  const Components = useComponentsContext();
+  const sideMenu = useExtension(SideMenuExtension);
+  const block = useExtensionState(SideMenuExtension, { editor, selector: (state) => state?.block });
+
+  // Deleting a block while its drag-handle menu is open unmounts the menu
+  // along with its anchor, so Radix may never report the close and BlockNote's
+  // side menu stays frozen: the six-dot would then stop following the pointer
+  // until a reload. Only unfreeze in that specific case — unmounting is also
+  // what happens when the menu merely hides itself, and React StrictMode tears
+  // effects down once right after mounting, so an unconditional cleanup would
+  // close the side menu the moment it appears.
+  useEffect(
+    () => () => {
+      if (block && editor.getBlock(block.id) === undefined) sideMenu.unfreezeMenu();
+    },
+    [block, editor, sideMenu],
+  );
+
+  if (!Components || !block || block.type !== "step") {
+    return <DragHandleMenu />;
+  }
+
+  return (
+    <Components.Generic.Menu.Dropdown className="bn-menu-dropdown bn-drag-handle-menu">
+      <Components.Generic.Menu.Item className="bn-menu-item" onClick={() => removeStepBlock(editor, block.id)}>
+        Hapus langkah
+      </Components.Generic.Menu.Item>
+    </Components.Generic.Menu.Dropdown>
+  );
+}
+
+/**
  * BlockNote's block side menu (the "+" and drag handle that appear on hover)
  * with a comment button added. Clicking it opens the Komentar tab aimed at
  * that block — a popover inside the side menu would vanish as soon as the
@@ -70,7 +113,7 @@ export function CommentSideMenu() {
         <SideMenu {...props}>
           <CommentButton />
           <AddBlockButton />
-          <DragHandleButton dragHandleMenu={props.dragHandleMenu} />
+          <DragHandleButton dragHandleMenu={BeaconDragHandleMenu} />
         </SideMenu>
       )}
     />

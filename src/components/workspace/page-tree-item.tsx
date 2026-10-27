@@ -13,6 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { DeleteConfirmDialog } from "./delete-confirm-dialog";
 import { useChildPages, useCreatePage, useDeletePage } from "@/hooks/use-pages";
 import { useSpaceRole } from "@/hooks/use-spaces";
+import { titleOrUntitled } from "@/lib/page-label";
 import { useSession } from "@/hooks/use-session";
 import type { Page } from "@/lib/types";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -46,7 +47,9 @@ export function PageTreeItem({ page, spaceId, depth }: PageTreeItemProps) {
     e.stopPropagation();
     if (!user) return;
     try {
-      const newPage = await createPage({ spaceId, parentPageId: page.id, title: "Halaman tanpa judul", createdByUserId: user.id });
+      // Untitled on purpose: the editor shows the "Untitled page" placeholder
+      // until the author fills the (required) title in.
+      const newPage = await createPage({ spaceId, parentPageId: page.id, title: "", createdByUserId: user.id });
       setIsExpanded(true);
       router.push(`/spaces/${spaceId}/pages/${newPage.id}`);
     } catch {
@@ -100,8 +103,13 @@ export function PageTreeItem({ page, spaceId, depth }: PageTreeItemProps) {
           <ChevronRight className={cn("size-3.5 transition-transform", isExpanded && "rotate-90")} />
         </button>
         <Link href={`/spaces/${spaceId}/pages/${page.id}`} className="flex min-w-0 flex-1 items-center gap-1.5">
-          <FileText className="size-3.5 shrink-0 text-sidebar-foreground/60" />
-          <span className="truncate">{page.title || "Halaman tanpa judul"}</span>
+          {/* No emoji set → the plain page icon, never a placeholder glyph. */}
+          {page.emoji ? (
+            <span className="shrink-0 text-[13px] leading-none">{page.emoji}</span>
+          ) : (
+            <FileText className="size-3.5 shrink-0 text-sidebar-foreground/60" />
+          )}
+          <span className="truncate">{titleOrUntitled(page.title)}</span>
         </Link>
         <Button
           variant="ghost"
@@ -150,7 +158,7 @@ export function PageTreeItem({ page, spaceId, depth }: PageTreeItemProps) {
       <DeleteConfirmDialog
         open={isDeleteOpen}
         onOpenChange={setIsDeleteOpen}
-        title={`Hapus "${page.title || "Halaman tanpa judul"}"?`}
+        title={`Hapus "${titleOrUntitled(page.title)}"?`}
         description={
           hasChildren
             ? "Halaman ini beserta seluruh sub-halaman di dalamnya akan dihapus permanen. Tindakan ini tidak dapat dibatalkan."

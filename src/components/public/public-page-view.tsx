@@ -8,6 +8,7 @@ import { usePublicPage } from "@/hooks/use-public-content";
 import { usePublicSpace } from "@/hooks/public-space-context";
 import { flattenPageTree } from "@/lib/build-page-tree";
 import { collectHeadings } from "@/lib/collect-headings";
+import { titleOrUntitled } from "@/lib/page-label";
 import { PublicPageContent } from "./public-page-content";
 import { FeedbackWidget } from "./feedback-widget";
 import { PageNotAvailable } from "./page-not-available";
@@ -72,13 +73,21 @@ export function PublicPageView({ pageSlug }: { pageSlug: string }) {
               <>
                 <ChevronRight className="size-3" aria-hidden />
                 <Link href={`${basePath}/pages/${parentEntry.page.slug}`} className="hover:text-foreground">
-                  {parentEntry.page.title || "Halaman tanpa judul"}
+                  {titleOrUntitled(parentEntry.page.title)}
                 </Link>
               </>
             )}
           </nav>
 
-          <h1 className="text-display font-bold tracking-tight text-foreground">{snapshot.title}</h1>
+          {/* An emoji only renders when the author actually set one — no placeholder glyph when it is unset. */}
+          <div className="flex items-center gap-3">
+            {page.emoji && (
+              <span className="text-4xl leading-none" aria-hidden>
+                {page.emoji}
+              </span>
+            )}
+            <h1 className="text-display font-bold tracking-tight text-foreground">{snapshot.title}</h1>
+          </div>
           {/* Author intentionally omitted — decision D3 (wireframe v2 §3.5/§6.1): never expose an internal employee's name on the public site. */}
           {page.publishedAt && (
             <p className="mt-2 text-body-sm text-muted-foreground">Diperbarui {formatPublicDate(page.publishedAt)}</p>
@@ -115,7 +124,7 @@ export function PublicPageView({ pageSlug }: { pageSlug: string }) {
               {previous && (
                 <Link href={`${basePath}/pages/${previous.page.slug}`} className="rounded-lg border border-border p-4 hover:bg-accent">
                   <p className="text-caption text-muted-foreground">Sebelumnya</p>
-                  <p className="mt-1 text-body-sm font-medium text-foreground">{previous.page.title || "Halaman tanpa judul"}</p>
+                  <p className="mt-1 text-body-sm font-medium text-foreground">{titleOrUntitled(previous.page.title)}</p>
                 </Link>
               )}
               {next && (
@@ -124,7 +133,7 @@ export function PublicPageView({ pageSlug }: { pageSlug: string }) {
                   className={cn("rounded-lg border border-border p-4 text-right hover:bg-accent", !previous && "sm:col-start-2")}
                 >
                   <p className="text-caption text-muted-foreground">Berikutnya</p>
-                  <p className="mt-1 text-body-sm font-medium text-foreground">{next.page.title || "Halaman tanpa judul"}</p>
+                  <p className="mt-1 text-body-sm font-medium text-foreground">{titleOrUntitled(next.page.title)}</p>
                 </Link>
               )}
             </div>

@@ -66,6 +66,8 @@ function makePage(overrides: Partial<Page>): Page {
     slug: null,
     isPublished: false,
     publishedContentSnapshot: null,
+    description: "",
+    emoji: null,
     publishedAt: null,
     createdByUserId: "user-1",
     createdAt: "2026-01-01T00:00:00.000Z",
@@ -182,7 +184,7 @@ describe("SpacePage Halaman tab", () => {
     expect(mockCreatePage).toHaveBeenCalledWith({
       spaceId: "space-1",
       parentPageId: null,
-      title: "Halaman tanpa judul",
+      title: "",
       createdByUserId: "user-1",
     });
     await vi.waitFor(() => expect(mockPush).toHaveBeenCalledWith("/spaces/space-1/pages/new-page"));

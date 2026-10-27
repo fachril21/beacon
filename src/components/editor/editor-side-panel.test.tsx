@@ -76,6 +76,8 @@ const page: Page = {
   slug: null,
   isPublished: false,
   publishedContentSnapshot: null,
+  description: "",
+  emoji: null,
   publishedAt: null,
   createdByUserId: "user-1",
   createdAt: "2026-01-01T00:00:00.000Z",

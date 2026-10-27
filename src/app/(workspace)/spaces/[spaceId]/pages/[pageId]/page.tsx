@@ -7,6 +7,8 @@ import { EmptyState } from "@/components/beacon/empty-state";
 import { useSpace, useSpaceRole } from "@/hooks/use-spaces";
 import { usePage } from "@/hooks/use-pages";
 import { useTitleAutosave } from "@/hooks/use-title-autosave";
+import { useDescriptionAutosave, usePageEmoji } from "@/hooks/use-page-meta-autosave";
+import { UNTITLED_PAGE_LABEL } from "@/lib/page-label";
 import { useSession } from "@/hooks/use-session";
 import { useFocusCommentFromUrl } from "@/hooks/use-focus-comment-from-url";
 import { useEditorRevision } from "@/lib/editor-revision-store";
@@ -16,6 +18,7 @@ import { VersionPreview } from "@/components/editor/version-preview";
 import { PageEditor } from "@/components/editor/page-editor";
 import { PageEditorToolbar } from "@/components/editor/page-editor-toolbar";
 import { PageMetaRow } from "@/components/editor/page-meta-row";
+import { PageEmojiPicker } from "@/components/editor/page-emoji-picker";
 import { EditorSidePanel } from "@/components/editor/editor-side-panel";
 import { EDITOR_PANEL_TOGGLE_ID, type EditorSidePanelTab } from "@/components/editor/editor-side-panel-tab";
 import type { SaveStatus } from "@/hooks/use-page-autosave";
@@ -53,6 +56,15 @@ export default function PageEditorPage({ params }: { params: Promise<{ spaceId: 
     toast.error("Judul gagal disimpan, silakan coba lagi.");
   }, []);
   const { title, scheduleTitleSave, flushTitleSave } = useTitleAutosave(pageId, page?.title, handleTitleSaveError);
+  const handleMetaSaveError = useCallback(() => {
+    toast.error("Perubahan gagal disimpan, silakan coba lagi.");
+  }, []);
+  const { description, scheduleDescriptionSave, flushDescriptionSave } = useDescriptionAutosave(
+    pageId,
+    page?.description,
+    handleMetaSaveError,
+  );
+  const { emoji, saveEmoji } = usePageEmoji(pageId, page?.emoji, handleMetaSaveError);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const scrollRootRef = useRef<HTMLElement | null>(null);
 
@@ -111,21 +123,52 @@ export default function PageEditorPage({ params }: { params: Promise<{ spaceId: 
         onOpenVersionHistory={() => openPanelTab("history")}
       />
       <div className="flex min-h-0 flex-1">
-        {/* md:px-14 + the column's px-6 = 80px, exactly BlockNote's side-menu gutter ("+" and drag handle), which would otherwise be clipped by this scroll container when the column is squeezed (e.g. 1280px with the panel open). */}
+        {/* md:px-14 + the column's px-6 = 80px, exactly BlockNote's side-menu gutter ("+" and drag handle), which would otherwise be clipped by this scroll container when the column is squeezed (e.g. 1280px with the panel open). The page emoji is positioned in this gutter too (md:-left-12), so the title can stay on the content's left edge. */}
         <main ref={scrollRootRef} className="min-w-0 flex-1 overflow-y-auto md:px-14">
           {/* max-w-(--width-editor-column), not max-w-editor-column: Tailwind 4's max-w-* reads the --container-* namespace, so the bare token name resolves to nothing. */}
           <div className="mx-auto w-full max-w-(--width-editor-column) px-6 pt-11 pb-24">
-            <input
-              id="page-title"
-              name="page-title"
-              value={previewedVersion ? previewedVersion.title : title}
-              onChange={(e) => scheduleTitleSave(e.target.value)}
-              onBlur={() => void flushTitleSave()}
-              readOnly={!canEdit || isPreviewingVersion}
-              placeholder="Halaman tanpa judul"
-              autoFocus={!page.title}
-              className="w-full border-none bg-transparent text-h1 font-bold text-foreground outline-none placeholder:text-muted-foreground read-only:cursor-default"
-            />
+            <div className="relative">
+              {/* The emoji is a decorative gutter element on desktop: it sits
+                  in the editor's left side-menu gutter and is absolutely
+                  positioned so it never changes where the title/description
+                  (and the content below them) begin. Below md there is no
+                  gutter, so it stacks above the title instead of pushing it
+                  sideways. */}
+              <PageEmojiPicker
+                emoji={emoji}
+                onChange={(value) => void saveEmoji(value)}
+                disabled={!canEdit || isPreviewingVersion}
+                className="mb-2 md:absolute md:top-1 md:-left-12 md:mb-0 md:text-2xl"
+              />
+              <div className="min-w-0">
+                <input
+                  id="page-title"
+                  name="page-title"
+                  value={previewedVersion ? previewedVersion.title : title}
+                  onChange={(e) => scheduleTitleSave(e.target.value)}
+                  onBlur={() => void flushTitleSave()}
+                  readOnly={!canEdit || isPreviewingVersion}
+                  placeholder={UNTITLED_PAGE_LABEL}
+                  required={canEdit && !isPreviewingVersion}
+                  aria-required={canEdit && !isPreviewingVersion ? true : undefined}
+                  autoFocus={!page.title}
+                  className="w-full border-none bg-transparent text-h1 font-bold text-foreground outline-none placeholder:text-muted-foreground read-only:cursor-default"
+                />
+                {/* Empty for a Viewer with no description: the optional field only renders when it has something to show. */}
+                {(canEdit || description) && (
+                  <input
+                    id="page-description"
+                    name="page-description"
+                    value={description}
+                    onChange={(e) => scheduleDescriptionSave(e.target.value)}
+                    onBlur={() => void flushDescriptionSave()}
+                    readOnly={!canEdit || isPreviewingVersion}
+                    placeholder="Page Description (Optional)"
+                    className="mt-2 w-full border-none bg-transparent text-body-sm text-muted-foreground outline-none placeholder:text-muted-foreground focus:text-foreground read-only:cursor-default"
+                  />
+                )}
+              </div>
+            </div>
             <div className="mt-3.5">
               {!isPreviewingVersion && <PageMetaRow page={page} canEdit={canEdit} />}
             </div>

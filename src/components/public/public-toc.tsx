@@ -7,6 +7,7 @@ import { usePublicSpace, usePublicSpaceStatus } from "@/hooks/public-space-conte
 import { usePublicOrgContext } from "@/hooks/use-public-org";
 import { flattenPageTree } from "@/lib/build-page-tree";
 import { cn } from "@/lib/utils";
+import { titleOrUntitled } from "@/lib/page-label";
 import { PublicTocSkeleton } from "./public-loading";
 
 /**
@@ -60,7 +61,8 @@ export function PublicToc({ onNavigate }: { onNavigate?: () => void }) {
                     "bg-accent font-medium text-primary-muted-foreground before:absolute before:inset-y-1 before:left-0 before:w-0.5 before:rounded-full before:bg-primary",
                 )}
               >
-                {page.title || "Halaman tanpa judul"}
+                {page.emoji && <span className="mr-1">{page.emoji}</span>}
+                {titleOrUntitled(page.title)}
               </Link>
             );
           })

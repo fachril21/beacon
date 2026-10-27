@@ -133,6 +133,10 @@ export interface Page {
   spaceId: ID;
   parentPageId: ID | null;
   title: string;
+  /** Optional one-line summary under the title — empty string when the author left it blank. */
+  description: string;
+  /** Optional emoji beside the title wherever the Page is listed. `null` renders no emoji at all (never a placeholder glyph). */
+  emoji: string | null;
   /** Sibling order within the same parent, for sidebar drag-and-drop reorder (Flow 2 step 5). */
   order: number;
   /** Live-draft BlockNote document — the truth source for the editor (PRD.md §5.1). */

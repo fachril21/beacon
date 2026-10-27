@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/beacon/empty-state";
 import { PageNotAvailable } from "./page-not-available";
 import { PublicSpaceSkeleton } from "./public-loading";
 import { flattenPageTree } from "@/lib/build-page-tree";
+import { titleOrUntitled } from "@/lib/page-label";
 
 /**
  * Public landing for a single Space — its name and its own published page
@@ -48,7 +49,8 @@ export function PublicSpaceView() {
                 style={{ paddingLeft: `${12 + depth * 16}px` }}
                 className="rounded-md py-2 pr-3 text-body text-foreground hover:bg-accent"
               >
-                {page.title || "Halaman tanpa judul"}
+                {page.emoji && <span className="mr-1.5">{page.emoji}</span>}
+                {titleOrUntitled(page.title)}
               </Link>
             ))}
           </div>
