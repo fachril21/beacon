@@ -10,6 +10,7 @@ import { screenshotBlock, divider, paragraph } from "@/lib/mock/blocknote-conten
 
 vi.mock("@/hooks/use-screenshot-blocks", () => ({
   useScreenshotBlock: () => undefined,
+  useScreenshotBlockLookup: () => ({ block: undefined, status: "idle", retry: vi.fn() }),
   useUploadScreenshot: () => vi.fn(),
   useUpdateScreenshotDescription: () => vi.fn(),
   useUpdateScreenshotAnnotations: () => vi.fn(),

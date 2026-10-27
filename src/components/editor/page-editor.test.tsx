@@ -19,6 +19,29 @@ const { mockUploadScreenshot } = vi.hoisted(() => ({ mockUploadScreenshot: vi.fn
 vi.mock("@/hooks/use-screenshot-blocks", () => ({
   useUploadScreenshot: () => mockUploadScreenshot,
   useScreenshotBlock: () => undefined,
+  // A block with an id resolves to its row (the upload just created it);
+  // one without an id is still an empty placeholder.
+  useScreenshotBlockLookup: (id?: string) =>
+    id
+      ? {
+          block: {
+            id,
+            pageId: "page-1",
+            type: "screenshot",
+            order: 0,
+            imageUrl: "pasted.png",
+            imageWidth: 640,
+            imageHeight: 480,
+            annotations: [],
+            description: "",
+            altText: "Gambar yang ditempel",
+            createdAt: "t",
+            updatedAt: "t",
+          },
+          status: "ready",
+          retry: vi.fn(),
+        }
+      : { block: undefined, status: "idle", retry: vi.fn() },
   useUpdateScreenshotDescription: () => vi.fn(),
 }));
 
@@ -96,7 +119,7 @@ describe("PageEditor paste image", () => {
         expect.objectContaining({ pageId: "page-1", file, width: 640, height: 480 }),
       ),
     );
-    await waitFor(() => expect(screen.getByText(/Seret gambar ke sini/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("img", { name: "Gambar yang ditempel" })).toBeInTheDocument());
   });
 
   it("does not upload an image pasted while the editor is read-only", () => {
