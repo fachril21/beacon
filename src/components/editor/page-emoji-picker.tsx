@@ -31,11 +31,14 @@ export function PageEmojiPicker({
   onChange,
   disabled = false,
   className,
+  subject = "halaman",
 }: {
   emoji: string | null;
   onChange: (emoji: string | null) => void;
   disabled?: boolean;
   className?: string;
+  /** Noun used in the accessible labels, e.g. "Space". */
+  subject?: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -51,7 +54,7 @@ export function PageEmojiPicker({
         render={
           <button
             type="button"
-            aria-label={emoji ? "Ganti emoji halaman" : "Tambahkan emoji halaman"}
+            aria-label={emoji ? `Ganti emoji ${subject}` : `Tambahkan emoji ${subject}`}
             aria-haspopup="dialog"
             className={cn(
               "flex size-8 shrink-0 items-center justify-center rounded-md text-lg leading-none transition-colors outline-none",

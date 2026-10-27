@@ -36,6 +36,11 @@ function SpaceSection({ space, defaultExpanded }: { space: Space; defaultExpande
         >
           <ChevronRight className={cn("size-3.5 transition-transform", isExpanded && "rotate-90")} />
         </button>
+        {space.icon && (
+          <span className="shrink-0 text-[13px] leading-none" aria-hidden>
+            {space.icon}
+          </span>
+        )}
         {!space.isPublishable && (
           <Lock className="size-3 shrink-0 text-sidebar-foreground/40" aria-label="Hanya internal" />
         )}

@@ -17,6 +17,7 @@ import { useCreatePage } from "@/hooks/use-pages";
 
 const TABS: { label: string; segment: string | null; adminOnly: boolean }[] = [
   { label: "Halaman", segment: null, adminOnly: false },
+  { label: "Layout", segment: "builder", adminOnly: true },
   { label: "Pengaturan", segment: "settings", adminOnly: true },
 ];
 
@@ -45,7 +46,7 @@ export default function SpaceOverviewLayout({
   const [isCreating, setIsCreating] = useState(false);
 
   const isAdmin = role === "admin";
-  const activeSegment = pathname === `/spaces/${spaceId}/settings` ? "settings" : null;
+  const activeSegment = TABS.find((tab) => tab.segment && pathname === `/spaces/${spaceId}/${tab.segment}`)?.segment ?? null;
 
   if (!space) {
     return (
@@ -84,13 +85,21 @@ export default function SpaceOverviewLayout({
 
   return (
     <main className="flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-[1040px] px-12 pt-9">
-        <div className="flex items-start justify-between gap-4">
-          <div>
+      <div className="mx-auto max-w-[1040px] px-4 pt-6 sm:px-8 sm:pt-9 lg:px-12">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
             {space.category && (
               <p className="mb-1.5 text-caption font-semibold tracking-[0.04em] text-muted-foreground uppercase">{space.category}</p>
             )}
-            <h1 className="text-h1 font-bold text-foreground">{space.name}</h1>
+            <div className="flex items-center gap-2.5">
+              {space.icon && (
+                <span className="shrink-0 text-2xl leading-none sm:text-3xl" aria-hidden>
+                  {space.icon}
+                </span>
+              )}
+              <h1 className="text-h1 font-bold text-foreground">{space.name}</h1>
+            </div>
+            {space.description && <p className="mt-2 max-w-2xl text-body text-muted-foreground">{space.description}</p>}
             <Badge variant={space.isPublishable ? "published" : "secondary"} className="mt-3">
               {space.isPublishable ? "Dapat dipublikasikan" : "Hanya internal"}
             </Badge>
@@ -108,7 +117,7 @@ export default function SpaceOverviewLayout({
           </div>
         </div>
 
-        <nav aria-label="Tab Space" className="mt-6 flex gap-4 border-b border-border">
+        <nav aria-label="Tab Space" className="mt-6 flex gap-4 overflow-x-auto border-b border-border">
           {TABS.filter((tab) => !tab.adminOnly || isAdmin).map((tab) => {
             const href = tab.segment ? `/spaces/${spaceId}/${tab.segment}` : `/spaces/${spaceId}`;
             const isActive = activeSegment === tab.segment;
@@ -117,7 +126,7 @@ export default function SpaceOverviewLayout({
                 key={tab.label}
                 href={href}
                 className={cn(
-                  "border-b-2 pb-3 text-body-sm font-medium text-muted-foreground hover:text-foreground",
+                  "shrink-0 border-b-2 pb-3 text-body-sm font-medium text-muted-foreground hover:text-foreground",
                   isActive ? "border-primary text-foreground" : "border-transparent",
                 )}
               >
@@ -128,7 +137,7 @@ export default function SpaceOverviewLayout({
         </nav>
       </div>
 
-      <div className="mx-auto max-w-[1040px] px-12 py-6">{children}</div>
+      <div className="mx-auto max-w-[1040px] px-4 py-6 sm:px-8 lg:px-12">{children}</div>
     </main>
   );
 }

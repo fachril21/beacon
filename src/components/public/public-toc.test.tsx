@@ -87,4 +87,14 @@ describe("PublicToc (single Space)", () => {
     expect(parentLink).toHaveAttribute("href", "/public/dibimbing/pages/getting-started");
     expect(Number(childLink.getAttribute("data-depth"))).toBeGreaterThan(Number(parentLink.getAttribute("data-depth")));
   });
+
+  it("hides the page list when the Space's Navigation setting turns it off", () => {
+    const page = makePage({ id: "parent", title: "Getting Started", slug: "getting-started" });
+    mockUsePublicSpace.mockReturnValue({ space: { ...space, showPageList: false }, pages: [{ page, children: [] }] });
+
+    render(<PublicToc />);
+
+    expect(screen.queryByRole("link", { name: "Getting Started" })).not.toBeInTheDocument();
+    expect(screen.getByText(/daftar halaman disembunyikan/i)).toBeInTheDocument();
+  });
 });

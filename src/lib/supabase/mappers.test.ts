@@ -74,9 +74,43 @@ describe("mapSpaceRow", () => {
       name: "Mobile App",
       slug: "mobile-app",
       category: "Aplikasi Mobile",
+      description: "",
+      icon: null,
+      layout: null,
+      showPageList: true,
       isPublishable: false,
       createdByUserId: "user-1",
       createdAt: "2026-01-01T00:00:00Z",
+    });
+  });
+
+  it("maps the Space layout JSONB into a normalized layout", () => {
+    const row = {
+      id: "space-1",
+      organization_id: "org-1",
+      name: "Mobile App",
+      slug: "mobile-app",
+      category: null,
+      is_publishable: true,
+      description: "Panduan mobile",
+      icon: "📱",
+      layout: {
+        version: 1,
+        sections: [{ id: "s1", title: "Mulai", columns: 2, pages: [{ pageId: "page-1" }, { pageId: "page-2", colSpan: 2 }] }],
+      },
+      show_page_list: false,
+      created_by_user_id: "user-1",
+      created_at: "2026-01-01T00:00:00Z",
+    };
+
+    expect(mapSpaceRow(row)).toMatchObject({
+      description: "Panduan mobile",
+      icon: "📱",
+      showPageList: false,
+      layout: {
+        version: 1,
+        sections: [{ id: "s1", title: "Mulai", columns: 2, pages: [{ pageId: "page-1" }, { pageId: "page-2", colSpan: 2 }] }],
+      },
     });
   });
 });

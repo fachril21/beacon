@@ -131,27 +131,51 @@ export function useCreateSpace() {
 }
 
 /**
- * Updates a Space's own settings after creation — its name and its publishable
- * flag (PRD.md Flow 2 step 2's toggle, previously only settable in the New
- * Space modal). Admin-only at the data layer via `spaces_update_admin_only`
- * (20260806100100_rls_policies.sql), so no extra client-side gate is needed
- * here. Flipping `isPublishable` off makes the Space internal-only again — RLS
- * immediately hides its published Pages from the public site, but nothing is
- * deleted.
+ * Updates a Space's own settings after creation. Admin-only at the data layer
+ * via `spaces_update_admin_only` (20260806100100_rls_policies.sql), so no extra
+ * client-side gate is needed here. Accepts every field the Space Builder and
+ * Space Settings tabs edit, including the persisted landing layout.
  */
+export interface UpdateSpacePatch {
+  name?: string;
+  description?: string;
+  icon?: string | null;
+  slug?: string;
+  category?: string | null;
+  isPublishable?: boolean;
+  layout?: Space["layout"];
+  showPageList?: boolean;
+}
+
 export function useUpdateSpace() {
-  return useCallback(async (id: string, patch: { name?: string; isPublishable?: boolean }) => {
-    const supabase = getSupabaseBrowserClient();
-
-    const row: Record<string, unknown> = {};
-    if (patch.name !== undefined) row.name = patch.name;
-    if (patch.isPublishable !== undefined) row.is_publishable = patch.isPublishable;
-
-    const { error } = await supabase.from("spaces").update(row).eq("id", id);
-    if (error) throw error;
-
-    spacesStore.setState((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  return useCallback(async (id: string, patch: UpdateSpacePatch) => {
+    await updateSpaceRecord(id, patch);
   }, []);
+}
+
+/**
+ * Non-hook write path for callers that persist a Space setting from an event
+ * handler but don't otherwise need the hook's callback (e.g. reordering Page
+ * cards in the Page Manager). Kept next to useUpdateSpace so both write the
+ * same snake_case columns and update the same store.
+ */
+export async function updateSpaceRecord(id: string, patch: UpdateSpacePatch): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+
+  const row: Record<string, unknown> = {};
+  if (patch.name !== undefined) row.name = patch.name;
+  if (patch.description !== undefined) row.description = patch.description;
+  if (patch.icon !== undefined) row.icon = patch.icon;
+  if (patch.slug !== undefined) row.slug = patch.slug;
+  if (patch.category !== undefined) row.category = patch.category;
+  if (patch.isPublishable !== undefined) row.is_publishable = patch.isPublishable;
+  if (patch.layout !== undefined) row.layout = patch.layout;
+  if (patch.showPageList !== undefined) row.show_page_list = patch.showPageList;
+
+  const { error } = await supabase.from("spaces").update(row).eq("id", id);
+  if (error) throw error;
+
+  spacesStore.setState((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
 }
 
 /**
