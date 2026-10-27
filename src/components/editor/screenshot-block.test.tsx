@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
@@ -9,8 +9,17 @@ import type { ScreenshotBlock } from "@/lib/types";
 vi.mock("./comment-thread-panel", () => ({ CommentThreadPanel: () => null }));
 
 const mockUseScreenshotBlock = vi.fn();
+const mockLookupStatus = vi.fn();
+const mockRetry = vi.fn();
 vi.mock("@/hooks/use-screenshot-blocks", () => ({
   useScreenshotBlock: (id?: string) => mockUseScreenshotBlock(id),
+  // Existing cases only set the block; status defaults to what a real lookup
+  // would report for it. Lookup-specific cases override via mockLookupStatus.
+  useScreenshotBlockLookup: (id?: string) => {
+    const block = mockUseScreenshotBlock(id);
+    const status = mockLookupStatus() ?? (block ? "ready" : id ? "missing" : "idle");
+    return { block, status, retry: mockRetry };
+  },
   useUploadScreenshot: () => vi.fn(),
   useUpdateScreenshotDescription: () => vi.fn(),
 }));
@@ -47,7 +56,48 @@ function TestEditor({ editable, screenshotBlockId }: { editable: boolean; screen
   );
 }
 
+describe("screenshot block with an id whose data is not in the store", () => {
+  beforeEach(() => {
+    mockUseScreenshotBlock.mockReturnValue(undefined);
+    mockLookupStatus.mockReset();
+    mockRetry.mockReset();
+  });
+
+  it("shows a loading placeholder, not the upload prompt, while the block is being fetched", () => {
+    mockLookupStatus.mockReturnValue("loading");
+    render(<TestEditor editable={true} screenshotBlockId="shot-2" />);
+    expect(screen.queryByText(/Seret gambar ke sini/)).not.toBeInTheDocument();
+    expect(screen.getByRole("status", { name: /memuat gambar/i })).toBeInTheDocument();
+  });
+
+  it("offers a retry instead of the upload prompt when the block cannot be found", () => {
+    mockLookupStatus.mockReturnValue("missing");
+    render(<TestEditor editable={true} screenshotBlockId="shot-2" />);
+    expect(screen.queryByText(/Seret gambar ke sini/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /muat ulang/i }));
+    expect(mockRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("tells the user the load failed instead of the upload prompt", () => {
+    mockLookupStatus.mockReturnValue("error");
+    render(<TestEditor editable={true} screenshotBlockId="shot-2" />);
+    expect(screen.queryByText(/Seret gambar ke sini/)).not.toBeInTheDocument();
+    expect(screen.getByText(/gagal memuat gambar/i)).toBeInTheDocument();
+  });
+
+  it("shows read-only Viewers nothing while it is unresolved", () => {
+    mockLookupStatus.mockReturnValue("missing");
+    render(<TestEditor editable={false} screenshotBlockId="shot-2" />);
+    expect(screen.queryByRole("button", { name: /muat ulang/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Seret gambar ke sini/)).not.toBeInTheDocument();
+  });
+});
+
 describe("screenshot block render", () => {
+  beforeEach(() => {
+    mockLookupStatus.mockReset();
+  });
+
   it("shows the upload prompt when editable and no screenshot block is attached yet", () => {
     mockUseScreenshotBlock.mockReturnValue(undefined);
     render(<TestEditor editable={true} screenshotBlockId="" />);

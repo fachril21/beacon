@@ -5,7 +5,7 @@ import Image from "next/image";
 import { Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { createReactBlockSpec, type ReactCustomBlockRenderProps } from "@blocknote/react";
-import { useScreenshotBlock, useUploadScreenshot, useUpdateScreenshotDescription } from "@/hooks/use-screenshot-blocks";
+import { useScreenshotBlockLookup, useUploadScreenshot, useUpdateScreenshotDescription } from "@/hooks/use-screenshot-blocks";
 import { resolveScreenshotUrl } from "@/lib/s3/screenshot-url";
 import { screenshotUploadErrorMessage } from "@/lib/s3/upload-error";
 import { openAnnotationFocus } from "@/lib/annotation-focus-store";
@@ -29,7 +29,7 @@ function ScreenshotBlockRender({ block, editor }: ScreenshotBlockRenderProps) {
   const blockId = block.props.screenshotBlockId;
   const readOnly = !editor.isEditable;
   const pageId = usePageId();
-  const screenshotBlock = useScreenshotBlock(blockId || undefined, pageId);
+  const { block: screenshotBlock, status: lookupStatus, retry } = useScreenshotBlockLookup(blockId || undefined, pageId);
   const uploadScreenshot = useUploadScreenshot();
   const updateDescription = useUpdateScreenshotDescription();
   const [isUploading, setIsUploading] = useState(false);
@@ -67,8 +67,32 @@ function ScreenshotBlockRender({ block, editor }: ScreenshotBlockRenderProps) {
     }
   }
 
-  if (!blockId || !screenshotBlock) {
+  // The upload prompt is only for a block that has no image yet. A block that
+  // already references an id must never fall back to it just because its row
+  // hasn't arrived (or couldn't be read) — that invites overwriting a real image.
+  if (!blockId) {
     return readOnly ? null : <ScreenshotUploadPrompt onUpload={(file, w, h) => void handleUpload(file, w, h)} isUploading={isUploading} />;
+  }
+
+  if (!screenshotBlock) {
+    if (readOnly) return null;
+    if (lookupStatus === "missing" || lookupStatus === "error") {
+      return (
+        <div className="my-4 flex w-full max-w-(--width-screenshot-breakout) items-center justify-between gap-3 rounded-lg border border-dashed border-border px-4 py-3 text-body-sm text-muted-foreground">
+          <span>{lookupStatus === "error" ? "Gagal memuat gambar ini." : "Gambar ini belum bisa ditemukan."}</span>
+          <button type="button" onClick={retry} className="rounded-md border border-border px-2.5 py-1 text-popover-foreground hover:bg-accent">
+            Muat ulang
+          </button>
+        </div>
+      );
+    }
+    return (
+      <div
+        role="status"
+        aria-label="Memuat gambar"
+        className="my-4 h-48 w-full max-w-(--width-screenshot-breakout) animate-pulse rounded-lg border border-border bg-muted"
+      />
+    );
   }
 
   if (readOnly) {

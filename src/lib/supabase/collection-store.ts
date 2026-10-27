@@ -18,8 +18,10 @@ interface Identified {
 
 export interface CollectionStore<T extends Identified> extends Store<T[]> {
   /** Fetches once per unique `key` (e.g. a spaceId); a repeat call while a
-   * previous load for that key is in flight or already settled is a no-op. */
-  ensureLoaded: (key: string, loader: () => Promise<T[]>, onError?: (error: unknown) => void) => void;
+   * previous load for that key is in flight or already settled is a no-op.
+   * Resolves `true` once that key's rows are in the store, `false` if the
+   * load failed — so a caller can tell "not loaded yet" from "loaded, absent". */
+  ensureLoaded: (key: string, loader: () => Promise<T[]>, onError?: (error: unknown) => void) => Promise<boolean>;
   /** Forces the next `ensureLoaded` for this key to fetch again. */
   invalidate: (key: string) => void;
 }
@@ -27,13 +29,14 @@ export interface CollectionStore<T extends Identified> extends Store<T[]> {
 export function createCollectionStore<T extends Identified>(): CollectionStore<T> {
   const store = createStore<T[]>([]);
   const settledKeys = new Set<string>();
-  const inFlightKeys = new Set<string>();
+  const inFlight = new Map<string, Promise<boolean>>();
 
-  function ensureLoaded(key: string, loader: () => Promise<T[]>, onError?: (error: unknown) => void) {
-    if (settledKeys.has(key) || inFlightKeys.has(key)) return;
-    inFlightKeys.add(key);
+  function ensureLoaded(key: string, loader: () => Promise<T[]>, onError?: (error: unknown) => void): Promise<boolean> {
+    if (settledKeys.has(key)) return Promise.resolve(true);
+    const pending = inFlight.get(key);
+    if (pending) return pending;
 
-    loader()
+    const load = loader()
       .then((rows) => {
         settledKeys.add(key);
         store.setState((prev) => {
@@ -41,13 +44,17 @@ export function createCollectionStore<T extends Identified>(): CollectionStore<T
           for (const row of rows) byId.set(row.id, row);
           return Array.from(byId.values());
         });
+        return true;
       })
       .catch((error: unknown) => {
         onError?.(error);
+        return false;
       })
       .finally(() => {
-        inFlightKeys.delete(key);
+        inFlight.delete(key);
       });
+    inFlight.set(key, load);
+    return load;
   }
 
   function invalidate(key: string) {

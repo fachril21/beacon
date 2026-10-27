@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore, useCallback, useEffect } from "react";
+import { useSyncExternalStore, useCallback, useEffect, useState } from "react";
 import { screenshotBlocksStore } from "@/lib/supabase/stores";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { mapScreenshotBlockRow, type ScreenshotBlockRow } from "@/lib/supabase/mappers";
@@ -15,23 +15,87 @@ import type { Annotation, ScreenshotBlock } from "@/lib/types";
  * (or a Viewer who never uploaded anything) still resolves existing blocks.
  */
 export function useScreenshotBlock(id: string | undefined, pageId: string | undefined) {
+  return useScreenshotBlockLookup(id, pageId).block;
+}
+
+/**
+ * "idle": nothing to look up yet (no block id, or no page id).
+ * "loading": the page's rows are being fetched.
+ * "missing": fetched fresh and the row still isn't there.
+ * "error": the fetch itself failed (RLS, network) — distinct from missing so
+ * the editor never mistakes a failed read for an empty block.
+ */
+export type ScreenshotBlockLookupStatus = "idle" | "loading" | "ready" | "missing" | "error";
+
+export interface ScreenshotBlockLookup {
+  block: ScreenshotBlock | undefined;
+  status: ScreenshotBlockLookupStatus;
+  /** Drops the cached page load and fetches it again. */
+  retry: () => void;
+}
+
+async function fetchPageScreenshotBlocks(pageId: string): Promise<ScreenshotBlock[]> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase.from("screenshot_blocks").select("*").eq("page_id", pageId);
+  if (error) throw error;
+  return ((data ?? []) as ScreenshotBlockRow[]).map(mapScreenshotBlockRow);
+}
+
+/**
+ * A Page's rows are fetched once per session and nothing pushes later inserts
+ * to the client, so a block another member uploads after this tab loaded the
+ * page has an id in the content but no row in the store. When a referenced
+ * block is absent from an already-settled load, refetch once before
+ * concluding it's missing.
+ */
+export function useScreenshotBlockLookup(id: string | undefined, pageId: string | undefined): ScreenshotBlockLookup {
   const blocks = useSyncExternalStore(screenshotBlocksStore.subscribe, screenshotBlocksStore.getState, screenshotBlocksStore.getState);
+  const [failure, setFailure] = useState<{ key: string; status: "missing" | "error" } | null>(null);
+  const [attempt, setAttempt] = useState(0);
+
+  const block = id ? blocks.find((b) => b.id === id) : undefined;
+  const hasBlock = block !== undefined;
+  const lookupKey = `${pageId}:${id}`;
 
   useEffect(() => {
-    if (!pageId) return;
-    screenshotBlocksStore.ensureLoaded(
-      `page:${pageId}`,
-      async () => {
-        const supabase = getSupabaseBrowserClient();
-        const { data, error } = await supabase.from("screenshot_blocks").select("*").eq("page_id", pageId);
-        if (error) throw error;
-        return ((data ?? []) as ScreenshotBlockRow[]).map(mapScreenshotBlockRow);
-      },
-      (error) => console.error("[beacon] failed to load screenshot blocks:", error),
-    );
+    if (!id || !pageId || hasBlock) return;
+    let cancelled = false;
+    const pageKey = `page:${pageId}`;
+    const load = () =>
+      screenshotBlocksStore.ensureLoaded(
+        pageKey,
+        () => fetchPageScreenshotBlocks(pageId),
+        (error) => console.error("[beacon] failed to load screenshot blocks:", error),
+      );
+    const isPresent = () => screenshotBlocksStore.getState().some((b) => b.id === id);
+
+    void (async () => {
+      let ok = await load();
+      if (ok && !isPresent()) {
+        screenshotBlocksStore.invalidate(pageKey);
+        ok = await load();
+      }
+      if (cancelled || isPresent()) return;
+      setFailure({ key: lookupKey, status: ok ? "missing" : "error" });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, pageId, hasBlock, lookupKey, attempt]);
+
+  const retry = useCallback(() => {
+    if (pageId) screenshotBlocksStore.invalidate(`page:${pageId}`);
+    setFailure(null);
+    setAttempt((n) => n + 1);
   }, [pageId]);
 
-  return id ? blocks.find((b) => b.id === id) : undefined;
+  let status: ScreenshotBlockLookupStatus;
+  if (hasBlock) status = "ready";
+  else if (!id || !pageId) status = "idle";
+  else status = failure?.key === lookupKey ? failure.status : "loading";
+
+  return { block, status, retry };
 }
 
 export interface CreateScreenshotBlockInput {
