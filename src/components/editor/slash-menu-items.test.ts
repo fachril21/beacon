@@ -15,6 +15,9 @@ describe("getSlashMenuItems", () => {
     expect(items[0].title).toBe("Tangkapan Layar");
     expect(items.map((i) => i.title)).toEqual([
       "Tangkapan Layar",
+      "Gambar",
+      "Video",
+      "Lampiran Berkas",
       "Judul 1",
       "Judul 2",
       "Judul 3",
@@ -23,9 +26,13 @@ describe("getSlashMenuItems", () => {
       "Checklist",
       "Kode",
       "Kutipan",
+      "Callout",
+      "Tombol / Tautan",
       "Tabel",
       "Pembatas",
       "Stepper",
+      "Dua Kolom",
+      "Tiga Kolom",
     ]);
   });
 
@@ -76,5 +83,35 @@ describe("getSlashMenuItems", () => {
     // Each step body starts with an empty paragraph — a cursor target the user can
     // immediately type into or press "/" from, matching GitBook's "Step content" placeholder line.
     expect(stepper.children.every((child) => child.children.length === 1 && child.children[0].type === "paragraph")).toBe(true);
+  });
+
+  it("inserting Callout creates an info callout with editable text", () => {
+    const editor = createTestEditor();
+    editor.setTextCursorPosition(editor.document[0], "start");
+
+    getSlashMenuItems(editor).find((i) => i.title === "Callout")!.onItemClick();
+
+    expect(editor.document[0]).toMatchObject({ type: "callout", props: { variant: "info" } });
+  });
+
+  it("inserting Tombol creates a button block with an empty URL", () => {
+    const editor = createTestEditor();
+    editor.setTextCursorPosition(editor.document[0], "start");
+
+    getSlashMenuItems(editor).find((i) => i.title === "Tombol / Tautan")!.onItemClick();
+
+    expect(editor.document[0]).toMatchObject({ type: "button", props: { url: "", variant: "primary" } });
+  });
+
+  it("inserting Dua Kolom creates two column children", () => {
+    const editor = createTestEditor();
+    editor.setTextCursorPosition(editor.document[0], "start");
+
+    getSlashMenuItems(editor).find((i) => i.title === "Dua Kolom")!.onItemClick();
+
+    const columns = editor.document[0];
+    expect(columns.type).toBe("columns");
+    expect(columns.children).toHaveLength(2);
+    expect(columns.children.every((child) => child.type === "column")).toBe(true);
   });
 });

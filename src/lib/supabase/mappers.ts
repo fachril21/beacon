@@ -21,6 +21,7 @@ import type {
   Feedback,
   Notification,
 } from "@/lib/types";
+import { normalizeSpaceLayout } from "@/lib/space-layout";
 
 export interface OrganizationRow {
   id: string;
@@ -117,6 +118,10 @@ export interface SpaceRow {
   slug: string;
   category: string | null;
   is_publishable: boolean;
+  description?: string | null;
+  icon?: string | null;
+  layout?: unknown;
+  show_page_list?: boolean | null;
   created_by_user_id: string;
   created_at: string;
 }
@@ -128,6 +133,12 @@ export function mapSpaceRow(row: SpaceRow): Space {
     name: row.name,
     slug: row.slug,
     category: row.category,
+    // `??` guards a code-before-migration deploy: a rows payload fetched
+    // before 20261027000000 runs simply lacks these keys.
+    description: row.description ?? "",
+    icon: row.icon ?? null,
+    layout: normalizeSpaceLayout(row.layout),
+    showPageList: row.show_page_list ?? true,
     isPublishable: row.is_publishable,
     createdByUserId: row.created_by_user_id,
     createdAt: row.created_at,

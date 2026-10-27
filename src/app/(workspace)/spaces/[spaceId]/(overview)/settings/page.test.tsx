@@ -131,6 +131,33 @@ describe("SpaceSettingsPage", () => {
     expect(screen.getByRole("button", { name: "Simpan" })).toBeEnabled();
   });
 
+  it("saves the Space description and slug alongside the name", async () => {
+    await renderPage();
+    const user = userEvent.setup();
+
+    await user.type(await screen.findByLabelText("Deskripsi Space"), "Panduan lengkap");
+    const slugInput = screen.getByLabelText("URL / Slug");
+    await user.clear(slugInput);
+    await user.type(slugInput, "panduan-lengkap");
+    await user.click(screen.getByRole("button", { name: "Simpan" }));
+
+    await vi.waitFor(() =>
+      expect(mockUpdateSpace).toHaveBeenCalledWith("space-1", {
+        description: "Panduan lengkap",
+        slug: "panduan-lengkap",
+      }),
+    );
+  });
+
+  it("toggles the public page-list navigation setting", async () => {
+    await renderPage();
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("switch", { name: /tampilkan daftar halaman/i }));
+
+    await vi.waitFor(() => expect(mockUpdateSpace).toHaveBeenCalledWith("space-1", { showPageList: false }));
+  });
+
   it("deletes the Space on confirm and navigates back to the workspace home", async () => {
     await renderPage();
     const user = userEvent.setup();

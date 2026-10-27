@@ -87,6 +87,38 @@ export interface User {
 // Space — top-level container per platform, PROJECT.md §9.4
 // ---------------------------------------------------------------------------
 
+/**
+ * One Page card inside a Space layout section. The Page itself stays a normal
+ * `Page` row — the layout only stores its id, so renaming/deleting/editing a
+ * Page never duplicates content.
+ */
+export interface SpaceLayoutPage {
+  pageId: ID;
+  /** Card width in a multi-column section. 1 is a normal card; 2–4 span more columns. */
+  colSpan?: number;
+}
+
+/** One admin-authored section on the Space landing page (e.g. "Panduan"). */
+export interface SpaceSection {
+  id: string;
+  title: string;
+  description?: string;
+  /** Number of columns the section's Page cards are arranged in (1–4). */
+  columns: number;
+  /** Ordered Page references. Order is the display order in every view. */
+  pages: SpaceLayoutPage[];
+}
+
+/**
+ * Persisted Space Builder layout. `version` leaves room for future shape
+ * changes without guessing at older documents; readers that don't recognise
+ * a version fall back to the automatic page tree.
+ */
+export interface SpaceLayout {
+  version: 1;
+  sections: SpaceSection[];
+}
+
 export interface Space {
   id: ID;
   organizationId: ID;
@@ -95,6 +127,14 @@ export interface Space {
   slug: string;
   /** Category shown as a kicker on Space summary cards (DESIGN.md §5.4) — e.g. "Aplikasi Mobile". */
   category: string | null;
+  /** Space-level subtitle shown under the title in the workspace and on the public landing page. Empty when unset. */
+  description?: string;
+  /** Optional emoji shown beside the Space name. `null` renders no glyph at all (never a placeholder). */
+  icon?: string | null;
+  /** Admin-authored landing layout. `null`/missing means "not arranged yet" — readers fall back to the page tree. */
+  layout?: SpaceLayout | null;
+  /** Navigation setting: show the Page tree in the public Space sidebar. Defaults to true. */
+  showPageList?: boolean;
   /** Per-Space "publishable" flag (PRD.md Flow 2 step 2) — default OFF/internal-only. */
   isPublishable: boolean;
   createdByUserId: ID;
@@ -177,6 +217,10 @@ export type BlockType =
   | "quote"
   | "table"
   | "divider"
+  | "callout"
+  | "button"
+  | "columns"
+  | "column"
   | "screenshot";
 
 export interface Block {

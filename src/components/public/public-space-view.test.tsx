@@ -87,4 +87,55 @@ describe("PublicSpaceView", () => {
     expect(screen.getByRole("link", { name: "Mulai" })).toHaveAttribute("href", "/public/dibimbing/pages/mulai");
     expect(screen.getByRole("link", { name: "Langkah 1" })).toHaveAttribute("href", "/public/dibimbing/pages/langkah-1");
   });
+
+  it("renders the admin-authored sections and description, in the saved order", () => {
+    const first = makePage({ id: "first", title: "Penjelasan", slug: "penjelasan" });
+    const second = makePage({ id: "second", title: "Dokumentasi", slug: "dokumentasi" });
+    mockUsePublicSpace.mockReturnValue({
+      space: {
+        ...space,
+        description: "Dokumentasi dan panduan penggunaan.",
+        layout: {
+          version: 1,
+          sections: [
+            { id: "s1", title: "Informasi Umum", columns: 2, pages: [{ pageId: "second" }, { pageId: "first" }] },
+          ],
+        },
+      },
+      pages: [
+        { page: first, children: [] },
+        { page: second, children: [] },
+      ],
+    });
+
+    render(<PublicSpaceView />);
+
+    expect(screen.getByRole("heading", { name: "Aplikasi Mobile" })).toBeInTheDocument();
+    expect(screen.getByText("Dokumentasi dan panduan penggunaan.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Informasi Umum" })).toBeInTheDocument();
+    const links = screen.getAllByRole("link").filter((link) => link.getAttribute("href")?.includes("/pages/"));
+    expect(links.map((link) => link.textContent)).toEqual(["Dokumentasi", "Penjelasan"]);
+  });
+
+  it("never renders a Page referenced by the layout that the public query did not return", () => {
+    const published = makePage({ id: "published", title: "Terbit", slug: "terbit" });
+    mockUsePublicSpace.mockReturnValue({
+      space: {
+        ...space,
+        layout: {
+          version: 1,
+          sections: [
+            { id: "s1", title: "Bagian", columns: 1, pages: [{ pageId: "draft" }, { pageId: "published" }] },
+          ],
+        },
+      },
+      pages: [{ page: published, children: [] }],
+    });
+
+    render(<PublicSpaceView />);
+
+    expect(screen.getByRole("link", { name: "Terbit" })).toBeInTheDocument();
+    expect(screen.queryByText("Draf")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Draft" })).not.toBeInTheDocument();
+  });
 });

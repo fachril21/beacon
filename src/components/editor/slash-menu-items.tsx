@@ -10,7 +10,14 @@ import {
   Table,
   Minus,
   Image as ImageIcon,
+  ImagePlus,
+  Video,
+  Paperclip,
   Milestone,
+  Info,
+  MousePointerClick,
+  Columns2,
+  Columns3,
 } from "lucide-react";
 import {
   insertOrUpdateBlockForSlashMenu,
@@ -43,6 +50,30 @@ export function getSlashMenuItems<BSchema extends BlockSchema, ISchema extends I
       group: "Media",
       icon: <ImageIcon className="size-3.5" />,
       onItemClick: () => insert({ type: "screenshot", props: { screenshotBlockId: "" } } as PartialBlock<BSchema, ISchema, SSchema>),
+    },
+    {
+      title: "Gambar",
+      subtext: "Sisipkan gambar biasa",
+      aliases: ["image", "gambar", "foto"],
+      group: "Media",
+      icon: <ImagePlus className="size-3.5" />,
+      onItemClick: () => insert({ type: "image" } as PartialBlock<BSchema, ISchema, SSchema>),
+    },
+    {
+      title: "Video",
+      subtext: "Sematkan video atau tautan embed",
+      aliases: ["video", "embed", "youtube"],
+      group: "Media",
+      icon: <Video className="size-3.5" />,
+      onItemClick: () => insert({ type: "video" } as PartialBlock<BSchema, ISchema, SSchema>),
+    },
+    {
+      title: "Lampiran Berkas",
+      subtext: "Unggah dokumen untuk diunduh",
+      aliases: ["file", "lampiran", "dokumen", "attachment"],
+      group: "Media",
+      icon: <Paperclip className="size-3.5" />,
+      onItemClick: () => insert({ type: "file" } as PartialBlock<BSchema, ISchema, SSchema>),
     },
     {
       title: "Judul 1",
@@ -109,6 +140,32 @@ export function getSlashMenuItems<BSchema extends BlockSchema, ISchema extends I
       onItemClick: () => insert({ type: "quote" } as PartialBlock<BSchema, ISchema, SSchema>),
     },
     {
+      title: "Callout",
+      subtext: "Kotak informasi, peringatan, atau tips",
+      aliases: ["callout", "info", "peringatan", "tips"],
+      group: "Blok dasar",
+      icon: <Info className="size-3.5" />,
+      onItemClick: () =>
+        insert({
+          type: "callout",
+          props: { variant: "info" },
+          content: "Tulis informasi penting di sini…",
+        } as unknown as PartialBlock<BSchema, ISchema, SSchema>),
+    },
+    {
+      title: "Tombol / Tautan",
+      subtext: "Tombol yang mengarah ke tautan",
+      aliases: ["button", "tombol", "link", "tautan", "cta"],
+      group: "Blok dasar",
+      icon: <MousePointerClick className="size-3.5" />,
+      onItemClick: () =>
+        insert({
+          type: "button",
+          props: { url: "", variant: "primary" },
+          content: "Buka tautan",
+        } as unknown as PartialBlock<BSchema, ISchema, SSchema>),
+    },
+    {
       title: "Tabel",
       subtext: "Sisipkan tabel 2×2",
       aliases: ["table", "tabel"],
@@ -143,6 +200,37 @@ export function getSlashMenuItems<BSchema extends BlockSchema, ISchema extends I
           children: [
             { type: "step", children: [{ type: "paragraph" }] },
             { type: "step", children: [{ type: "paragraph" }] },
+          ],
+        } as unknown as PartialBlock<BSchema, ISchema, SSchema>),
+    },
+    {
+      title: "Dua Kolom",
+      subtext: "Susun konten berdampingan dalam 2 kolom",
+      aliases: ["kolom", "columns", "column", "2 kolom", "dua kolom"],
+      group: "Tata letak",
+      icon: <Columns2 className="size-3.5" />,
+      onItemClick: () =>
+        insert({
+          type: "columns",
+          children: [
+            { type: "column", children: [{ type: "paragraph" }] },
+            { type: "column", children: [{ type: "paragraph" }] },
+          ],
+        } as unknown as PartialBlock<BSchema, ISchema, SSchema>),
+    },
+    {
+      title: "Tiga Kolom",
+      subtext: "Susun konten berdampingan dalam 3 kolom",
+      aliases: ["kolom", "columns", "3 kolom", "tiga kolom"],
+      group: "Tata letak",
+      icon: <Columns3 className="size-3.5" />,
+      onItemClick: () =>
+        insert({
+          type: "columns",
+          children: [
+            { type: "column", children: [{ type: "paragraph" }] },
+            { type: "column", children: [{ type: "paragraph" }] },
+            { type: "column", children: [{ type: "paragraph" }] },
           ],
         } as unknown as PartialBlock<BSchema, ISchema, SSchema>),
     },

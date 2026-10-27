@@ -1,19 +1,21 @@
 "use client";
 
-import Link from "next/link";
 import { BookOpen } from "lucide-react";
 import { usePublicOrgContext } from "@/hooks/use-public-org";
 import { usePublicSpace, usePublicSpaceStatus } from "@/hooks/public-space-context";
 import { EmptyState } from "@/components/beacon/empty-state";
+import { SpaceLayoutView } from "@/components/space/space-layout-view";
+import { flattenPageTree } from "@/lib/build-page-tree";
 import { PageNotAvailable } from "./page-not-available";
 import { PublicSpaceSkeleton } from "./public-loading";
-import { flattenPageTree } from "@/lib/build-page-tree";
-import { titleOrUntitled } from "@/lib/page-label";
 
 /**
- * Public landing for a single Space — its name and its own published page
- * tree, nothing from any other Space. The current Space is resolved by the
- * layout shell (usePublicCurrentSpace) into PublicSpaceContext.
+ * Public landing for a single Space. It renders the admin-authored layout
+ * (sections/columns/page order) from `spaces.layout`, using only Pages the
+ * public query returned — which RLS has already narrowed to published,
+ * publishable Pages in a publishable Space. A saved layout that has drifted
+ * from the current Page set is merged, so new published Pages are never lost
+ * and deleted/unpublished Pages never leak.
  */
 export function PublicSpaceView() {
   const { organization, basePath } = usePublicOrgContext();
@@ -25,35 +27,16 @@ export function PublicSpaceView() {
   if (!current) return <PageNotAvailable organizationName={organization.name} />;
 
   const { space, pages } = current;
-  const rows = flattenPageTree(pages).filter(({ page }) => page.slug);
+  const publishedPages = flattenPageTree(pages)
+    .filter(({ page }) => page.slug)
+    .map(({ page }) => page);
 
   return (
-    <main className="flex-1 px-6 py-12 lg:px-8">
-      <div className="mx-auto max-w-(--width-reading-column)">
-        {space.category && (
-          <p className="mb-1.5 text-caption font-semibold tracking-[0.04em] text-muted-foreground uppercase">
-            {space.category}
-          </p>
-        )}
-        <h1 className="text-display font-bold tracking-tight text-foreground">{space.name}</h1>
-
-        {rows.length === 0 ? (
-          <EmptyState icon={BookOpen} title="Belum ada panduan yang dipublikasikan" className="mt-16" />
-        ) : (
-          <div className="mt-10 flex flex-col gap-1">
-            {rows.map(({ page, depth }) => (
-              <Link
-                key={page.id}
-                href={`${basePath}/pages/${page.slug}`}
-                data-depth={depth}
-                style={{ paddingLeft: `${12 + depth * 16}px` }}
-                className="rounded-md py-2 pr-3 text-body text-foreground hover:bg-accent"
-              >
-                {page.emoji && <span className="mr-1.5">{page.emoji}</span>}
-                {titleOrUntitled(page.title)}
-              </Link>
-            ))}
-          </div>
+    <main className="flex-1 px-6 py-10 lg:px-10 lg:py-14">
+      <div className="mx-auto w-full max-w-[64rem]">
+        <SpaceLayoutView space={space} pages={publishedPages} basePath={basePath} mode="public" />
+        {publishedPages.length === 0 && (
+          <EmptyState icon={BookOpen} title="Belum ada panduan yang dipublikasikan" className="mt-10" />
         )}
       </div>
     </main>

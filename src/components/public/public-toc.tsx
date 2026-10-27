@@ -6,6 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import { usePublicSpace, usePublicSpaceStatus } from "@/hooks/public-space-context";
 import { usePublicOrgContext } from "@/hooks/use-public-org";
 import { flattenPageTree } from "@/lib/build-page-tree";
+import { orderedLayoutPages } from "@/lib/space-layout";
 import { cn } from "@/lib/utils";
 import { titleOrUntitled } from "@/lib/page-label";
 import { PublicTocSkeleton } from "./public-loading";
@@ -27,7 +28,15 @@ export function PublicToc({ onNavigate }: { onNavigate?: () => void }) {
   if (!current) return null;
 
   const { space, pages } = current;
-  const rows = flattenPageTree(pages).filter(({ page }) => page.slug);
+  const treeRows = flattenPageTree(pages).filter(({ page }) => page.slug);
+  const depthByPageId = new Map(treeRows.map(({ page, depth }) => [page.id, depth]));
+  const allPublishedPages = treeRows.map(({ page }) => page);
+  // Navigation follows the admin's Space Builder order; spaces without a saved
+  // layout keep the automatic tree order via mergeLayoutWithPages.
+  const rows = orderedLayoutPages(space.layout, allPublishedPages)
+    .filter((page) => page.slug)
+    .map((page) => ({ page, depth: depthByPageId.get(page.id) ?? 0 }));
+  const showPageList = space.showPageList !== false;
 
   return (
     <nav aria-label="Daftar halaman Space" className="flex flex-col gap-4 px-4 py-6">
@@ -42,7 +51,9 @@ export function PublicToc({ onNavigate }: { onNavigate?: () => void }) {
 
       <div className="flex flex-col gap-1">
         <p className="px-2 text-caption font-semibold tracking-[0.04em] text-muted-foreground uppercase">{space.name}</p>
-        {rows.length === 0 ? (
+        {!showPageList ? (
+          <p className="px-2 py-1.5 text-body-sm text-muted-foreground">Daftar halaman disembunyikan oleh admin.</p>
+        ) : rows.length === 0 ? (
           <p className="px-2 py-1.5 text-body-sm text-muted-foreground">Belum ada halaman yang dipublikasikan.</p>
         ) : (
           rows.map(({ page, depth }) => {

@@ -22,14 +22,21 @@ vi.mock("@/hooks/use-session", () => ({ useSession: () => ({ user: { id: "user-1
 
 let mockRole: "viewer" | "editor" | "admin" | null = "editor";
 let mockSpace: Space | undefined;
+const mockUpdateSpace = vi.fn(() => Promise.resolve());
 vi.mock("@/hooks/use-spaces", () => ({
   useSpace: () => mockSpace,
   useSpaceRole: () => mockRole,
+  useUpdateSpace: () => mockUpdateSpace,
 }));
 
 let mockPages: Page[] = [];
 const mockCreatePage = vi.fn();
 const mockDeletePage = vi.fn(() => Promise.resolve());
+const mockUpdatePageTitle = vi.fn(() => Promise.resolve());
+const mockUpdatePageVisibility = vi.fn(() => Promise.resolve());
+const mockPublish = vi.fn(() => Promise.resolve({}));
+const mockUpdatePublished = vi.fn(() => Promise.resolve({}));
+const mockUnpublish = vi.fn(() => Promise.resolve({}));
 vi.mock("@/hooks/use-pages", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/hooks/use-pages")>();
   return {
@@ -37,6 +44,9 @@ vi.mock("@/hooks/use-pages", async (importOriginal) => {
     usePages: () => mockPages,
     useCreatePage: () => mockCreatePage,
     useDeletePage: () => mockDeletePage,
+    useUpdatePageTitle: () => mockUpdatePageTitle,
+    useUpdatePageVisibility: () => mockUpdatePageVisibility,
+    usePublishActions: () => ({ publish: mockPublish, update: mockUpdatePublished, unpublish: mockUnpublish }),
   };
 });
 
@@ -172,6 +182,43 @@ describe("SpacePage Halaman tab", () => {
     await renderPage();
     await screen.findByRole("link", { name: /onboarding/i });
     expect(screen.queryByRole("button", { name: "Menu halaman" })).not.toBeInTheDocument();
+  });
+
+  it("renames a Page from the row menu", async () => {
+    mockPages = [makePage({ id: "page-1", title: "Onboarding" })];
+    await renderPage();
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "Menu halaman" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Ubah nama" }));
+    const input = await screen.findByLabelText("Nama halaman");
+    await user.clear(input);
+    await user.type(input, "Panduan Onboarding");
+    await user.click(screen.getByRole("button", { name: "Simpan" }));
+
+    await vi.waitFor(() => expect(mockUpdatePageTitle).toHaveBeenCalledWith("page-1", "Panduan Onboarding"));
+  });
+
+  it("publishes a draft Page from the row menu", async () => {
+    mockPages = [makePage({ id: "page-1", title: "Onboarding", isPublished: false })];
+    await renderPage();
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "Menu halaman" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Publikasikan" }));
+
+    await vi.waitFor(() => expect(mockPublish).toHaveBeenCalledWith("page-1"));
+  });
+
+  it("changes a Page's visibility from the row menu", async () => {
+    mockPages = [makePage({ id: "page-1", title: "Onboarding", visibility: "internal" })];
+    await renderPage();
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "Menu halaman" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Jadikan publik" }));
+
+    await vi.waitFor(() => expect(mockUpdatePageVisibility).toHaveBeenCalledWith("page-1", "publishable"));
   });
 
   it("creates a new Page and navigates to it from the empty state's action", async () => {

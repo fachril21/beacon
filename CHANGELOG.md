@@ -3,6 +3,50 @@
 Catatan perubahan yang dibuat selama sesi pengembangan ini, terbaru di atas.
 Tanggal mengikuti waktu lokal proyek (WIB).
 
+## 2026-10-27
+
+### Redesign Space Management: Space → Page → Blok Konten
+
+- **Hierarki baru yang konsisten.** Space tetap menjadi wadah utama, Halaman tetap menjadi dokumen, dan blok konten tetap hidup di dalam Page Builder. Sidebar workspace, header Space, daftar Halaman, navigasi publik, dan halaman publik kini memakai istilah serta urutan yang sama. Menambah/mengubah Halaman tidak lagi mengubah struktur Space secara diam-diam.
+- **Space Builder baru** di tab **Layout** (`/spaces/[spaceId]/builder`):
+  - Mengedit judul, deskripsi/subtitle, dan emoji Space langsung dari builder.
+  - Menambah, mengubah judul/deskripsi, mengurutkan (naik/turun), dan menghapus bagian (*section*).
+  - Mengatur jumlah kolom per bagian (1–4) dan lebar tiap kartu Halaman (1–`jumlah kolom`); mengecilkan kolom otomatis mengecilkan span kartu agar tidak meluber.
+  - Menambah Halaman ke bagian lewat dropdown, menyeret kartu untuk mengubah urutan di dalam bagian maupun memindahkannya antar-bagian.
+  - Pratinjau langsung di samping editor (dan tombol tampil/sembunyikan di layar kecil) memakai komponen yang sama dengan halaman publik, sehingga hasil pratinjau identik dengan yang dilihat pengunjung.
+  - Tombol **Simpan perubahan** eksplisit dengan status “belum disimpan/tersimpan” dan toast sukses/gagal. Layout bertahan setelah refresh karena disimpan ke `spaces.layout`.
+- **Page Management** di tab **Halaman**:
+  - Daftar Halaman dikelompokkan mengikuti bagian Space, dengan pencarian dan filter status (Semua/Draf/Dipublikasikan).
+  - Drag handle untuk mengurutkan Halaman dan memindahkannya antar-bagian; perubahan layout disimpan otomatis.
+  - Menu baris untuk **Ubah nama**, **Publikasikan/Perbarui publikasi/Batalkan publikasi**, **Jadikan publik/internal** (visibilitas), **Pindahkan ke bagian**, dan **Hapus**.
+  - Status, penulis, dan waktu perubahan tetap terlihat; tampilan menyesuaikan layar kecil tanpa horizontal scroll.
+- **Space Settings dipisah dari pengaturan Halaman** dan dikelompokkan menjadi **Umum**, **Akses & Izin**, **Navigasi**, dan **Publikasi**:
+  - Umum: nama, deskripsi, emoji, dan slug/URL.
+  - Akses & Izin: ringkasan akses publik/privat dan peran anggota.
+  - Navigasi: tampilkan/sembunyikan daftar halaman di sidebar publik, serta urutan bagian.
+  - Publikasi: status “Dapat dipublikasikan/Hanya internal”, konfirmasi sebelum menjadikan Space internal, tautan ke halaman publik, dan hapus Space.
+- **Halaman publik Space** sekarang dirender dari layout yang disimpan admin: judul, deskripsi, emoji, bagian, jumlah kolom, lebar kartu, dan urutan Halaman. Hanya Halaman yang lolos RLS publik (`is_publishable`, `visibility = publishable`, `is_published`) yang tampil; draf, kontrol editor, dan drag handle tidak pernah ikut dirender. Sidebar publik mengikuti urutan layout dan menghormati pengaturan sembunyikan daftar halaman.
+- **Page Builder — blok baru**:
+  - **Callout** dengan varian Informasi/Peringatan/Berhasil/Penting.
+  - **Tombol / Tautan** dengan URL dan gaya Utama/Sekunder; di halaman publik dirender sebagai `<a>` sungguhan.
+  - **Dua Kolom** dan **Tiga Kolom** (bisa ditambah/dikurangi kolomnya saat mengedit).
+  - Item slash menu baru: Gambar, Video, Lampiran Berkas, Callout, Tombol/Tautan, Dua Kolom, dan Tiga Kolom. Blok bawaan lain (teks, H1–H3, daftar berpoin/bernomor, checklist, kutipan, pembatas, tabel, file, screenshot) tetap tersedia.
+- **Tipografi dan komponen disatukan**: satu keluarga font, skala tipe dengan bobot/line-height tetap, `body-sm` 0.875rem dan `caption` 0.8125rem agar tidak ada teks terlalu kecil, serta badge status dengan tinggi, padding, bobot, dan titik indikator yang seragam — termasuk badge “Dapat dipublikasikan”.
+- **Migrasi database**: `supabase/migrations/20261027000000_space_layout.sql` menambahkan `spaces.description`, `spaces.icon`, `spaces.layout` (JSONB), dan `spaces.show_page_list`. Kolom baru bersifat opsional; Space lama tetap tampil memakai layout otomatis. **Migrasi ini belum dijalankan di Supabase** dan perlu diterapkan sebelum fitur layout dipakai di environment nyata.
+- Menambahkan test untuk normalisasi/merge/move layout, Space Builder, Page Manager (rename/publikasi/visibilitas), pengaturan Space, render layout publik, visibilitas sidebar publik, slash menu, mapper, serta render blok callout/button/columns.
+- File utama:
+  - `supabase/migrations/20261027000000_space_layout.sql`
+  - `src/lib/types.ts`, `src/lib/space-layout.ts`
+  - `src/lib/supabase/mappers.ts`, `src/hooks/use-spaces.ts`, `src/hooks/use-pages.ts`
+  - `src/components/space/space-builder.tsx`, `src/components/space/space-layout-view.tsx`
+  - `src/app/(workspace)/spaces/[spaceId]/(overview)/page.tsx`
+  - `src/app/(workspace)/spaces/[spaceId]/(overview)/settings/page.tsx`
+  - `src/app/(workspace)/spaces/[spaceId]/(overview)/layout.tsx`
+  - `src/components/public/public-space-view.tsx`, `src/components/public/public-toc.tsx`
+  - `src/components/editor/{callout-block,button-block,columns-block,schema,slash-menu-items}.tsx`
+  - `src/app/globals.css`
+- Status: belum di-commit; `npm test` (711 test), `tsc --noEmit`, `npm run lint`, dan `npm run build` lulus. Tampilan builder, blok baru, dan mode baca sudah dicek langsung di browser pada tema gelap.
+
 ## 2026-10-26
 
 ### Perbaikan penambahan langkah stepper dan wording judul

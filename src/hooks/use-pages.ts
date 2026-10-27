@@ -128,6 +128,23 @@ export function useUpdatePageMeta() {
   }, []);
 }
 
+/**
+ * Changes whether a Page can appear publicly. `visibility` is independent of
+ * `is_published`: both must be public for a Page to be visible (see the page
+ * RLS policies), which is why the Page Manager shows them separately.
+ */
+export function useUpdatePageVisibility() {
+  return useCallback(async (id: string, visibility: Page["visibility"]) => {
+    const supabase = getSupabaseBrowserClient();
+    const { error } = await supabase.from("pages").update({ visibility }).eq("id", id);
+    if (error) throw error;
+
+    pagesStore.setState((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, visibility, updatedAt: new Date().toISOString() } : p)),
+    );
+  }, []);
+}
+
 export function useUpdatePageContent() {
   return useCallback(async (id: string, content: PageContent) => {
     const supabase = getSupabaseBrowserClient();
