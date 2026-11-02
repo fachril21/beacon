@@ -5,6 +5,7 @@ import { useState } from "react";
 import { BookOpen, Search } from "lucide-react";
 import { usePublicOrgContext } from "@/hooks/use-public-org";
 import { usePublicSpaces } from "@/hooks/use-public-content";
+import { publicPageHref } from "@/lib/public-url";
 import { EmptyState } from "@/components/beacon/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { titleOrUntitled } from "@/lib/page-label";
@@ -46,8 +47,8 @@ export function PublicHomeContent() {
             <span className="text-muted-foreground">Terbaru:</span>
             {recentPages.map((page) => (
               <Link
-                key={page.slug}
-                href={`${basePath}/pages/${page.slug}`}
+                key={`${page.spaceSlug}-${page.slug}`}
+                href={publicPageHref(basePath, page.spaceSlug, page.slug)!}
                 className="rounded-full border border-border px-3 py-1 text-foreground hover:bg-accent"
               >
                 {titleOrUntitled(page.title)}

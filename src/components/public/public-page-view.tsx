@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { usePublicOrgContext } from "@/hooks/use-public-org";
 import { usePublicPage } from "@/hooks/use-public-content";
 import { usePublicSpace } from "@/hooks/public-space-context";
+import { publicPageHref, publicSpaceHref } from "@/lib/public-url";
 import { flattenPageTree } from "@/lib/build-page-tree";
 import { collectHeadings } from "@/lib/collect-headings";
 import { titleOrUntitled } from "@/lib/page-label";
@@ -23,15 +24,17 @@ function scrollToHeading(id: string) {
 }
 
 /**
- * Shared body for both the custom-domain (/public/pages/[pageSlug]) and
- * platform-domain (/public/[orgSlug]/pages/[pageSlug]) page routes —
- * usePublicOrgContext already resolves the right Organization for either
- * one, so the only thing that differs between the two route files is which
- * URL segment supplied pageSlug.
+ * Shared body for the custom-domain (/public/spaces/[spaceSlug]/pages/[pageSlug])
+ * and platform-domain (/public/[orgSlug]/spaces/[spaceSlug]/pages/[pageSlug])
+ * page routes — usePublicOrgContext already resolves the right Organization
+ * for either one, so the only thing that differs between the two route files
+ * is which URL segments supplied the Space and Page slugs. The legacy
+ * org-level page routes (/public/[orgSlug]/pages/[pageSlug]) pass no
+ * `spaceSlug`; those links keep resolving the Page's own Space.
  */
-export function PublicPageView({ pageSlug }: { pageSlug: string }) {
+export function PublicPageView({ pageSlug, spaceSlug }: { pageSlug: string; spaceSlug?: string }) {
   const { organization, basePath } = usePublicOrgContext();
-  const result = usePublicPage(pageSlug, organization?.id);
+  const result = usePublicPage(pageSlug, organization?.id, spaceSlug);
   const currentSpace = usePublicSpace();
 
   if (!organization) return null;
@@ -62,17 +65,15 @@ export function PublicPageView({ pageSlug }: { pageSlug: string }) {
       <div className="flex gap-10">
         <article className="min-w-0 max-w-(--width-reading-column) flex-1">
           <nav aria-label="Breadcrumb" className="mb-4 flex flex-wrap items-center gap-1.5 text-caption text-muted-foreground">
-            <Link href={basePath} className="hover:text-foreground">
-              {organization.name} Docs
-            </Link>
+            <span>{organization.name} Docs</span>
             <ChevronRight className="size-3" aria-hidden />
-            <Link href={`${basePath}/spaces/${space.slug}`} className="hover:text-foreground">
+            <Link href={publicSpaceHref(basePath, space.slug)!} className="hover:text-foreground">
               {space.name}
             </Link>
             {parentEntry && (
               <>
                 <ChevronRight className="size-3" aria-hidden />
-                <Link href={`${basePath}/pages/${parentEntry.page.slug}`} className="hover:text-foreground">
+                <Link href={publicPageHref(basePath, space.slug, parentEntry.page.slug)!} className="hover:text-foreground">
                   {titleOrUntitled(parentEntry.page.title)}
                 </Link>
               </>
@@ -122,14 +123,14 @@ export function PublicPageView({ pageSlug }: { pageSlug: string }) {
           {(previous || next) && (
             <div className="mt-10 grid grid-cols-1 gap-3 border-t border-border pt-6 sm:grid-cols-2">
               {previous && (
-                <Link href={`${basePath}/pages/${previous.page.slug}`} className="rounded-lg border border-border p-4 hover:bg-accent">
+                <Link href={publicPageHref(basePath, space.slug, previous.page.slug)!} className="rounded-lg border border-border p-4 hover:bg-accent">
                   <p className="text-caption text-muted-foreground">Sebelumnya</p>
                   <p className="mt-1 text-body-sm font-medium text-foreground">{titleOrUntitled(previous.page.title)}</p>
                 </Link>
               )}
               {next && (
                 <Link
-                  href={`${basePath}/pages/${next.page.slug}`}
+                  href={publicPageHref(basePath, space.slug, next.page.slug)!}
                   className={cn("rounded-lg border border-border p-4 text-right hover:bg-accent", !previous && "sm:col-start-2")}
                 >
                   <p className="text-caption text-muted-foreground">Berikutnya</p>

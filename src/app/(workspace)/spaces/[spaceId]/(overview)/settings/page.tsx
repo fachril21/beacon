@@ -15,6 +15,8 @@ import { PageEmojiPicker } from "@/components/editor/page-emoji-picker";
 import { DeleteConfirmDialog } from "@/components/workspace/delete-confirm-dialog";
 import { useSession } from "@/hooks/use-session";
 import { useSpace, useUpdateSpace, useDeleteSpace } from "@/hooks/use-spaces";
+import { useOrganization } from "@/hooks/use-organizations";
+import { buildPublicSpaceUrl } from "@/lib/public-url";
 import type { Space, SpaceLayout } from "@/lib/types";
 
 const SETTINGS_GROUPS = [
@@ -43,6 +45,7 @@ export default function SpaceSettingsPage({ params }: { params: Promise<{ spaceI
  */
 function SpaceSettingsForm({ space }: { space: Space }) {
   const router = useRouter();
+  const organization = useOrganization(space.organizationId);
   const updateSpace = useUpdateSpace();
   const deleteSpace = useDeleteSpace();
   const [nameInput, setNameInput] = useState(space.name);
@@ -370,8 +373,10 @@ function SpaceSettingsForm({ space }: { space: Space }) {
                 variant="outline"
                 size="sm"
                 className="mt-3"
+                disabled={!organization}
                 onClick={() => {
-                  const path = `/public/spaces/${space.slug}`;
+                  const path = buildPublicSpaceUrl(organization?.slug, space.slug);
+                  if (!path) return;
                   window.open(path, "_blank", "noopener,noreferrer");
                 }}
               >

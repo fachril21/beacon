@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { usePublicSpace, usePublicSpaceStatus } from "@/hooks/public-space-context";
 import { usePublicOrgContext } from "@/hooks/use-public-org";
 import { flattenPageTree } from "@/lib/build-page-tree";
 import { orderedLayoutPages } from "@/lib/space-layout";
+import { publicPageHref } from "@/lib/public-url";
 import { cn } from "@/lib/utils";
 import { titleOrUntitled } from "@/lib/page-label";
 import { PublicTocSkeleton } from "./public-loading";
@@ -14,7 +14,9 @@ import { PublicTocSkeleton } from "./public-loading";
 /**
  * Sidebar for the public site — scoped to the ONE Space the visitor is in
  * (resolved by the layout shell into PublicSpaceContext), never a merged list
- * across Spaces. Renders nothing on the Space directory (org home). Reused
+ * across Spaces. Renders nothing on the Space directory (org home). There is
+ * deliberately no "all documentation" link: a visitor stays inside the Space
+ * whose URL they opened and cannot hop to a sibling Space from here. Reused
  * as-is inside the mobile nav's sheet (PublicNav) — `onNavigate` closes that
  * sheet after a link is picked; unused on desktop.
  */
@@ -40,15 +42,6 @@ export function PublicToc({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <nav aria-label="Daftar halaman Space" className="flex flex-col gap-4 px-4 py-6">
-      <Link
-        href={basePath}
-        onClick={onNavigate}
-        className="flex items-center gap-1.5 px-2 text-caption font-medium text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="size-3" />
-        Semua dokumentasi
-      </Link>
-
       <div className="flex flex-col gap-1">
         <p className="px-2 text-caption font-semibold tracking-[0.04em] text-muted-foreground uppercase">{space.name}</p>
         {!showPageList ? (
@@ -57,7 +50,7 @@ export function PublicToc({ onNavigate }: { onNavigate?: () => void }) {
           <p className="px-2 py-1.5 text-body-sm text-muted-foreground">Belum ada halaman yang dipublikasikan.</p>
         ) : (
           rows.map(({ page, depth }) => {
-            const href = `${basePath}/pages/${page.slug}`;
+            const href = publicPageHref(basePath, space.slug, page.slug)!;
             const isActive = pathname === href;
             return (
               <Link

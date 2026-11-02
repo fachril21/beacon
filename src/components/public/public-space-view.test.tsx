@@ -84,8 +84,8 @@ describe("PublicSpaceView", () => {
     render(<PublicSpaceView />);
 
     expect(screen.getByRole("heading", { name: "Aplikasi Mobile" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Mulai" })).toHaveAttribute("href", "/public/dibimbing/pages/mulai");
-    expect(screen.getByRole("link", { name: "Langkah 1" })).toHaveAttribute("href", "/public/dibimbing/pages/langkah-1");
+    expect(screen.getByRole("link", { name: "Mulai" })).toHaveAttribute("href", "/public/dibimbing/spaces/aplikasi-mobile/pages/mulai");
+    expect(screen.getByRole("link", { name: "Langkah 1" })).toHaveAttribute("href", "/public/dibimbing/spaces/aplikasi-mobile/pages/langkah-1");
   });
 
   it("renders the admin-authored sections and description, in the saved order", () => {

@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { usePublicOrgContext } from "@/hooks/use-public-org";
 import { usePublicSpace } from "@/hooks/public-space-context";
+import { publicSpaceHref } from "@/lib/public-url";
 import { PublicSearchCommand } from "./public-search-command";
 import { PublicToc } from "./public-toc";
 import type { Organization } from "@/lib/types";
@@ -25,6 +26,9 @@ export function PublicNav({ organization }: { organization: Organization }) {
   // production visitor can never see that other Organizations exist
   // (wireframe v2 §3.5 / PRD Flow 5).
   const showDevOrgSwitcher = process.env.NODE_ENV !== "production" && organizations.length > 1;
+  // Inside a Space the logo returns to that Space's landing, never the org
+  // directory — a visitor must not be able to hop to a sibling Space.
+  const homeHref = publicSpaceHref(basePath, currentSpace?.space.slug) ?? basePath;
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-border bg-background/95 px-4 backdrop-blur-sm lg:h-public-nav lg:gap-4 lg:px-6">
@@ -39,7 +43,7 @@ export function PublicNav({ organization }: { organization: Organization }) {
             <Menu className="size-4.5" />
           </button>
         )}
-        <Link href={basePath} className="flex min-w-0 items-center gap-2.5">
+        <Link href={homeHref} className="flex min-w-0 items-center gap-2.5">
           <BeaconLogo decorative className="size-8 shrink-0" />
           <span className="truncate text-body-sm font-semibold text-foreground lg:text-h4">{organization.name} Docs</span>
         </Link>

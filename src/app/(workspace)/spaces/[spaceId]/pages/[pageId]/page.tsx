@@ -100,7 +100,7 @@ export default function PageEditorPage({ params }: { params: Promise<{ spaceId: 
     document.getElementById(EDITOR_PANEL_TOGGLE_ID)?.focus();
   }
 
-  if (!page || !space) {
+  if (!page || !space || page.spaceId !== space.id) {
     return (
       <main className="flex-1 overflow-y-auto">
         <EmptyState icon={FileText} title="Halaman tidak ditemukan" className="mt-16" />

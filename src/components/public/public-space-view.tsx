@@ -6,6 +6,7 @@ import { usePublicSpace, usePublicSpaceStatus } from "@/hooks/public-space-conte
 import { EmptyState } from "@/components/beacon/empty-state";
 import { SpaceLayoutView } from "@/components/space/space-layout-view";
 import { flattenPageTree } from "@/lib/build-page-tree";
+import { publicSpaceHref } from "@/lib/public-url";
 import { PageNotAvailable } from "./page-not-available";
 import { PublicSpaceSkeleton } from "./public-loading";
 
@@ -34,7 +35,7 @@ export function PublicSpaceView() {
   return (
     <main className="flex-1 px-6 py-10 lg:px-10 lg:py-14">
       <div className="mx-auto w-full max-w-[64rem]">
-        <SpaceLayoutView space={space} pages={publishedPages} basePath={basePath} mode="public" />
+        <SpaceLayoutView space={space} pages={publishedPages} basePath={publicSpaceHref(basePath, space.slug) ?? undefined} mode="public" />
         {publishedPages.length === 0 && (
           <EmptyState icon={BookOpen} title="Belum ada panduan yang dipublikasikan" className="mt-10" />
         )}

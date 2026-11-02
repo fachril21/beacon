@@ -69,10 +69,10 @@ describe("PublicToc (single Space)", () => {
     expect(screen.getByRole("status")).toHaveTextContent(/memuat daftar halaman/i);
   });
 
-  it("shows a back link to the Space directory", () => {
+  it("does not offer a link back to the Space directory (visitors cannot switch Spaces)", () => {
     mockUsePublicSpace.mockReturnValue({ space, pages: [] });
     render(<PublicToc />);
-    expect(screen.getByRole("link", { name: /semua dokumentasi/i })).toHaveAttribute("href", "/public/dibimbing");
+    expect(screen.queryByRole("link", { name: /semua dokumentasi/i })).not.toBeInTheDocument();
   });
 
   it("renders only the current Space's pages, nested by tree depth", () => {
@@ -84,7 +84,7 @@ describe("PublicToc (single Space)", () => {
 
     const parentLink = screen.getByRole("link", { name: "Getting Started" });
     const childLink = screen.getByRole("link", { name: "Step One" });
-    expect(parentLink).toHaveAttribute("href", "/public/dibimbing/pages/getting-started");
+    expect(parentLink).toHaveAttribute("href", "/public/dibimbing/spaces/mobile-app/pages/getting-started");
     expect(Number(childLink.getAttribute("data-depth"))).toBeGreaterThan(Number(parentLink.getAttribute("data-depth")));
   });
 
