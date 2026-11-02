@@ -80,18 +80,18 @@ describe("PublicHomeContent (Space directory)", () => {
     mockUsePublicSpaces.mockReturnValue({
       spaces: [{ space: space({ id: "s1", name: "Aplikasi Mobile", slug: "aplikasi-mobile" }), publishedPageCount: 1 }],
       recentPages: [
-        { title: "Cara login", slug: "cara-login", publishedAt: "2026-01-02T00:00:00.000Z" },
-        { title: "Reset kata sandi", slug: "reset-kata-sandi", publishedAt: "2026-01-01T00:00:00.000Z" },
+        { title: "Cara login", slug: "cara-login", spaceSlug: "aplikasi-mobile", publishedAt: "2026-01-02T00:00:00.000Z" },
+        { title: "Reset kata sandi", slug: "reset-kata-sandi", spaceSlug: "aplikasi-mobile", publishedAt: "2026-01-01T00:00:00.000Z" },
       ],
     });
     render(<PublicHomeContent />);
 
     expect(screen.getByText("Terbaru:")).toBeInTheDocument();
     expect(screen.queryByText(/populer/i)).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Cara login" })).toHaveAttribute("href", "/public/dibimbing/pages/cara-login");
+    expect(screen.getByRole("link", { name: "Cara login" })).toHaveAttribute("href", "/public/dibimbing/spaces/aplikasi-mobile/pages/cara-login");
     expect(screen.getByRole("link", { name: "Reset kata sandi" })).toHaveAttribute(
       "href",
-      "/public/dibimbing/pages/reset-kata-sandi",
+      "/public/dibimbing/spaces/aplikasi-mobile/pages/reset-kata-sandi",
     );
   });
 

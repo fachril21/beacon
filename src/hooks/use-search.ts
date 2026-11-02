@@ -15,7 +15,7 @@ interface PageSearchRow {
   is_published: boolean;
   published_content_snapshot: { title: string } | null;
   search_text: string;
-  spaces: { name: string; organization_id?: string; is_publishable?: boolean } | null;
+  spaces: { name: string; slug?: string | null; organization_id?: string; is_publishable?: boolean } | null;
 }
 
 function useDebounced(value: string, delayMs: number): string {
@@ -51,7 +51,7 @@ export function useInternalSearch(query: string, userId: string | undefined, org
       const supabase = getSupabaseBrowserClient();
       const { data, error } = await supabase
         .from("pages")
-        .select("id, space_id, title, slug, is_published, published_content_snapshot, search_text, spaces(name, organization_id)")
+        .select("id, space_id, title, slug, is_published, published_content_snapshot, search_text, spaces(name, slug, organization_id)")
         .textSearch("search_vector", trimmed, { type: "websearch", config: "simple" });
       if (error) {
         console.error("[beacon] internal search failed:", error);
@@ -64,6 +64,7 @@ export function useInternalSearch(query: string, userId: string | undefined, org
           pageId: row.id,
           pageSlug: row.slug,
           spaceId: row.space_id,
+          spaceSlug: row.spaces!.slug ?? null,
           spaceName: row.spaces!.name,
           pageTitle: row.title,
           snippet: snippetAround(row.search_text, trimmed),
@@ -108,7 +109,7 @@ export function usePublicSearch(
       const supabase = getSupabaseBrowserClient();
       const { data, error } = await supabase
         .from("pages")
-        .select("id, space_id, title, slug, is_published, published_content_snapshot, search_text, spaces(name, organization_id, is_publishable)")
+        .select("id, space_id, title, slug, is_published, published_content_snapshot, search_text, spaces(name, slug, organization_id, is_publishable)")
         .textSearch("search_vector", trimmed, { type: "websearch", config: "simple" });
       if (error) {
         console.error("[beacon] public search failed:", error);
@@ -128,6 +129,7 @@ export function usePublicSearch(
           pageId: row.id,
           pageSlug: row.slug,
           spaceId: row.space_id,
+          spaceSlug: row.spaces!.slug ?? null,
           spaceName: row.spaces!.name,
           pageTitle: row.published_content_snapshot!.title,
           snippet: snippetAround(row.search_text, trimmed),

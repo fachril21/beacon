@@ -351,6 +351,8 @@ export interface SearchResult {
   /** Public URL slug — null for internal search results (unpublished Pages have none). */
   pageSlug: string | null;
   spaceId: ID;
+  /** The Space's public slug — public Page links are nested under it. */
+  spaceSlug: string | null;
   spaceName: string;
   pageTitle: string;
   snippet: string;

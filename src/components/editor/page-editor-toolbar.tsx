@@ -79,7 +79,7 @@ export function PageEditorToolbar({
   const isPrimaryPublish = canEdit && !page.isPublished && !disabledReason;
   const pendingChanges = hasUnpublishedChanges(page);
   const status = getPageStatus(page);
-  const publicUrl = buildPublicPageUrl(organization?.slug, page.slug);
+  const publicUrl = buildPublicPageUrl(organization?.slug, space.slug, page.slug);
 
   function reportFailure(headline: string, error: unknown) {
     console.error("[beacon] publish action failed:", error);
@@ -94,7 +94,7 @@ export function PageEditorToolbar({
     }
     try {
       const publishedPage = await publish(page.id);
-      const publishedUrl = buildPublicPageUrl(organization?.slug, publishedPage.slug);
+      const publishedUrl = buildPublicPageUrl(organization?.slug, space.slug, publishedPage.slug);
       toast.success(
         "Halaman berhasil dipublikasikan",
         publishedUrl ? { action: { label: "Lihat halaman publik", onClick: () => router.push(publishedUrl) } } : undefined,

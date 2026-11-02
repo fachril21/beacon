@@ -37,6 +37,18 @@ vi.mock("@/hooks/use-spaces", () => ({
   useDeleteSpace: () => mockDeleteSpace,
 }));
 
+vi.mock("@/hooks/use-organizations", () => ({
+  useOrganization: () => ({
+    id: "org-1",
+    name: "Dibimbing",
+    slug: "dibimbing",
+    domain: null,
+    isDomainVerified: false,
+    pendingDnsToken: null,
+    createdAt: "2026-01-01T00:00:00.000Z",
+  }),
+}));
+
 const mockPush = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mockPush }) }));
 
@@ -89,6 +101,18 @@ describe("SpaceSettingsPage", () => {
     await user.click(await screen.findByRole("switch", { name: /dapat dipublikasikan/i }));
 
     expect(mockUpdateSpace).toHaveBeenCalledWith("space-1", { isPublishable: true });
+  });
+
+  it("opens this Space's own public page at the org-scoped platform URL", async () => {
+    mockSpace = { ...baseSpace, isPublishable: true };
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    await renderPage();
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: /lihat halaman publik/i }));
+
+    expect(open).toHaveBeenCalledWith("/public/dibimbing/spaces/test-space", "_blank", "noopener,noreferrer");
+    open.mockRestore();
   });
 
   it("asks for confirmation before turning publishing off, then updates on confirm", async () => {

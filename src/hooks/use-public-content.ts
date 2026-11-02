@@ -10,6 +10,8 @@ import type { Page, Space } from "@/lib/types";
 export interface PublicRecentPage {
   title: string;
   slug: string;
+  /** The Page's own Space — every public Page link is nested under it. */
+  spaceSlug: string;
   publishedAt: string;
 }
 
@@ -107,6 +109,7 @@ export function usePublicSpaces(organizationId: string | undefined) {
       for (const row of publishedPages) {
         countBySpaceId.set(row.space_id, (countBySpaceId.get(row.space_id) ?? 0) + 1);
       }
+      const slugBySpaceId = new Map(allSpaces.map((space) => [space.id, space.slug]));
 
       const result = allSpaces
         .map((space) => ({ space, publishedPageCount: countBySpaceId.get(space.id) ?? 0 }))
@@ -116,7 +119,13 @@ export function usePublicSpaces(organizationId: string | undefined) {
         .filter((row): row is { space_id: string; title: string; slug: string; published_at: string } => Boolean(row.slug && row.published_at))
         .sort((a, b) => (a.published_at < b.published_at ? 1 : -1))
         .slice(0, 4)
-        .map((row) => ({ title: row.title, slug: row.slug, publishedAt: row.published_at }));
+        .map((row) => ({
+          title: row.title,
+          slug: row.slug,
+          spaceSlug: slugBySpaceId.get(row.space_id) ?? "",
+          publishedAt: row.published_at,
+        }))
+        .filter((page) => page.spaceSlug.length > 0);
 
       finish(result, recent);
     })();
@@ -135,9 +144,10 @@ export function usePublicSpaces(organizationId: string | undefined) {
  * The single Space the visitor is currently browsing on the public site, with
  * only that Space's published Page tree — never a merge across Spaces:
  *
- *   /public/{org}/spaces/{spaceSlug}   -> that Space (by slug)
- *   /public/{org}/pages/{pageSlug}     -> the published Page's own Space
- *   /public/{org}  (directory)         -> null
+ *   /public/{org}/spaces/{spaceSlug}                     -> that Space (by slug)
+ *   /public/{org}/spaces/{spaceSlug}/pages/{pageSlug}    -> that Space (by slug)
+ *   /public/{org}/pages/{pageSlug}  (legacy page URL)    -> the published Page's own Space
+ *   /public/{org}  (directory)                           -> null
  *
  * Resolved here (once, in the layout shell) so the sidebar TOC and the
  * space-scoped search don't each have to re-derive it from whichever child
@@ -244,12 +254,17 @@ export function usePublicCurrentSpace(organizationId: string | undefined): Publi
 /**
  * A single published Page, looked up by its slug scoped to its Organization
  * (slugs are unique per-Organization, not globally — see
- * pages_organization_id_slug_unique) — returns "not-found" if not published,
- * missing, or owned by a different Organization (never a fallback), and
- * "loading" while the lookup is in flight.
+ * pages_organization_id_slug_unique) and, on the Space-scoped public routes,
+ * to the Space in the URL. Returns "not-found" if the Page is not published,
+ * missing, owned by a different Organization, or — when `spaceSlug` is given —
+ * belongs to a different Space. Never a fallback.
  */
-export function usePublicPage(pageSlug: string | undefined, organizationId: string | undefined): PublicLookup<PublicPageResult> {
-  const requestKey = pageSlug && organizationId ? `${organizationId}|${pageSlug}` : null;
+export function usePublicPage(
+  pageSlug: string | undefined,
+  organizationId: string | undefined,
+  spaceSlug?: string,
+): PublicLookup<PublicPageResult> {
+  const requestKey = pageSlug && organizationId ? `${organizationId}|${spaceSlug ?? ""}|${pageSlug}` : null;
   const [state, setState] = useState<ResolvedState<PublicPageResult> | null>(null);
 
   useEffect(() => {
@@ -278,17 +293,20 @@ export function usePublicPage(pageSlug: string | undefined, organizationId: stri
         return;
       }
 
-      const { data: spaceRow, error: spaceError } = await supabase
-        .from("spaces")
-        .select("*")
-        .eq("id", page.spaceId)
-        .single();
+      // On a Space-scoped URL the Space comes from the URL, and the Page must
+      // belong to it. The legacy org-level Page URL (no spaceSlug) keeps
+      // resolving the Page's own Space so already-shared links still work.
+      let spaceQuery = supabase.from("spaces").select("*");
+      spaceQuery = spaceSlug
+        ? spaceQuery.eq("organization_id", organizationId).eq("slug", spaceSlug)
+        : spaceQuery.eq("id", page.spaceId);
+      const { data: spaceRow, error: spaceError } = await spaceQuery.single();
       if (spaceError || !spaceRow) {
         notFound();
         return;
       }
       const space = mapSpaceRow(spaceRow as SpaceRow);
-      if (space.organizationId !== organizationId || !space.isPublishable) {
+      if (space.organizationId !== organizationId || !space.isPublishable || page.spaceId !== space.id) {
         notFound();
         return;
       }
@@ -299,7 +317,7 @@ export function usePublicPage(pageSlug: string | undefined, organizationId: stri
     return () => {
       cancelled = true;
     };
-  }, [requestKey, pageSlug, organizationId]);
+  }, [requestKey, pageSlug, organizationId, spaceSlug]);
 
   if (!requestKey) return { status: "not-found", data: null };
   if (!state || state.key !== requestKey) return { status: "loading", data: null };

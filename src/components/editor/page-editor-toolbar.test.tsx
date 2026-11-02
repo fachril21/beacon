@@ -106,7 +106,7 @@ describe("PageEditorToolbar publish gate (platform-domain publishing)", () => {
 
     const [, options] = mockToastSuccess.mock.calls[0] as [string, { action: { label: string; onClick: () => void } }];
     options.action.onClick();
-    expect(mockPush).toHaveBeenCalledWith("/public/test-org/pages/untitled");
+    expect(mockPush).toHaveBeenCalledWith("/public/test-org/spaces/test-space/pages/untitled");
   });
 
   it("shows the real failure reason in the error toast when publishing fails", async () => {
@@ -148,7 +148,7 @@ describe("PageEditorToolbar view published page link", () => {
   it("links to the platform-domain public URL for a published page", () => {
     render(<PageEditorToolbar page={publishedPage} space={space} title={publishedPage.title} saveStatus="idle" role="editor" />);
     const link = screen.getByRole("link", { name: "Lihat halaman publik" });
-    expect(link).toHaveAttribute("href", "/public/test-org/pages/getting-started");
+    expect(link).toHaveAttribute("href", "/public/test-org/spaces/test-space/pages/getting-started");
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
   });

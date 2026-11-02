@@ -178,7 +178,7 @@ describe("PublicPageView", () => {
 
     render(<PublicPageView pageSlug="cara-login" />);
 
-    expect(screen.getByRole("link", { name: /Pendahuluan/ })).toHaveAttribute("href", "/public/dibimbing/pages/pendahuluan");
-    expect(screen.getByRole("link", { name: /Reset kata sandi/ })).toHaveAttribute("href", "/public/dibimbing/pages/reset-kata-sandi");
+    expect(screen.getByRole("link", { name: /Pendahuluan/ })).toHaveAttribute("href", "/public/dibimbing/spaces/aplikasi-mobile/pages/pendahuluan");
+    expect(screen.getByRole("link", { name: /Reset kata sandi/ })).toHaveAttribute("href", "/public/dibimbing/spaces/aplikasi-mobile/pages/reset-kata-sandi");
   });
 });

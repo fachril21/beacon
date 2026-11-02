@@ -14,7 +14,7 @@ interface SpaceLayoutViewProps {
   space: Space;
   /** Pages to render. Public callers pass only published Pages; the builder passes every Page. */
   pages: Page[];
-  /** Public URL prefix (e.g. "/public/acme"). Omit in preview mode to render non-navigating cards. */
+  /** Public URL prefix of the Space (e.g. "/public/acme/spaces/panduan"); page cards append `/pages/{slug}`. Omit in preview mode to render non-navigating cards. */
   basePath?: string;
   mode?: "public" | "preview";
   /** Builder-only: opens the Page editor from a preview card. */

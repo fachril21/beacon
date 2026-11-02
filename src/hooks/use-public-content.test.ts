@@ -88,14 +88,14 @@ describe("usePublicSpaces", () => {
     expect(result.current.spaces[0]).toMatchObject({ space: { id: "space-1", slug: "mobile-app" }, publishedPageCount: 2 });
   });
 
-  it("returns the 4 most recently published page titles across Spaces, newest first", async () => {
+  it("returns the 4 most recently published page titles across Spaces, newest first, each with its own Space slug", async () => {
     mockFrom({
-      spaces: [{ data: [spaceRow()], error: null }],
+      spaces: [{ data: [spaceRow(), spaceRow({ id: "space-2", slug: "learning-center" })], error: null }],
       pages: [
         {
           data: [
             { space_id: "space-1", title: "Oldest", slug: "oldest", published_at: "2026-01-01T00:00:00.000Z" },
-            { space_id: "space-1", title: "Newest", slug: "newest", published_at: "2026-01-04T00:00:00.000Z" },
+            { space_id: "space-2", title: "Newest", slug: "newest", published_at: "2026-01-04T00:00:00.000Z" },
             { space_id: "space-1", title: "Middle", slug: "middle", published_at: "2026-01-02T00:00:00.000Z" },
           ],
           error: null,
@@ -107,6 +107,7 @@ describe("usePublicSpaces", () => {
     await waitFor(() => expect(result.current.recentPages).toHaveLength(3));
 
     expect(result.current.recentPages.map((p) => p.title)).toEqual(["Newest", "Middle", "Oldest"]);
+    expect(result.current.recentPages.map((p) => p.spaceSlug)).toEqual(["learning-center", "mobile-app", "mobile-app"]);
   });
 
   it("returns empty spaces and recentPages without querying when organizationId is undefined", () => {
@@ -255,5 +256,86 @@ describe("usePublicPage", () => {
     const { result } = renderHook(() => usePublicPage("getting-started", "org-1"));
     await waitFor(() => expect(result.current.status).toBe("not-found"));
     expect(result.current.data).toBeNull();
+  });
+
+  it("resolves the Space from the URL and rejects a Page that belongs to a sibling Space", async () => {
+    const pageRow = {
+      id: "page-b",
+      space_id: "space-b",
+      parent_page_id: null,
+      title: "Participant guide",
+      order: 0,
+      content: emptyDoc(),
+      visibility: "publishable",
+      slug: "participant-guide",
+      is_published: true,
+      published_content_snapshot: { title: "Participant guide", content: emptyDoc(), screenshotBlocks: {}, publishedAt: "t" },
+      published_at: "t",
+      created_by_user_id: "user-1",
+      created_at: "t",
+      updated_at: "t",
+    };
+    // The URL says space-a (the admin Space), but the Page lives in space-b.
+    const spaceRow = {
+      id: "space-a",
+      organization_id: "org-1",
+      name: "LMS B2B (Admin)",
+      slug: "lms-b2b-admin",
+      category: null,
+      is_publishable: true,
+      created_by_user_id: "user-1",
+      created_at: "t",
+    };
+
+    const spacesEqSlug = vi.fn(() => ({ single: () => Promise.resolve({ data: spaceRow, error: null }) }));
+    mockSupabase.from.mockImplementation((table: string) => {
+      if (table === "pages") return { select: () => ({ eq: () => ({ eq: () => ({ single: () => Promise.resolve({ data: pageRow, error: null }) }) }) }) };
+      if (table === "spaces") return { select: () => ({ eq: () => ({ eq: spacesEqSlug }) }) };
+      throw new Error(`unexpected table ${table}`);
+    });
+
+    const { result } = renderHook(() => usePublicPage("participant-guide", "org-1", "lms-b2b-admin"));
+    await waitFor(() => expect(result.current.status).toBe("not-found"));
+    expect(result.current.data).toBeNull();
+    expect(spacesEqSlug).toHaveBeenCalledWith("slug", "lms-b2b-admin");
+  });
+
+  it("returns the Page when it belongs to the Space named in the URL", async () => {
+    const pageRow = {
+      id: "page-a",
+      space_id: "space-a",
+      parent_page_id: null,
+      title: "Admin guide",
+      order: 0,
+      content: emptyDoc(),
+      visibility: "publishable",
+      slug: "admin-guide",
+      is_published: true,
+      published_content_snapshot: { title: "Admin guide", content: emptyDoc(), screenshotBlocks: {}, publishedAt: "t" },
+      published_at: "t",
+      created_by_user_id: "user-1",
+      created_at: "t",
+      updated_at: "t",
+    };
+    const spaceRow = {
+      id: "space-a",
+      organization_id: "org-1",
+      name: "LMS B2B (Admin)",
+      slug: "lms-b2b-admin",
+      category: null,
+      is_publishable: true,
+      created_by_user_id: "user-1",
+      created_at: "t",
+    };
+
+    mockSupabase.from.mockImplementation((table: string) => {
+      if (table === "pages") return { select: () => ({ eq: () => ({ eq: () => ({ single: () => Promise.resolve({ data: pageRow, error: null }) }) }) }) };
+      if (table === "spaces") return { select: () => ({ eq: () => ({ eq: () => ({ single: () => Promise.resolve({ data: spaceRow, error: null }) }) }) }) };
+      throw new Error(`unexpected table ${table}`);
+    });
+
+    const { result } = renderHook(() => usePublicPage("admin-guide", "org-1", "lms-b2b-admin"));
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+    expect(result.current.data).toMatchObject({ page: { id: "page-a" }, space: { id: "space-a" } });
   });
 });
