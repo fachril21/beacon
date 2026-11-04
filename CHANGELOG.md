@@ -3,6 +3,18 @@
 Catatan perubahan yang dibuat selama sesi pengembangan ini, terbaru di atas.
 Tanggal mengikuti waktu lokal proyek (WIB).
 
+## 2026-11-05
+
+### Ukuran dan perataan gambar pada Screenshot Block
+
+- **Gambar bisa diatur besar-kecilnya.** Setiap gambar hasil unggah/tempel (Screenshot Block) kini punya slider **Ukuran** (20%–100% dari lebar baris) dan pegangan tarik di sudut gambar. Ukuran tampil langsung di editor dan tetap sama di halaman publik karena disimpan di props blok — ikut tersimpan ke konten halaman, snapshot publikasi, dan riwayat versi.
+- **Gambar bisa diletakkan kiri, tengah, atau kanan.** Kontrol perataan ada di toolbar kecil di bawah gambar; keterangan gambar ikut mengikuti perataan. Pilihan ini juga ikut terbawa ke halaman publik.
+- **Kontrol tidak mengganggu saat menulis.** Toolbar ukuran/perataan muncul saat baris gambar di-hover atau difokuskan, dan tetap terlihat di perangkat sentuh. Pembaca halaman publik tidak melihat kontrol ini sama sekali.
+- Default untuk konten lama tetap **100% / rata kiri**, sehingga halaman dan snapshot yang sudah ada tidak berubah tampilannya. Nilai default juga diabaikan oleh fingerprint konten agar membuka halaman lama tidak dianggap sebagai perubahan.
+- Menambahkan test untuk render publik, perubahan ukuran/perataan di editor, dan pengaturan ukuran lewat keyboard.
+- File utama: `src/components/editor/screenshot-block.tsx`, `src/app/globals.css`, `src/lib/content-fingerprint.ts`, `src/components/editor/screenshot-block.test.tsx`.
+- Status: `npm test` (723 test), `npx tsc --noEmit`, `npm run lint` (hanya warning lama), dan `npm run build` lulus.
+
 ## 2026-10-27
 
 ### Redesign Space Management: Space → Page → Blok Konten

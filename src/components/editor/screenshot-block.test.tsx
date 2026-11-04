@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { editorSchema } from "./schema";
@@ -35,10 +35,29 @@ const mockBlock: ScreenshotBlock = {
   updatedAt: "t",
 };
 
-function TestEditor({ editable, screenshotBlockId }: { editable: boolean; screenshotBlockId: string }) {
+function TestEditor({
+  editable,
+  screenshotBlockId,
+  displayWidth,
+  alignment,
+}: {
+  editable: boolean;
+  screenshotBlockId: string;
+  displayWidth?: number;
+  alignment?: "left" | "center" | "right";
+}) {
   const editor = useCreateBlockNote({
     schema: editorSchema,
-    initialContent: [{ type: "screenshot", props: { screenshotBlockId } }],
+    initialContent: [
+      {
+        type: "screenshot",
+        props: {
+          screenshotBlockId,
+          ...(displayWidth === undefined ? {} : { displayWidth }),
+          ...(alignment === undefined ? {} : { alignment }),
+        },
+      },
+    ],
   });
   return (
     <PageIdProvider pageId="page-1">
@@ -64,6 +83,39 @@ describe("screenshot block render", () => {
     mockUseScreenshotBlock.mockReturnValue(mockBlock);
     render(<TestEditor editable={false} screenshotBlockId="shot-1" />);
     expect(screen.getByRole("img")).toBeInTheDocument();
+  });
+
+  it("keeps the saved width and alignment in the read-only render used by published pages", () => {
+    mockUseScreenshotBlock.mockReturnValue(mockBlock);
+    const { container } = render(<TestEditor editable={false} screenshotBlockId="shot-1" displayWidth={60} alignment="center" />);
+
+    const row = container.querySelector('[data-image-alignment="center"]');
+    expect(row).not.toBeNull();
+    expect(row).toHaveAttribute("data-image-width", "60");
+    expect(row?.querySelector("figure")).toHaveStyle({ width: "60%" });
+    expect(screen.queryByRole("group", { name: /perataan gambar/i })).not.toBeInTheDocument();
+  });
+
+  it("lets authors resize and align the image from the inline controls", async () => {
+    mockUseScreenshotBlock.mockReturnValue(mockBlock);
+    const { container } = render(<TestEditor editable={true} screenshotBlockId="shot-1" displayWidth={60} alignment="left" />);
+
+    const slider = await screen.findByRole("slider", { name: /ukuran gambar \(persen\)/i });
+    fireEvent.change(slider, { target: { value: "85" } });
+    fireEvent.blur(slider);
+    await waitFor(() => expect(container.querySelector("[data-image-width]")).toHaveAttribute("data-image-width", "85"));
+
+    fireEvent.click(screen.getByRole("button", { name: /rata kanan/i }));
+    await waitFor(() => expect(container.querySelector("[data-image-alignment]")).toHaveAttribute("data-image-alignment", "right"));
+  });
+
+  it("resizes the image with the keyboard from the corner handle", async () => {
+    mockUseScreenshotBlock.mockReturnValue(mockBlock);
+    const { container } = render(<TestEditor editable={true} screenshotBlockId="shot-1" displayWidth={60} alignment="left" />);
+
+    const handle = await screen.findByRole("slider", { name: /tarik untuk mengubah ukuran gambar/i });
+    fireEvent.keyDown(handle, { key: "ArrowRight" });
+    await waitFor(() => expect(container.querySelector("[data-image-width]")).toHaveAttribute("data-image-width", "65"));
   });
 
   it("renders existing annotations on top of the image in read-only mode", () => {
