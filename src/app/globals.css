@@ -662,6 +662,32 @@
     opacity: 0.6;
   }
 
+  /* --- Screenshot block resizing ------------------------------------------
+     Width and alignment live in the block props, so both the editor and the
+     published page render the same geometry. The authoring controls stay out
+     of the way until the image row is hovered or focused; touch devices have
+     no hover, so they remain visible there. Opacity lives here (not as a
+     utility) so the hover rule in this layer is not outranked. */
+  .bn-root .beacon-image-controls,
+  .bn-root .beacon-image-resize {
+    opacity: 0;
+    transition: opacity 150ms ease;
+  }
+
+  .bn-root .bn-block-content[data-content-type="screenshot"]:hover .beacon-image-controls,
+  .bn-root .bn-block-content[data-content-type="screenshot"]:focus-within .beacon-image-controls,
+  .bn-root .bn-block-content[data-content-type="screenshot"]:hover .beacon-image-resize,
+  .bn-root .beacon-image-resize:focus-visible {
+    opacity: 1;
+  }
+
+  @media (hover: none) {
+    .bn-root .beacon-image-controls,
+    .bn-root .beacon-image-resize {
+      opacity: 1;
+    }
+  }
+
   /* --- Columns ------------------------------------------------------------
      `columns` is an empty container whose children are `column` blocks;
      BlockNote renders those children as a sibling block group, so the group

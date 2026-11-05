@@ -15,6 +15,10 @@ const DEFAULT_PROPS: Record<string, unknown> = {
   textColor: "default",
   backgroundColor: "default",
   textAlignment: "left",
+  // Screenshot block display props added after pages already existed: treating
+  // the defaults as absent keeps an untouched old page from looking edited.
+  displayWidth: 100,
+  alignment: "left",
 };
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
