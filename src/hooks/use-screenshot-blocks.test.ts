@@ -5,12 +5,13 @@ import { screenshotBlocksStore } from "@/lib/supabase/stores";
 const mockSupabase = { from: vi.fn() };
 vi.mock("@/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => mockSupabase }));
 
-const { useScreenshotBlock, useCreateScreenshotBlock, useUploadScreenshot, useUpdateScreenshotAnnotations, usePatchScreenshotAnnotationsLocal } =
+const { useScreenshotBlock, useScreenshotBlockLookup, useCreateScreenshotBlock, useUploadScreenshot, useUpdateScreenshotAnnotations, usePatchScreenshotAnnotationsLocal } =
   await import("./use-screenshot-blocks");
 
 function resetStore() {
   screenshotBlocksStore.setState([]);
   screenshotBlocksStore.invalidate("all");
+  screenshotBlocksStore.invalidate("page:page-1");
 }
 
 describe("useScreenshotBlock", () => {
@@ -46,6 +47,88 @@ describe("useScreenshotBlock", () => {
   it("does not query Supabase when the page id is not yet known", () => {
     const { result } = renderHook(() => useScreenshotBlock("shot-1", undefined));
     expect(result.current).toBeUndefined();
+    expect(mockSupabase.from).not.toHaveBeenCalled();
+  });
+});
+
+function blockRow(id: string) {
+  return {
+    id,
+    page_id: "page-1",
+    order: 0,
+    image_object_key: `screenshots/page-1/${id}.png`,
+    image_width: 800,
+    image_height: 600,
+    description: "",
+    alt_text: null,
+    created_at: "t",
+    updated_at: "t",
+  };
+}
+
+/** A page query that answers with a different row set on each call, in order. */
+function mockPageQueries(...responses: Array<{ data: unknown[] | null; error: Error | null }>) {
+  const eq = vi.fn();
+  for (const response of responses) eq.mockResolvedValueOnce(response);
+  mockSupabase.from.mockReturnValue({ select: () => ({ eq }) });
+  return eq;
+}
+
+describe("useScreenshotBlockLookup", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetStore();
+  });
+
+  it("reports loading, not missing, while the page's blocks are still being fetched", async () => {
+    mockPageQueries({ data: [blockRow("shot-1")], error: null });
+
+    const { result } = renderHook(() => useScreenshotBlockLookup("shot-1", "page-1"));
+
+    expect(result.current).toMatchObject({ block: undefined, status: "loading" });
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+    expect(result.current.block).toMatchObject({ id: "shot-1" });
+  });
+
+  it("refetches the page when a block uploaded by another member is absent from an already-loaded store", async () => {
+    // First page load predates the other member's upload; the second sees it.
+    const eq = mockPageQueries(
+      { data: [blockRow("shot-1")], error: null },
+      { data: [blockRow("shot-1"), blockRow("shot-2")], error: null },
+    );
+
+    const first = renderHook(() => useScreenshotBlockLookup("shot-1", "page-1"));
+    await waitFor(() => expect(first.result.current.status).toBe("ready"));
+
+    const second = renderHook(() => useScreenshotBlockLookup("shot-2", "page-1"));
+    await waitFor(() => expect(second.result.current.status).toBe("ready"));
+
+    expect(second.result.current.block).toMatchObject({ id: "shot-2" });
+    expect(eq).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports missing when the block is still absent after a fresh refetch", async () => {
+    mockPageQueries({ data: [], error: null }, { data: [], error: null });
+
+    const { result } = renderHook(() => useScreenshotBlockLookup("ghost", "page-1"));
+
+    await waitFor(() => expect(result.current.status).toBe("missing"));
+    expect(result.current.block).toBeUndefined();
+  });
+
+  it("reports error, not missing, when the query fails (e.g. RLS or network)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    mockPageQueries({ data: null, error: new Error("permission denied") });
+
+    const { result } = renderHook(() => useScreenshotBlockLookup("shot-1", "page-1"));
+
+    await waitFor(() => expect(result.current.status).toBe("error"));
+    expect(result.current.block).toBeUndefined();
+  });
+
+  it("is idle for a block with no id yet, without querying", () => {
+    const { result } = renderHook(() => useScreenshotBlockLookup(undefined, "page-1"));
+    expect(result.current).toMatchObject({ block: undefined, status: "idle" });
     expect(mockSupabase.from).not.toHaveBeenCalled();
   });
 });
